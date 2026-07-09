@@ -1,0 +1,1439 @@
+import React, { useState } from 'react';
+import { 
+  Settings, 
+  Building, 
+  FileText, 
+  Percent, 
+  Save, 
+  RefreshCw,
+  Sliders,
+  CheckCircle2,
+  FileCheck,
+  ShieldCheck,
+  Lock,
+  Plus,
+  Trash2,
+  HelpCircle,
+  AlertCircle,
+  Calendar,
+  Paperclip,
+  Check,
+  ToggleLeft,
+  XCircle,
+  LayoutDashboard,
+  Users,
+  Briefcase,
+  Package,
+  Truck,
+  ShoppingCart,
+  ArrowDownLeft,
+  TrendingUp,
+  CheckSquare,
+  Inbox,
+  BarChart3,
+  ArrowUp,
+  ArrowDown,
+  Menu
+} from 'lucide-react';
+import { ERPSettings, CustomField, ProjectCategoryGroup } from '../types';
+import ConfirmModal from './ConfirmModal';
+import { compressAndResizeImage } from '../imageUtils';
+
+interface SettingsViewProps {
+  settings: ERPSettings;
+  updateSettings: (newSettings: ERPSettings) => void;
+  userRole?: 'admin' | 'user';
+  changeRole?: (role: 'admin' | 'user') => void;
+  projectCategoryGroups?: ProjectCategoryGroup[];
+}
+
+export default function SettingsView({
+  settings,
+  updateSettings,
+  userRole = 'admin',
+  changeRole,
+  projectCategoryGroups = []
+}: SettingsViewProps) {
+  const template = settings?.proformaTemplates?.[0] || {
+    name: 'قالب پیش‌فرض رسمی',
+    companyName: 'ابزار تامین ارشیا (سهامی خاص)',
+    registrationNumber: '۱۰۴۸۲۷',
+    nationalCode: '۱۰۲۶۰۴۸۲۷۳۱',
+    economicCode: '۴۱۱۴۸۳۹۲۷۴۸۲',
+    phone: '02188899000',
+    email: 'sales@abzartamin.com',
+    website: 'www.abzartamin.com',
+    address: 'تهران، خیابان ولیعصر، برج سپهر، طبقه ۸، واحد ۸۰۴',
+    titleColor: '#0ea5e9',
+    documentTitle: 'پیش‌فاکتور رسمی',
+    headerText: 'مفتخریم پیشنهاد قیمت تجهیزات ابزار دقیق مورد نیاز آن مجموعه محترم را به شرح زیر تقدیم داریم.',
+    termsAndConditions: '۱. مدت اعتبار این پیشنهاد ۱۰ روز کاری از تاریخ صدور می‌باشد.\n۲. زمان تحویل کالاهای موجود در انبار، ۲ روز کاری و کالاهای سفارشی ۶ هفته پس از دریافت پیش‌پرداخت می‌باشد.\n۳. گارانتی کلیه تجهیزات به مدت ۱۲ ماه شمسی و خدمات پس از فروش به مدت ۵ سال ارائه می‌گردد.',
+    footerText: 'از حسن توجه و اعتماد شما به شرکت ابزار تامین ارشیا صمیمانه سپاسگزاریم.',
+    signatureLabel1: 'کارشناس فروش - محمد توکل مقدم',
+    signatureLabel2: 'مدیرعامل - علیرضا ارشیا',
+    showLogo: true,
+    showTerms: true,
+    showSignatures: true,
+    showTotals: true
+  };
+  
+  // Tab control
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder'>('general');
+
+  // Loss reasons state
+  const [newLossReason, setNewLossReason] = useState('');
+  
+  // Activity categories state
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  // Dropdown items state
+  const [selectedDropdownKey, setSelectedDropdownKey] = useState<keyof ERPSettings['dropdownItems'] | 'lossReasons'>('industries');
+  const [newDropdownItem, setNewDropdownItem] = useState('');
+
+  // Delete confirm state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteType, setDeleteType] = useState<'dropdownItem' | 'activityCategory' | 'lossReason' | 'customField' | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string>('');
+  const [deleteTargetName, setDeleteTargetName] = useState<string>('');
+  const [deleteTargetExtra, setDeleteTargetExtra] = useState<any>(null);
+
+  const dropdownLabels: Record<keyof ERPSettings['dropdownItems'] | 'lossReasons', string> = {
+    industries: 'صنایع فعالیت مشتریان',
+    customerTypes: 'نوع شخصیت مشتریان (حقیقی/حقوقی)',
+    customerStatuses: 'وضعیت‌های پرونده مشتریان',
+    categories: 'دسته‌بندی‌های کالا و ابزار دقیق',
+    units: 'واحدهای سنجش و شمارش کالا',
+    currencies: 'ارزهای مبادلاتی تأمین‌کنندگان',
+    paymentTerms: 'شرایط پرداخت و تسویه ارزی',
+    paymentTypes: 'روش‌های دریافت و پرداخت ریالی',
+    projectStatuses: 'وضعیت‌های پیشرفت فرصت/پروژه',
+    salesExperts: 'کارشناسان فروش مسئول',
+    marketingChannels: 'کانال‌های بازاریابی و جذب لید',
+    leadQualities: 'سطوح کیفیت سرنخ‌ها (لیدها)',
+    communicationMethods: 'روش‌های اصلی ارتباط با مشتری',
+    taskPriorities: 'اولویت‌های وظایف و پیگیری‌ها',
+    taskStatuses: 'وضعیت‌های وظایف و پیگیری‌ها',
+    proformaStatuses: 'وضعیت‌های پیش‌فاکتورها',
+    purchaseOrderStatuses: 'وضعیت‌های سفارشات خرید خارجی',
+    positions: 'سمت‌های افراد حقیقی',
+    receiptTypes: 'انواع دریافت و پرداخت (بابت)',
+    lossReasons: 'دلایل باخت پروژه/اقلام پیش‌فاکتور',
+  };
+
+  const dropdownDescriptions: Record<keyof ERPSettings['dropdownItems'] | 'lossReasons', string> = {
+    industries: 'لیست صنایع اصلی که مشتریان شما در آن‌ها فعالیت می‌کنند (مثال: نفت و گاز، پتروشیمی، نیروگاهی).',
+    customerTypes: 'انواع هویت‌های ثبتی مشتریان در سیستم.',
+    customerStatuses: 'وضعیت‌های اصلی همکاری با مشتریان در پرونده‌ها.',
+    categories: 'گروه‌های کالایی و ابزار دقیق برای دسته‌بندی کالاها و پیش‌فاکتورها.',
+    units: 'واحدهای شمارش فیزیکی اقلام و تجهیزات.',
+    currencies: 'ارزهای پشتیبانی‌شده در سفارشات خرید ارزی خارجی.',
+    paymentTerms: 'شرایط پیش‌فرض برای تسویه حساب با تأمین‌کنندگان خارجی.',
+    paymentTypes: 'شیوه‌های مجاز برای ثبت دریافت‌ها و پرداخت‌ها در صندوق ریالی.',
+    projectStatuses: 'مراحل اصلی قیف فروش و وضعیت پروژه‌ها از ابتدا تا موفقیت یا شکست.',
+    salesExperts: 'لیست اسامی کارشناسان فروش شرکت جهت انتساب به پروژه‌ها.',
+    marketingChannels: 'راه‌های مختلف ورود سرنخ و فرصت‌های فروش به سیستم برای تحلیل بازاریابی.',
+    leadQualities: 'درجه‌بندی اهمیت و گرمای سرنخ‌های ورودی.',
+    communicationMethods: 'روش‌های اصلی تعامل و ارتباط با کارفرما.',
+    taskPriorities: 'درجات اهمیت پیگیری‌ها و اقدامات همکاران.',
+    taskStatuses: 'مراحل انجام و پیگیری وظایف محوله در سیستم.',
+    proformaStatuses: 'وضعیت‌های چرخه حیات پیش‌فاکتورهای صادر شده.',
+    purchaseOrderStatuses: 'مراحل پیگیری سفارشات خرید خارجی.',
+    positions: 'لیست سمت‌های پیش‌فرض و انتخابی برای مخاطبین و افراد حقیقی در بخش مشتریان.',
+    receiptTypes: 'دسته‌بندی‌ها و بابت‌های دریافت و پرداخت در دفتر صندوق (مانند پیش‌پرداخت، میاندوره، تسویه و غیره).',
+    lossReasons: 'دلایل باخت تعریف شده که کاربر می‌تواند هنگام مشخص کردن وضعیت بازنده یا لغو پروژه/پیش‌فاکتور انتخاب کند.',
+  };
+
+  const handleAddDropdownItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDropdownItem.trim()) return;
+    
+    if (selectedDropdownKey === 'lossReasons') {
+      const currentList = settings.lossReasons || [];
+      if (currentList.map(item => item.toLowerCase()).includes(newDropdownItem.trim().toLowerCase())) {
+        alert('این آیتم قبلاً در لیست وجود دارد.');
+        return;
+      }
+      const updatedList = [...currentList, newDropdownItem.trim()];
+      updateSettings({
+        ...settings,
+        lossReasons: updatedList
+      });
+      setNewDropdownItem('');
+      return;
+    }
+
+    const currentList = settings.dropdownItems[selectedDropdownKey] || [];
+    if (currentList.map(item => item.toLowerCase()).includes(newDropdownItem.trim().toLowerCase())) {
+      alert('این آیتم قبلاً در لیست وجود دارد.');
+      return;
+    }
+    
+    const updatedList = [...currentList, newDropdownItem.trim()];
+    
+    updateSettings({
+      ...settings,
+      dropdownItems: {
+        ...settings.dropdownItems,
+        [selectedDropdownKey]: updatedList
+      }
+    });
+    setNewDropdownItem('');
+  };
+
+  const handleDeleteDropdownItem = (itemToDelete: string) => {
+    if (selectedDropdownKey === 'lossReasons') {
+      setDeleteType('lossReason');
+      setDeleteTargetId(itemToDelete);
+      setDeleteTargetName(itemToDelete);
+      setDeleteConfirmOpen(true);
+      return;
+    }
+
+    const currentList = settings.dropdownItems[selectedDropdownKey] || [];
+    if (currentList.length <= 1) {
+      alert('لیست بازشو نمی‌تواند کاملاً خالی باشد. حداقل یک آیتم باید باقی بماند.');
+      return;
+    }
+    setDeleteType('dropdownItem');
+    setDeleteTargetId(itemToDelete);
+    setDeleteTargetName(itemToDelete);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    const exists = (settings.activityCategories || []).some(
+      (cat) => cat.name.toLowerCase() === newCategoryName.trim().toLowerCase()
+    );
+    if (exists) {
+      alert('این دسته‌بندی فعالیتی قبلاً تعریف شده است.');
+      return;
+    }
+    const newCat = {
+      id: `act-${Date.now()}`,
+      name: newCategoryName.trim(),
+      module: 'projects'
+    };
+    updateSettings({
+      ...settings,
+      activityCategories: [...(settings.activityCategories || []), newCat]
+    });
+    setNewCategoryName('');
+  };
+
+  const handleDeleteCategory = (catId: string, catName: string) => {
+    if (projectCategoryGroups.some((g) => g.categoryId === catId)) {
+      alert(`دسته‌بندی "${catName}" در پروژه‌ها فعال بوده و قابل حذف نیست.`);
+      return;
+    }
+    setDeleteType('activityCategory');
+    setDeleteTargetId(catId);
+    setDeleteTargetName(catName);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleAddLossReason = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLossReason.trim()) return;
+    if (settings.lossReasons?.includes(newLossReason.trim())) {
+      alert('این علت باخت قبلاً تعریف شده است.');
+      return;
+    }
+    const updatedReasons = [...(settings.lossReasons || []), newLossReason.trim()];
+    updateSettings({
+      ...settings,
+      lossReasons: updatedReasons
+    });
+    setNewLossReason('');
+  };
+
+  const handleDeleteLossReason = (reasonToDelete: string) => {
+    setDeleteType('lossReason');
+    setDeleteTargetId(reasonToDelete);
+    setDeleteTargetName(reasonToDelete);
+    setDeleteConfirmOpen(true);
+  };
+
+  // General settings states
+  const [companyName, setCompanyName] = useState(template?.companyName || 'ابزار تامین ارشیا');
+  const [address, setAddress] = useState(template?.address || '');
+  const [phone, setPhone] = useState(template?.phone || '');
+  const [email, setEmail] = useState(template?.email || '');
+  const [registrationNumber, setRegistrationNumber] = useState(template?.registrationNumber || '');
+  const [nationalId, setNationalId] = useState(template?.nationalCode || '');
+  const [logoUrl, setLogoUrl] = useState(template?.logoUrl || '');
+  const [companySealUrl, setCompanySealUrl] = useState(template?.companySealUrl || '');
+  const [proformaPrefix, setProformaPrefix] = useState(settings.documentFormats.proformaPrefix);
+  const [purchaseOrderPrefix, setPurchaseOrderPrefix] = useState(settings.documentFormats.poPrefix);
+  const [projectFormat, setProjectFormat] = useState(settings.documentFormats.projectFormat || 'ATA-{YYYY}-{SEQ:3}');
+  const [proformaFormat, setProformaFormat] = useState(settings.documentFormats.proformaFormat || 'QT-{PROJECT}-{SEQ:2}');
+  const [poFormat, setPoFormat] = useState(settings.documentFormats.poFormat || 'PO-{PROJECT}-{SEQ:3}');
+  const [transactionFormat, setTransactionFormat] = useState(settings.documentFormats.transactionFormat || 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}');
+  const [productFormat, setProductFormat] = useState(settings.documentFormats.productFormat || 'EQ-{RAND:5}');
+  const [vatPercent, setVatPercent] = useState(10);
+
+  const [isSaved, setIsSaved] = useState(false);
+
+  // Custom Fields manager states
+  const [selectedModule, setSelectedModule] = useState<'customers' | 'projects' | 'products' | 'proformas' | 'suppliers' | 'purchaseOrders' | 'transactions' | 'tasks'>('customers');
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldType, setNewFieldType] = useState<CustomField['type']>('text');
+  const [newFieldRequired, setNewFieldRequired] = useState(false);
+  const [newFieldUseSeparator, setNewFieldUseSeparator] = useState(false);
+  const [newFieldOptions, setNewFieldOptions] = useState('');
+
+  const modulesList = [
+    { id: 'customers', name: 'مشتریان' },
+    { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)' },
+    { id: 'products', name: 'کالاها و تجهیزات' },
+    { id: 'proformas', name: 'پیش‌فاکتورها' },
+    { id: 'suppliers', name: 'تأمین‌کنندگان' },
+    { id: 'purchaseOrders', name: 'سفارشات خرید خارجی' },
+    { id: 'transactions', name: 'دریافت و پرداخت ریالی' },
+    { id: 'tasks', name: 'وظایف و پیگیری' },
+  ] as const;
+
+  const handleSaveGeneral = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const currentTemplates = settings?.proformaTemplates || [];
+    const updatedTemplates = (currentTemplates.length > 0 ? currentTemplates : [template]).map((t, idx) => {
+      if (idx === 0) {
+        return {
+          ...t,
+          companyName,
+          address,
+          phone,
+          email,
+          registrationNumber,
+          nationalCode: nationalId,
+          logoUrl,
+          companySealUrl
+        };
+      }
+      return t;
+    });
+
+    updateSettings({
+      ...settings,
+      proformaTemplates: updatedTemplates,
+      documentFormats: {
+        ...settings.documentFormats,
+        proformaPrefix,
+        poPrefix: purchaseOrderPrefix,
+        projectFormat,
+        proformaFormat,
+        poFormat,
+        transactionFormat,
+        productFormat
+      }
+    });
+
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  const handleAddCustomField = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFieldName.trim()) {
+      alert('لطفاً نام فیلد سفارشی را وارد کنید.');
+      return;
+    }
+
+    let optionsArray: string[] | undefined = undefined;
+    if (newFieldType === 'select') {
+      const opts = newFieldOptions.split('\n').map(o => o.trim()).filter(o => o.length > 0);
+      if (opts.length === 0) {
+        alert('لطفاً حداقل یک گزینه برای لیست بازشو تعریف کنید (هر گزینه در یک خط).');
+        return;
+      }
+      optionsArray = opts;
+    }
+
+    const newField: CustomField = {
+      id: `cf-${Date.now()}`,
+      module: selectedModule,
+      name: newFieldName.trim(),
+      type: newFieldType,
+      required: newFieldRequired,
+      useSeparator: newFieldType === 'number' ? newFieldUseSeparator : undefined,
+      options: optionsArray
+    };
+
+    const currentFields = settings.customFields || [];
+    updateSettings({
+      ...settings,
+      customFields: [...currentFields, newField]
+    });
+
+    // Reset Form
+    setNewFieldName('');
+    setNewFieldRequired(false);
+    setNewFieldUseSeparator(false);
+    setNewFieldOptions('');
+    alert(`فیلد سفارشی "${newField.name}" با موفقیت ایجاد شد.`);
+  };
+
+  const handleDeleteCustomField = (fieldId: string) => {
+    const field = (settings.customFields || []).find(f => f.id === fieldId);
+    const fieldName = field ? field.name : '';
+    setDeleteType('customField');
+    setDeleteTargetId(fieldId);
+    setDeleteTargetName(fieldName);
+    setDeleteConfirmOpen(true);
+  };
+
+  const currentFields = settings.customFields || [];
+  const filteredFields = currentFields.filter(f => f.module === selectedModule);
+
+  const handleConfirmDelete = () => {
+    if (deleteType === 'dropdownItem') {
+      const currentList = settings.dropdownItems[selectedDropdownKey] || [];
+      const updatedList = currentList.filter(item => item !== deleteTargetId);
+      updateSettings({
+        ...settings,
+        dropdownItems: {
+          ...settings.dropdownItems,
+          [selectedDropdownKey]: updatedList
+        }
+      });
+    } else if (deleteType === 'activityCategory') {
+      const updated = (settings.activityCategories || []).filter((cat) => cat.id !== deleteTargetId);
+      updateSettings({
+        ...settings,
+        activityCategories: updated
+      });
+    } else if (deleteType === 'lossReason') {
+      const updatedReasons = (settings.lossReasons || []).filter(r => r !== deleteTargetId);
+      updateSettings({
+        ...settings,
+        lossReasons: updatedReasons
+      });
+    } else if (deleteType === 'customField') {
+      const currentFields = settings.customFields || [];
+      updateSettings({
+        ...settings,
+        customFields: currentFields.filter(f => f.id !== deleteTargetId)
+      });
+    }
+
+    setDeleteConfirmOpen(false);
+    setDeleteType(null);
+    setDeleteTargetId('');
+    setDeleteTargetName('');
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in text-right" dir="rtl">
+      
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">تنظیمات سیستم و شخصی‌سازی</h1>
+          <p className="text-slate-500 text-sm mt-1">مدیریت هویت حقوقی شرکت و تعریف فیلدهای پویا سفارشی برای ماژول‌های مختلف ERP</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="grid grid-cols-2 gap-2 md:flex md:gap-0 md:border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 pb-2 md:pb-0">
+        <button
+          onClick={() => setActiveTab('general')}
+          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+            activeTab === 'general'
+              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
+              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+          }`}
+        >
+          <Building size={16} />
+          تنظیمات عمومی شرکت
+        </button>
+        <button
+          onClick={() => setActiveTab('customFields')}
+          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+            activeTab === 'customFields'
+              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
+              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+          }`}
+        >
+          <Sliders size={16} />
+          فیلدهای سفارشی
+          <span className="bg-sky-100 text-sky-700 text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-bold">مدیر</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('activityCategories')}
+          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+            activeTab === 'activityCategories'
+              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
+              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+          }`}
+        >
+          <Sliders size={16} className="text-sky-500" />
+          دسته‌بندی فعالیت‌ها
+        </button>
+        <button
+          onClick={() => setActiveTab('dropdowns')}
+          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+            activeTab === 'dropdowns'
+              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
+              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+          }`}
+        >
+          <Settings size={16} className="text-amber-500" />
+          لیست‌های بازشو
+        </button>
+        <button
+          onClick={() => setActiveTab('sidebarOrder')}
+          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+            activeTab === 'sidebarOrder'
+              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
+              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+          }`}
+        >
+          <Menu size={16} className="text-teal-500" />
+          ترتیب منوی سایدبار
+        </button>
+      </div>
+
+      {activeTab === 'general' ? (
+        <form onSubmit={handleSaveGeneral} className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Col 1: Company Profile settings */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4 lg:col-span-2">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
+                <Building size={18} className="text-sky-500" />
+                <h3 className="font-bold text-sm">مشخصات هویتی و ثبتی شرکت</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Logo Upload & Preview */}
+                <div className="space-y-1.5 bg-slate-50 p-4 rounded-xl border border-slate-200/60">
+                  <label className="text-xs font-bold text-slate-700 block">تصویر لوگو جهت نمایش در سربرگ پیش‌فاکتورها</label>
+                  <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+                    {logoUrl ? (
+                      <div className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden bg-white shrink-0 shadow-sm flex items-center justify-center p-1">
+                        <img src={logoUrl} alt="Company Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                        <button
+                          type="button"
+                          onClick={() => setLogoUrl('')}
+                          className="absolute -top-1 -right-1 p-0.5 bg-red-600 text-white rounded-full hover:bg-red-700 transition"
+                          title="حذف لوگو"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg border border-dashed border-slate-300 bg-white flex items-center justify-center text-slate-400 shrink-0 text-[10px] font-bold">
+                        بدون لوگو
+                      </div>
+                    )}
+                    
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="relative border border-dashed border-slate-350 hover:border-sky-500 rounded-lg py-2 px-3 text-center cursor-pointer bg-white transition">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              compressAndResizeImage(file, 400, 400, 0.7)
+                                .then(base64 => setLogoUrl(base64))
+                                .catch(err => {
+                                  console.error(err);
+                                  alert('خطا در پردازش فایل تصویر لوگو');
+                                });
+                            }
+                          }}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                        />
+                        <span className="text-xs text-sky-600 font-semibold">بارگذاری فایل لوگو</span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="یا آدرس اینترنتی (URL) لوگو را وارد کنید..."
+                        value={logoUrl.startsWith('data:') ? '' : logoUrl}
+                        onChange={(e) => setLogoUrl(e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Company Seal Upload & Preview */}
+                <div className="space-y-1.5 bg-slate-50 p-4 rounded-xl border border-slate-200/60">
+                  <label className="text-xs font-bold text-slate-700 block">تصویر مهر شرکت جهت مهر زدن زیر امضاها</label>
+                  <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+                    {companySealUrl ? (
+                      <div className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden bg-white shrink-0 shadow-sm flex items-center justify-center p-1">
+                        <img src={companySealUrl} alt="Company Seal" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                        <button
+                          type="button"
+                          onClick={() => setCompanySealUrl('')}
+                          className="absolute -top-1 -right-1 p-0.5 bg-red-600 text-white rounded-full hover:bg-red-700 transition"
+                          title="حذف مهر شرکت"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg border border-dashed border-slate-300 bg-white flex items-center justify-center text-slate-400 shrink-0 text-[10px] font-bold">
+                        بدون مهر
+                      </div>
+                    )}
+                    
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="relative border border-dashed border-slate-350 hover:border-sky-500 rounded-lg py-2 px-3 text-center cursor-pointer bg-white transition">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              compressAndResizeImage(file, 400, 400, 0.7)
+                                .then(base64 => setCompanySealUrl(base64))
+                                .catch(err => {
+                                  console.error(err);
+                                  alert('خطا در پردازش فایل تصویر مهر');
+                                });
+                            }
+                          }}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                        />
+                        <span className="text-xs text-sky-600 font-semibold">بارگذاری فایل مهر شرکت</span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="یا آدرس اینترنتی (URL) مهر را وارد کنید..."
+                        value={companySealUrl.startsWith('data:') ? '' : companySealUrl}
+                        onChange={(e) => setCompanySealUrl(e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">نام رسمی شخصیت حقوقی *</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
+                  />
+                </div>
+
+                {/* Registration */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">شماره ثبت شرکت</label>
+                  <input
+                    type="text"
+                    value={registrationNumber}
+                    onChange={(e) => setRegistrationNumber(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none font-mono text-left"
+                  />
+                </div>
+
+                {/* National ID */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">شناسه ملی حقوقی</label>
+                  <input
+                    type="text"
+                    value={nationalId}
+                    onChange={(e) => setNationalId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none font-mono text-left"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">شماره تلفن دفتر مرکزی *</label>
+                  <input
+                    type="text"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none font-mono text-left"
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-500">پست الکترونیکی عمومی *</label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none font-mono text-left"
+                  />
+                </div>
+
+                {/* Address */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-500">آدرس دقیق پستی دفتر مرکزی *</label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
+                  />
+                </div>
+
+              </div>
+            </div>
+
+            {/* Col 2: Variables and advanced document numbering formats settings */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
+                <Sliders size={18} className="text-sky-500" />
+                <h3 className="font-bold text-sm">متغیرها و فرمت‌های شماره‌گذاری</h3>
+              </div>
+
+              <div className="space-y-4">
+
+                {/* Advanced Numbering Formats Header */}
+                <div className="pt-2 border-t border-slate-100">
+                  <span className="text-xs font-bold text-slate-700 block mb-1.5">فرمت پیشرفته شماره‌گذاری خودکار اسناد (ERP Standard)</span>
+                  <p className="text-[10px] text-slate-400 leading-relaxed mb-4 text-justify">
+                    با ترکیب متغیرها و کلمات ثابت، سیستم کدگذاری منحصربه‌فرد خود را بسازید. متغیرهای مجاز:
+                    <br />
+                    <span className="font-mono text-sky-600 bg-sky-50 px-1 py-0.5 rounded inline-block text-left my-1" style={{ direction: 'ltr' }}>
+                      {"{YYYY}"} (سال شمسی)، {"{YY}"} (سال دورقمی)، {"{MM}"} (ماه)، {"{DD}"} (روز)، {"{SEQ:3}"} (سریال ۳ رقمی)، {"{PROJECT}"} (پروژه)، {"{TYPE}"} (نوع دریافت/پرداخت)، {"{RAND:5}"} (تصادفی)
+                    </span>
+                  </p>
+                </div>
+
+                {/* Project Number Format */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پروژه‌ها</label>
+                  <input
+                    type="text"
+                    required
+                    value={projectFormat}
+                    onChange={(e) => setProjectFormat(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
+                    placeholder="ATA-{YYYY}-{SEQ:3}"
+                  />
+                  <div className="text-[10px] text-slate-400 flex justify-between">
+                    <span>پیش‌فرض: <code className="font-mono">ATA-{"{YYYY}"}-{"{SEQ:3}"}</code></span>
+                    <span>مثال: <code className="font-mono text-emerald-600">ATA-1405-001</code></span>
+                  </div>
+                </div>
+
+                {/* Proforma Number Format */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورها</label>
+                  <input
+                    type="text"
+                    required
+                    value={proformaFormat}
+                    onChange={(e) => setProformaFormat(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
+                    placeholder="QT-{PROJECT}-{SEQ:2}"
+                  />
+                  <div className="text-[10px] text-slate-400 flex justify-between">
+                    <span>پیش‌فرض: <code className="font-mono">QT-{"{PROJECT}"}-{"{SEQ:2}"}</code></span>
+                    <span>مثال: <code className="font-mono text-emerald-600">QT-ATA-1405-001-01</code></span>
+                  </div>
+                </div>
+
+                {/* PO Number Format */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری سفارشات خرید ارزی</label>
+                  <input
+                    type="text"
+                    required
+                    value={poFormat}
+                    onChange={(e) => setPoFormat(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
+                    placeholder="PO-{PROJECT}-{SEQ:3}"
+                  />
+                  <div className="text-[10px] text-slate-400 flex justify-between">
+                    <span>پیش‌فرض: <code className="font-mono">PO-{"{PROJECT}"}-{"{SEQ:3}"}</code></span>
+                    <span>مثال: <code className="font-mono text-emerald-600">PO-ATA-1405-001-001</code></span>
+                  </div>
+                </div>
+
+                {/* Transaction Number Format */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار شماره اسناد دریافت/پرداخت صندوق</label>
+                  <input
+                    type="text"
+                    required
+                    value={transactionFormat}
+                    onChange={(e) => setTransactionFormat(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
+                    placeholder="TR-{TYPE}-{YYYY}{MM}-{SEQ:3}"
+                  />
+                  <div className="text-[10px] text-slate-400 flex justify-between">
+                    <span>پیش‌فرض: <code className="font-mono">TR-{"{TYPE}"}-{"{YYYY}"}{"{MM}"}-{"{SEQ:3}"}</code></span>
+                    <span>مثال: <code className="font-mono text-emerald-600">TR-RC-140504-001</code></span>
+                  </div>
+                </div>
+
+                {/* Product Code Format */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار پیش‌فرض کدهای کالا و تجهیزات</label>
+                  <input
+                    type="text"
+                    required
+                    value={productFormat}
+                    onChange={(e) => setProductFormat(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
+                    placeholder="EQ-{RAND:5}"
+                  />
+                  <div className="text-[10px] text-slate-400 flex justify-between">
+                    <span>پیش‌فرض: <code className="font-mono">EQ-{"{RAND:5}"}</code></span>
+                    <span>مثال: <code className="font-mono text-emerald-600">EQ-48912</code></span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+          {/* Form save footer */}
+          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100">
+            <div className="flex items-center gap-2">
+              {isSaved && (
+                <span className="text-emerald-600 text-xs font-bold flex items-center gap-1.5 animate-bounce-short">
+                  <CheckCircle2 size={16} />
+                  تنظیمات با موفقیت در فضای ابری محلی (LocalStorage) ذخیره شد.
+                </span>
+              )}
+            </div>
+            <button
+              type="submit"
+              className="px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-sky-500/15 flex items-center gap-2"
+            >
+              <Save size={16} />
+              ذخیره کل پیکربندی
+            </button>
+          </div>
+        </form>
+      ) : (
+        /* Dynamic Custom Fields Tab contents */
+        userRole !== 'admin' ? (
+          /* Locked State for non-admin */
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center space-y-4 animate-fade-in">
+            <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+              <Lock size={28} />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-slate-900">عدم دسترسی به تنظیمات فیلدهای سفارشی</h3>
+              <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
+                تعریف، تغییر یا حذف ساختار فیلدهای سفارشی ماژول‌ها فقط برای کاربران با نقش <span className="font-bold text-slate-800">مدیر سیستم</span> مجاز است. شما با نقش کاربر عادی وارد شده‌اید.
+              </p>
+            </div>
+            {changeRole && (
+              <button
+                type="button"
+                onClick={() => changeRole('admin')}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition shadow-md shadow-amber-500/10"
+              >
+                شبیه‌سازی و ورود با نقش مدیر سیستم
+              </button>
+            )}
+          </div>
+        ) : activeTab === 'customFields' ? (
+          /* Authorized Custom Fields Designer */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+            
+            {/* Sidebar module selector */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-2.5">انتخاب ماژول هدف</h3>
+              <p className="text-slate-400 text-[11px]">ماژولی که مایل به مدیریت فیلدهای سفارشی آن هستید را انتخاب کنید:</p>
+              
+              <div className="space-y-1 pt-1">
+                {modulesList.map((m) => {
+                  const count = currentFields.filter(f => f.module === m.id).length;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedModule(m.id)}
+                      className={`w-full flex justify-between items-center px-3.5 py-2.5 rounded-lg text-xs font-bold transition ${
+                        selectedModule === m.id
+                          ? 'bg-sky-500 text-white shadow-md shadow-sky-500/10'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{m.name}</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${selectedModule === m.id ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                        {count} فیلد
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Custom Field designer workspace */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Add Custom Field Form */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2 pb-3.5 border-b border-slate-100 mb-4 text-slate-800">
+                  <Plus size={18} className="text-emerald-500" />
+                  <h3 className="font-bold text-sm">
+                    تعریف فیلد جدید برای ماژول «{modulesList.find(m => m.id === selectedModule)?.name}»
+                  </h3>
+                </div>
+
+                <form onSubmit={handleAddCustomField} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* Field Label / Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500">عنوان فیلد (نام نمایشی) *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newFieldName}
+                        onChange={(e) => setNewFieldName(e.target.value)}
+                        placeholder="مثال: برند موتور، تاریخ ترخیص، کد فنی قطعه"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
+                      />
+                    </div>
+
+                    {/* Field Type */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500">نوع فیلد ورودی *</label>
+                      <select
+                        value={newFieldType}
+                        onChange={(e) => {
+                          setNewFieldType(e.target.value as any);
+                          setNewFieldUseSeparator(false);
+                          setNewFieldOptions('');
+                        }}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
+                      >
+                        <option value="text">متن کوتاه (یک خطی)</option>
+                        <option value="textarea">متن بلند (چند خطی)</option>
+                        <option value="number">عددی (با قابلیت فیلترینگ)</option>
+                        <option value="select">لیست بازشو (گزینه‌ای)</option>
+                        <option value="date">تاریخ شمسی (Shamsi Calendar)</option>
+                        <option value="file">پیوست فایل (تصویر یا سند فنی)</option>
+                        <option value="boolean">بله / خیر (چک‌باکس)</option>
+                      </select>
+                    </div>
+
+                    {/* Conditional Select options config */}
+                    {newFieldType === 'select' && (
+                      <div className="space-y-1.5 md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-150">
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          تعریف آیتم‌های لیست بازشو *
+                        </label>
+                        <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
+                          آیتم‌هایی که کاربر نهایی در فرم قادر به انتخاب آنهاست را تعریف کنید. <strong>هر گزینه را در یک خط جداگانه بنویسید.</strong>
+                        </p>
+                        <textarea
+                          rows={4}
+                          required
+                          value={newFieldOptions}
+                          onChange={(e) => setNewFieldOptions(e.target.value)}
+                          placeholder="مثال:&#10;آلمان&#10;ژاپن&#10;ایتالیا&#10;سوئیس"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right font-mono"
+                        />
+                      </div>
+                    )}
+
+                    {/* Numeric special options */}
+                    {newFieldType === 'number' && (
+                      <div className="space-y-1.5 md:col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-150 flex items-center gap-2">
+                        <input
+                          id="newFieldUseSeparator"
+                          type="checkbox"
+                          checked={newFieldUseSeparator}
+                          onChange={(e) => setNewFieldUseSeparator(e.target.checked)}
+                          className="w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 cursor-pointer"
+                        />
+                        <label htmlFor="newFieldUseSeparator" className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                          فعال‌سازی جداکننده سه رقمی برای مبالغ و مقادیر عددی
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Field Required */}
+                    <div className="space-y-1.5 md:col-span-2 flex items-center gap-2 pt-2">
+                      <input
+                        id="newFieldRequired"
+                        type="checkbox"
+                        checked={newFieldRequired}
+                        onChange={(e) => setNewFieldRequired(e.target.checked)}
+                        className="w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 cursor-pointer"
+                      />
+                      <label htmlFor="newFieldRequired" className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                        این فیلد اجباری است و تکمیل آن برای ثبت الزامی است (*)
+                      </label>
+                    </div>
+
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                    >
+                      <Plus size={14} />
+                      ثبت و اضافه کردن فیلد سفارشی
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Fields List Table */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-4">
+                <h4 className="font-bold text-slate-800 text-xs border-b border-slate-100 pb-2">فیلدهای تعریف شده فعلی ({filteredFields.length} فیلد)</h4>
+                
+                {filteredFields.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-xs">
+                    هیچ فیلد سفارشی برای این ماژول تعریف نشده است.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-xs divide-y divide-slate-150">
+                      <thead>
+                        <tr className="text-slate-400 font-semibold bg-slate-50">
+                          <th className="py-2.5 px-3">نام فیلد (برچسب)</th>
+                          <th className="py-2.5 px-3">نوع فیلد</th>
+                          <th className="py-2.5 px-3">وضعیت اعتبار سنجی</th>
+                          <th className="py-2.5 px-3 text-left">عملیات</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredFields.map((field) => (
+                          <tr key={field.id} className="hover:bg-slate-50/50">
+                            <td className="py-3 px-3 font-bold text-slate-800">{field.name}</td>
+                            <td className="py-3 px-3">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 text-[10px] font-semibold">
+                                {field.type === 'text' && 'متن کوتاه'}
+                                {field.type === 'textarea' && 'متن بلند'}
+                                {field.type === 'number' && `عددی ${field.useSeparator ? '(با جداکننده هزارگان)' : ''}`}
+                                {field.type === 'select' && `لیست بازشو (${field.options?.length || 0} گزینه)`}
+                                {field.type === 'date' && 'تاریخ شمسی'}
+                                {field.type === 'file' && 'پیوست فایل'}
+                                {field.type === 'boolean' && 'بله/خیر (چک‌باکس)'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              {field.required ? (
+                                <span className="inline-flex px-2 py-0.5 rounded bg-rose-50 text-rose-600 text-[10px] font-bold">
+                                  اجباری (*)
+                                </span>
+                              ) : (
+                                <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px]">
+                                  اختیاری
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-left">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCustomField(field.id)}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition"
+                                title="حذف فیلد سفارشی"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+        ) : activeTab === 'dropdowns' ? (
+          /* Dropdowns Tab */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in text-right" dir="rtl">
+            
+            {/* Sidebar dropdown selector */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-2.5">انتخاب لیست بازشو</h3>
+              <p className="text-slate-400 text-[11px]">لیستی که مایل به مدیریت آیتم‌های آن هستید را انتخاب کنید:</p>
+              
+              <div className="space-y-1 pt-1 max-h-[60vh] overflow-y-auto">
+                {(Object.keys(dropdownLabels) as Array<keyof ERPSettings['dropdownItems'] | 'lossReasons'>).map((key) => {
+                  const count = key === 'lossReasons' 
+                    ? (settings.lossReasons || []).length 
+                    : (settings.dropdownItems[key as keyof ERPSettings['dropdownItems']] || []).length;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSelectedDropdownKey(key)}
+                      className={`w-full flex justify-between items-center px-3.5 py-2.5 rounded-lg text-xs font-bold transition ${
+                        selectedDropdownKey === key
+                          ? 'bg-sky-500 text-white shadow-md shadow-sky-500/10'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{dropdownLabels[key]}</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${selectedDropdownKey === key ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                        {count} مورد
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* List manager workspace */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Add Dropdown Item Form */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2 pb-3.5 border-b border-slate-100 mb-4 text-slate-800">
+                  <Plus size={18} className="text-amber-500" />
+                  <h3 className="font-bold text-sm">
+                    مدیریت «{dropdownLabels[selectedDropdownKey]}»
+                  </h3>
+                </div>
+
+                <p className="text-slate-500 text-xs leading-relaxed mb-4">
+                  {dropdownDescriptions[selectedDropdownKey]}
+                </p>
+
+                <form onSubmit={handleAddDropdownItem} className="flex gap-3 max-w-lg">
+                  <input
+                    type="text"
+                    required
+                    placeholder="عنوان آیتم جدید را وارد کنید..."
+                    value={newDropdownItem}
+                    onChange={(e) => setNewDropdownItem(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-right"
+                  />
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                  >
+                    <Plus size={14} />
+                    افزودن به لیست
+                  </button>
+                </form>
+              </div>
+
+              {/* Items List Table */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-4">
+                <h4 className="font-bold text-slate-800 text-xs border-b border-slate-100 pb-2">
+                  آیتم‌های تعریف شده فعلی ({selectedDropdownKey === 'lossReasons' ? (settings.lossReasons || []).length : (settings.dropdownItems[selectedDropdownKey as keyof ERPSettings['dropdownItems']] || []).length} مورد)
+                </h4>
+                
+                <div className="border border-slate-150 rounded-xl overflow-hidden max-w-2xl bg-slate-50/50">
+                  <table className="w-full text-right border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold">
+                        <th className="py-3 px-4 w-16">ردیف</th>
+                        <th className="py-3 px-4">عنوان آیتم</th>
+                        <th className="py-3 px-4 text-left w-20">عملیات</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {(selectedDropdownKey === 'lossReasons' ? (settings.lossReasons || []) : (settings.dropdownItems[selectedDropdownKey as keyof ERPSettings['dropdownItems']] || [])).map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition">
+                          <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-800">{item}</td>
+                          <td className="py-3 px-4 text-left">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDropdownItem(item)}
+                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition"
+                              title="حذف این آیتم"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {(selectedDropdownKey === 'lossReasons' ? (settings.lossReasons || []) : (settings.dropdownItems[selectedDropdownKey as keyof ERPSettings['dropdownItems']] || [])).length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="text-center py-6 text-slate-400 bg-white">
+                            هیچ آیتمی در این لیست تعریف نشده است.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        ) : activeTab === 'activityCategories' ? (
+          /* Activity Categories Tab */
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
+              <Sliders size={18} className="text-sky-500" />
+              <h3 className="font-bold text-sm">مدیریت دسته‌بندی‌های فعالیت پروژه‌ها (فرصت‌ها)</h3>
+            </div>
+            
+            <p className="text-slate-500 text-xs leading-relaxed">
+              دسته‌بندی‌های مشخص‌شده در این بخش، ساختار ثبت فعالیت‌های روزانه، گزارش کار، تماس‌ها و ارجاعات همکاران در هر پروژه را تشکیل می‌دهند. کاربران برای هر پروژه فقط قادر به ثبت فعالیت در این دسته‌های مشخص خواهند بود و از ایجاد دسته‌بندی تکراری و متفرقه ممانعت به عمل می‌آید.
+            </p>
+
+            <form onSubmit={handleAddCategory} className="flex gap-3 max-w-lg">
+              <input
+                type="text"
+                placeholder="مثال: پیگیری استعلام قیمت، تست فنی کارگاهی، ارسال مدارک نهایی"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                required
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-right"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+              >
+                <Plus size={14} />
+                افزودن دسته‌بندی جدید
+              </button>
+            </form>
+
+            <div className="border border-slate-150 rounded-xl overflow-hidden max-w-2xl bg-slate-50/50">
+              <table className="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold">
+                    <th className="py-3 px-4">ردیف</th>
+                    <th className="py-3 px-4">نام دسته‌بندی فعالیت</th>
+                    <th className="py-3 px-4">وضعیت استفاده در پروژه‌ها</th>
+                    <th className="py-3 px-4 text-left">عملیات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(settings.activityCategories || []).map((cat, idx) => {
+                    const isUsed = (projectCategoryGroups || []).some(g => g.categoryId === cat.id);
+                    return (
+                      <tr key={cat.id} className="hover:bg-white transition bg-white/40">
+                        <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-800">{cat.name}</td>
+                        <td className="py-3 px-4">
+                          {isUsed ? (
+                            <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                              استفاده شده (غیرقابل حذف)
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-medium">بدون استفاده</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-left">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                            disabled={isUsed}
+                            className={`p-1 rounded transition ${
+                              isUsed 
+                                ? 'text-slate-300 cursor-not-allowed bg-slate-50' 
+                                : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
+                            }`}
+                            title={isUsed ? 'این دسته‌بندی در پروژه‌ها استفاده شده و قابل حذف نیست.' : 'حذف دسته‌بندی'}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {(settings.activityCategories || []).length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-center py-6 text-slate-400 bg-white">
+                        هیچ دسته‌بندی فعالیتی تعریف نشده است. لطفاً حداقل یک مورد را بیفزایید.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          /* Sidebar Module Order Tab */
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-150 pb-4">
+              <div className="flex items-center gap-2 text-slate-800">
+                <Menu size={18} className="text-sky-500" />
+                <div>
+                  <h3 className="font-bold text-sm">ترتیب چیدمان منوی سایدبار</h3>
+                  <p className="text-slate-400 text-[11px] mt-0.5">ترتیب نمایش ماژول‌ها در سایدبار سمت راست را به سلیقه خود تنظیم کنید.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('آیا مایلید ترتیب منو به حالت پیش‌فرض سیستم بازگردد؟')) {
+                    updateSettings({
+                      ...settings,
+                      sidebarModuleOrder: [
+                        'dashboard',
+                        'customers',
+                        'projects',
+                        'proformas',
+                        'products',
+                        'suppliers',
+                        'purchaseOrders',
+                        'transactions',
+                        'rates',
+                        'tasks',
+                        'referrals',
+                        'reports',
+                        'users',
+                        'settings'
+                      ]
+                    });
+                  }
+                }}
+                className="px-3 py-1.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 rounded-lg transition font-semibold"
+              >
+                بازنشانی به چیدمان پیش‌فرض
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(() => {
+                const ALL_MODULES = [
+                  { id: 'dashboard', name: 'داشبورد', desc: 'خلاصه وضعیت، آمارهای کلیدی و نمودارهای سریع سیستم', icon: LayoutDashboard },
+                  { id: 'customers', name: 'مشتریان', desc: 'مدیریت پرونده‌های خریداران حقیقی و حقوقی و ارتباطات آن‌ها', icon: Users },
+                  { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)', desc: 'کنترل فازها، فعالیت‌ها و ارجاعات مربوط به هر فرصت تجاری', icon: Briefcase },
+                  { id: 'proformas', name: 'پیش‌فاکتورها', desc: 'صدور و پیگیری پیشنهادهای مالی فنی برای مشتریان', icon: FileText },
+                  { id: 'products', name: 'کالاها و تجهیزات', desc: 'انبارداری، موجودی کالاها و ابزار دقیق شرکت', icon: Package },
+                  { id: 'suppliers', name: 'تأمین‌کنندگان', desc: 'مدیریت وندورها و سازندگان داخلی و خارجی کالا', icon: Truck },
+                  { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', desc: 'پیگیری مراحل پروفرمای خرید، حمل و ترخیص گمرکی', icon: ShoppingCart },
+                  { id: 'transactions', name: 'دریافت و پرداخت ریالی', desc: 'ثبت و کنترل تراکنش‌های مالی ریالی و صندوق شرکت', icon: ArrowDownLeft },
+                  { id: 'rates', name: 'نرخ ارز روزانه', desc: 'ثبت نرخ‌های روزانه ارزهای دلار، یورو و درهم', icon: TrendingUp },
+                  { id: 'tasks', name: 'وظایف و پیگیری', desc: 'مدیریت کارها، ددلاین‌ها و پیگیری‌های پرسنل فروش و فنی', icon: CheckSquare },
+                  { id: 'referrals', name: 'کارتابل ارجاعات کار', desc: 'صندوق ورودی ارجاع امور فنی و بازرگانی پروژه‌ها بین همکاران', icon: Inbox },
+                  { id: 'reports', name: 'گزارشات و نمودارها', desc: 'تحلیل پیشرفته فروش، عملکرد مالی و وضعیت انبار', icon: BarChart3 },
+                  { id: 'users', name: 'مدیریت کاربران', desc: 'تعریف پرسنل، نقش‌ها و تنظیمات دسترسی به هر ماژول', icon: ShieldCheck },
+                  { id: 'settings', name: 'تنظیمات سیستم', desc: 'شخصی‌سازی فیلدها، دسته‌بندی‌ها و قالب‌های اسناد رسمی', icon: Settings },
+                ];
+
+                const currentOrder = [...(settings.sidebarModuleOrder || [])];
+                ALL_MODULES.forEach(m => {
+                  if (!currentOrder.includes(m.id)) {
+                    currentOrder.push(m.id);
+                  }
+                });
+
+                return currentOrder.map((id, index) => {
+                  const mod = ALL_MODULES.find(m => m.id === id);
+                  if (!mod) return null;
+                  const IconComponent = mod.icon;
+                  const isFirst = index === 0;
+                  const isLast = index === currentOrder.length - 1;
+
+                  const handleMoveModule = (direction: 'up' | 'down') => {
+                    const newOrder = [...currentOrder];
+                    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+                    if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+                    
+                    // Swap elements
+                    const temp = newOrder[index];
+                    newOrder[index] = newOrder[targetIndex];
+                    newOrder[targetIndex] = temp;
+
+                    updateSettings({
+                      ...settings,
+                      sidebarModuleOrder: newOrder
+                    });
+                  };
+
+                  return (
+                    <div 
+                      key={id} 
+                      className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200/80 hover:border-sky-200 rounded-xl hover:bg-sky-50/10 transition duration-150 group"
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        {/* Order Badge */}
+                        <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-200/60 group-hover:bg-sky-100 text-[11px] font-extrabold text-slate-500 group-hover:text-sky-700 transition">
+                          {index + 1}
+                        </div>
+
+                        {/* Module Icon & Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <div className="p-1 rounded-md bg-white border border-slate-200 text-slate-600">
+                              <IconComponent size={14} />
+                            </div>
+                            <span className="text-xs font-bold text-slate-800">{mod.name}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed truncate" title={mod.desc}>
+                            {mod.desc}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Control Buttons */}
+                      <div className="flex flex-col gap-1 shrink-0 ml-1">
+                        <button
+                          type="button"
+                          disabled={isFirst}
+                          onClick={() => handleMoveModule('up')}
+                          className={`p-1 rounded-md border transition ${
+                            isFirst 
+                              ? 'text-slate-300 border-slate-100 bg-slate-50/50 cursor-not-allowed' 
+                              : 'text-slate-600 border-slate-200 bg-white hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200'
+                          }`}
+                          title="انتقال به بالا"
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isLast}
+                          onClick={() => handleMoveModule('down')}
+                          className={`p-1 rounded-md border transition ${
+                            isLast 
+                              ? 'text-slate-300 border-slate-100 bg-slate-50/50 cursor-not-allowed' 
+                              : 'text-slate-600 border-slate-200 bg-white hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200'
+                          }`}
+                          title="انتقال به پایین"
+                        >
+                          <ArrowDown size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        ))}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setDeleteType(null);
+          setDeleteTargetId('');
+          setDeleteTargetName('');
+        }}
+        onConfirm={handleConfirmDelete}
+        title={
+          deleteType === 'dropdownItem' ? 'حذف گزینه لیست بازشو' :
+          deleteType === 'activityCategory' ? 'حذف دسته‌بندی فعالیت' :
+          deleteType === 'lossReason' ? 'حذف علت باخت' :
+          deleteType === 'customField' ? 'حذف فیلد سفارشی' : 'تایید حذف'
+        }
+        message={
+          deleteType === 'dropdownItem' ? `آیا از حذف گزینه "${deleteTargetName}" از لیست کشویی "${dropdownLabels[selectedDropdownKey]}" اطمینان دارید؟` :
+          deleteType === 'activityCategory' ? `آیا از حذف دسته‌بندی فعالیت "${deleteTargetName}" اطمینان دارید؟` :
+          deleteType === 'lossReason' ? `آیا از حذف علت باخت "${deleteTargetName}" اطمینان دارید؟` :
+          deleteType === 'customField' ? `آیا از حذف فیلد سفارشی "${deleteTargetName}" اطمینان دارید؟ تمامی مقادیر ذخیره شده برای این فیلد در رکوردهای موجود حذف خواهند شد.` : ''
+        }
+      />
+
+    </div>
+  );
+}
