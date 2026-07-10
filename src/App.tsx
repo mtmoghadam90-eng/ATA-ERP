@@ -16,12 +16,13 @@ import ReferralsView from './components/ReferralsView';
 import UsersView from './components/UsersView';
 import LoginView from './components/LoginView';
 import { useERPStore } from './useERPStore';
-import { ShieldAlert, Bell, Inbox } from 'lucide-react';
+import { ShieldAlert, Bell, Inbox, Menu } from 'lucide-react';
 
 export default function App() {
   const store = useERPStore();
   const [activeView, setActiveView] = useState<string>('dashboard');
   const [referralsTab, setReferralsTab] = useState<'toMe' | 'fromMe' | 'notifications'>('toMe');
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
 
   if (!store.isInitialized) {
     return (
@@ -283,7 +284,7 @@ export default function App() {
     const isResponsible = isManagerOrAdmin || cat?.responsibleUserId === currentUserName;
     
     (group.activities || []).forEach((act) => {
-      if (isResponsible) {
+      if (isResponsible && act.createdBy !== currentUserName) {
         if (!readItems.has(act.id)) groupedNotifsUnread++;
       }
       if (act.referral) {
@@ -292,7 +293,7 @@ export default function App() {
           messages = [act.referral.response];
         }
         messages.forEach((msg: any, idx: number) => {
-           if (isResponsible || act.referral?.assignedBy === currentUserName) {
+           if ((isResponsible || act.referral?.assignedBy === currentUserName) && msg.responder !== currentUserName) {
              const id = msg.id || `${act.id}-msg-${msg.timestamp || parseInt(act.id.split('-').pop() || '0', 10) + idx + 1}`;
              if (!readItems.has(id)) groupedNotifsUnread++;
            }
@@ -322,12 +323,23 @@ export default function App() {
         currentUser={store.currentUser}
         onLogout={store.logout}
         sidebarModuleOrder={store.settings.sidebarModuleOrder}
+        isOpen={sidebarOpen}
+        setIsOpen={setSidebarOpen}
       />
 
       {/* Main Panel Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between z-10 shrink-0">
-          <div className="font-bold text-slate-800 text-sm md:text-base hidden sm:block">سیستم مدیریت منابع سازمانی</div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition"
+              title={sidebarOpen ? "بستن منو" : "باز کردن منو"}
+            >
+              <Menu size={20} />
+            </button>
+            <div className="font-bold text-slate-800 text-sm md:text-base hidden sm:block">سیستم مدیریت منابع سازمانی</div>
+          </div>
           <div className="flex items-center gap-5 mr-auto">
              <button 
                className="relative text-slate-500 hover:text-amber-600 transition p-1"

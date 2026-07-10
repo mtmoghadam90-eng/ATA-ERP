@@ -32,10 +32,27 @@ interface SidebarProps {
   currentUser?: User | null;
   onLogout?: () => void;
   sidebarModuleOrder?: string[];
+  isOpen?: boolean;
+  setIsOpen?: (open: boolean) => void;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, taskCount, lowStockCount, userRole, changeRole, referralsCount = 0, currentUser, onLogout, sidebarModuleOrder }: SidebarProps) {
-  const [isOpen, setIsOpen] = useState(true);
+export default function Sidebar({ 
+  activeTab, 
+  setActiveTab, 
+  taskCount, 
+  lowStockCount, 
+  userRole, 
+  changeRole, 
+  referralsCount = 0, 
+  currentUser, 
+  onLogout, 
+  sidebarModuleOrder,
+  isOpen: propIsOpen,
+  setIsOpen: propSetIsOpen
+}: SidebarProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(true);
+  const isOpen = propIsOpen !== undefined ? propIsOpen : internalIsOpen;
+  const setIsOpen = propSetIsOpen !== undefined ? propSetIsOpen : setInternalIsOpen;
 
   const menuItems = [
     { id: 'dashboard', name: 'داشبورد', icon: LayoutDashboard },
@@ -89,45 +106,55 @@ export default function Sidebar({ activeTab, setActiveTab, taskCount, lowStockCo
 
       {/* Sidebar container */}
       <div className={`
-        fixed inset-y-0 right-0 z-40 bg-slate-900 text-slate-100 flex flex-col h-screen border-l border-slate-800
-        transition-all duration-300 ease-in-out shadow-2xl
+        fixed lg:relative inset-y-0 right-0 z-40 bg-slate-900 text-slate-100 flex flex-col h-screen border-l border-slate-800
+        transition-all duration-300 ease-in-out shadow-2xl flex-shrink-0
         ${isOpen ? 'w-64' : 'w-0 lg:w-20'}
         overflow-hidden
       `}>
         {/* Brand Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+        <div className={`p-4 border-b border-slate-800 flex ${isOpen ? 'justify-between' : 'flex-col gap-3 justify-center'} items-center bg-slate-950 transition-all duration-300`}>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-sky-500 rounded-lg text-white flex items-center justify-center shadow-lg shadow-sky-500/20">
+            <div className="p-2.5 bg-sky-500 rounded-lg text-white flex items-center justify-center shadow-lg shadow-sky-500/20 flex-shrink-0">
               <Clock className="animate-spin-slow text-white" size={20} />
             </div>
             {isOpen && (
-              <div className="flex flex-col">
-                <span className="font-bold text-base text-slate-100 leading-tight">ابزار تامین ارشیا</span>
-                <span className="text-[10px] text-sky-400 mt-0.5 tracking-wider font-mono">ERP SYSTEM v2.5</span>
+              <div className="flex flex-col overflow-hidden">
+                <span className="font-bold text-sm text-slate-100 leading-tight whitespace-nowrap">ابزار تامین ارشیا</span>
+                <span className="text-[9px] text-sky-400 mt-0.5 tracking-wider font-mono">ERP SYSTEM v2.5</span>
               </div>
             )}
           </div>
+          {/* Toggle Button */}
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-100 rounded-md transition flex-shrink-0"
+            title={isOpen ? "بستن منو" : "باز کردن منو"}
+          >
+            {isOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
         </div>
 
         {/* User profile brief */}
-        {isOpen && currentUser && (
-          <div className="px-5 py-4 border-b border-slate-800 bg-slate-900/50 flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-slate-700 border-2 border-sky-500/50 flex items-center justify-center font-bold text-sky-400">
+        {currentUser && (
+          <div className="px-4 py-4 border-b border-slate-800 bg-slate-900/50 flex flex-col gap-2">
+            <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center'}`}>
+              <div className="w-10 h-10 rounded-full bg-slate-700 border-2 border-sky-500/50 flex items-center justify-center font-bold text-sky-400 flex-shrink-0 shadow-inner">
                 {currentUser.fullName.substring(0, 2)}
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold text-slate-200">{currentUser.fullName}</span>
-                <span className="text-[10px] text-slate-400">
-                  {currentUser.role === 'admin' ? 'سمت: مدیر سیستم / فنی' : 'سمت: کارشناس'}
-                </span>
-              </div>
+              {isOpen && (
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-xs font-semibold text-slate-200 truncate">{currentUser.fullName}</span>
+                  <span className="text-[10px] text-slate-400 truncate">
+                    {currentUser.role === 'admin' ? 'سمت: مدیر سیستم / فنی' : 'سمت: کارشناس'}
+                  </span>
+                </div>
+              )}
             </div>
             {/* Logout Button */}
-            {onLogout && (
+            {onLogout && isOpen && (
               <button
                 onClick={onLogout}
-                className="mt-1 text-center text-[10px] font-bold text-rose-400 hover:text-rose-300 py-1 border border-rose-500/20 hover:border-rose-500/40 rounded transition bg-rose-500/5"
+                className="mt-1 text-center text-[10px] font-bold text-rose-400 hover:text-rose-300 py-1 border border-rose-500/20 hover:border-rose-500/40 rounded transition bg-rose-500/5 whitespace-nowrap overflow-hidden"
               >
                 خروج از حساب کاربری
               </button>
@@ -148,7 +175,7 @@ export default function Sidebar({ activeTab, setActiveTab, taskCount, lowStockCo
                   if (window.innerWidth < 1024) setIsOpen(false); // Auto close on mobile click
                 }}
                 className={`
-                  w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200
+                  w-full flex items-center ${isOpen ? 'gap-3 px-3 justify-start' : 'justify-center'} py-3 rounded-lg text-sm font-medium transition-all duration-200
                   ${isActive 
                     ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/10' 
                     : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'

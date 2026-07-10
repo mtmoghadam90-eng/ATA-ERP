@@ -166,7 +166,7 @@ export default function ReferralsView({
       
       (group.activities || []).forEach(act => {
         // Base Activity - only visible if responsible
-        if (isResponsible) {
+        if (isResponsible && act.createdBy !== currentUserName) {
           items.push({
             type: 'activity',
             activity: act,
@@ -183,7 +183,7 @@ export default function ReferralsView({
           
           messages.forEach((msg, idx) => {
              // Visible if responsible, OR if the current user is the one who assigned the referral
-             if (isResponsible || act.referral?.assignedBy === currentUserName) {
+             if ((isResponsible || act.referral?.assignedBy === currentUserName) && msg.responder !== currentUserName) {
                items.push({
                  type: 'message',
                  activity: act,

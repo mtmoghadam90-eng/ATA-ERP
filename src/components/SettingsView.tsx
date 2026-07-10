@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { set as idbSet } from 'idb-keyval';
 import { 
   Settings, 
   Building, 
@@ -434,6 +435,15 @@ export default function SettingsView({
       localStorage.setItem("erp_transactions", JSON.stringify([]));
       localStorage.setItem("erp_tasks", JSON.stringify([]));
       localStorage.setItem("erp_project_category_groups", JSON.stringify([]));
+      localStorage.setItem("erp_module_notifications", JSON.stringify([]));
+      // Remove any user-specific read notifications
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('read_notifications_')) {
+          localStorage.removeItem(key);
+        }
+      }
+      idbSet("erp_project_category_groups", []).catch(err => console.error("Failed to clear idb:", err));
       alert("تمامی داده‌ها با موفقیت پاک شدند. لطفاً صفحه را بارگذاری مجدد (Refresh) کنید.");
       window.location.reload();
     }

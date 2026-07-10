@@ -689,7 +689,11 @@ export function useERPStore() {
     if (!projectId) return;
 
     setProjectCategoryGroups(prevGroups => {
-      const existingGroup = prevGroups.find(g => g.projectId === projectId && g.categoryName === categoryName);
+      const normalize = (str: string) => str.replace(/[\s\u200c]/g, '').trim();
+      const existingGroup = prevGroups.find(g => 
+        g.projectId === projectId && 
+        normalize(g.categoryName) === normalize(categoryName)
+      );
 
       const newActivity: ProjectActivity = {
         id: `act-item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -1250,11 +1254,11 @@ export function useERPStore() {
     
     // --- Project Activities (Category Groups) CRUD ---
     addProjectCategoryGroup: (projectId: string, categoryId: string, categoryName: string) => {
-      let isDuplicate = false;
-      setProjectCategoryGroups(prev => {
-        isDuplicate = prev.some(g => g.projectId === projectId && g.categoryId === categoryId);
-        return prev;
-      });
+      const normalize = (str: string) => str.replace(/[\s\u200c]/g, '').trim();
+      const isDuplicate = projectCategoryGroups.some(g => 
+        g.projectId === projectId && 
+        (g.categoryId === categoryId || normalize(g.categoryName) === normalize(categoryName))
+      );
 
       if (isDuplicate) {
         return { success: false, error: 'این دسته‌بندی قبلاً در این پروژه فعال شده است.' };
@@ -1272,6 +1276,10 @@ export function useERPStore() {
       };
 
       setProjectCategoryGroups(prev => {
+        // Double check in updater just in case
+        if (prev.some(g => g.projectId === projectId && (g.categoryId === categoryId || normalize(g.categoryName) === normalize(categoryName)))) {
+          return prev;
+        }
         const updated = [newGroup, ...prev];
         idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
         return updated;
