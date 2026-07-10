@@ -8,6 +8,7 @@ import {
   Project, 
   Transaction, 
   Task, 
+  ModuleNotification,
   ExchangeRate, 
   ERPSettings,
   ProjectCategoryGroup,
@@ -30,6 +31,7 @@ import {
 } from './seedData';
 import { toShamsiStr, getTodayShamsi, gregorianToJalali, addDaysToShamsi, addWorkingDaysToShamsi } from './dateUtils';
 import { formatERPNumber } from './numUtils';
+import { get as idbGet, set as idbSet } from 'idb-keyval';
 
 export const SEED_PROJECT_CATEGORY_GROUPS: ProjectCategoryGroup[] = [];
 
@@ -118,7 +120,9 @@ export function useERPStore() {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [moduleNotifications, setModuleNotifications] = useState<ModuleNotification[]>([]);
   const [projectCategoryGroups, setProjectCategoryGroups] = useState<ProjectCategoryGroup[]>([]);
+  const [readItems, setReadItems] = useState<string[]>([]);
   const [settings, setSettings] = useState<ERPSettings>(DEFAULT_SETTINGS);
   const [isInitialized, setIsInitialized] = useState(false);
   
@@ -146,7 +150,7 @@ export function useERPStore() {
   useEffect(() => {
     try {
       // Force clear for first-time deploy of blank state to ensure existing users see empty data
-      const hasForcedClear = localStorage.getItem('erp_force_clear_data_v5');
+      const hasForcedClear = localStorage.getItem('erp_force_clear_data_v6');
       if (!hasForcedClear) {
         localStorage.setItem('erp_customers', JSON.stringify([]));
         localStorage.setItem('erp_products', JSON.stringify([]));
@@ -157,10 +161,11 @@ export function useERPStore() {
         localStorage.setItem('erp_transactions', JSON.stringify([]));
         localStorage.setItem('erp_tasks', JSON.stringify([]));
         localStorage.setItem('erp_project_category_groups', JSON.stringify([]));
+        idbSet('erp_project_category_groups', []);
         localStorage.setItem('erp_users', JSON.stringify(SEED_USERS));
-        localStorage.setItem('erp_current_user', JSON.stringify(SEED_USERS[0]));
-        localStorage.setItem('erp_simulated_role', 'admin');
-        localStorage.setItem('erp_force_clear_data_v5', 'true');
+        localStorage.removeItem('erp_current_user');
+        localStorage.removeItem('erp_simulated_role');
+        localStorage.setItem('erp_force_clear_data_v6', 'true');
       }
 
       const storedCustomers = localStorage.getItem('erp_customers');
@@ -247,6 +252,14 @@ export function useERPStore() {
       setTasks(mappedTasks);
       localStorage.setItem('erp_tasks', JSON.stringify(mappedTasks));
 
+      const storedModuleNotifs = localStorage.getItem('erp_module_notifications');
+      if (storedModuleNotifs) setModuleNotifications(JSON.parse(storedModuleNotifs));
+      else {
+        setModuleNotifications([]);
+        localStorage.setItem('erp_module_notifications', JSON.stringify([]));
+      }
+
+
       if (storedSettings) {
         const parsed = JSON.parse(storedSettings);
         const mergedDropdownItems = {
@@ -264,13 +277,26 @@ export function useERPStore() {
         localStorage.setItem('erp_settings', JSON.stringify(DEFAULT_SETTINGS));
       }
 
-      const storedCategoryGroups = localStorage.getItem('erp_project_category_groups');
-      if (storedCategoryGroups) {
-        setProjectCategoryGroups(JSON.parse(storedCategoryGroups));
-      } else {
+      idbGet('erp_project_category_groups').then(storedGroups => {
+        if (storedGroups && Array.isArray(storedGroups)) {
+          setProjectCategoryGroups(storedGroups);
+        } else {
+          // fallback to check localStorage
+          const localGroups = localStorage.getItem('erp_project_category_groups');
+          if (localGroups) {
+            const parsed = JSON.parse(localGroups);
+            setProjectCategoryGroups(parsed);
+            idbSet('erp_project_category_groups', parsed);
+            localStorage.removeItem('erp_project_category_groups');
+          } else {
+            setProjectCategoryGroups([]);
+            idbSet('erp_project_category_groups', []);
+          }
+        }
+      }).catch(err => {
+        console.error('Failed to load project category groups from idb:', err);
         setProjectCategoryGroups([]);
-        localStorage.setItem('erp_project_category_groups', JSON.stringify([]));
-      }
+      });
 
       const storedUsers = localStorage.getItem('erp_users');
       if (storedUsers) {
@@ -490,12 +516,22 @@ export function useERPStore() {
     };
     const updated = [newProject, ...projects];
     saveToStorage('erp_projects', updated, setProjects);
+
+    notifyModuleResponsible('projects', 'ثبت پروژه جدید', `پروژه جدید ${newProject.name} (${newProject.code}) توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`, newProject.id);
+
     return newProject;
   };
 
   const updateProject = (updatedProj: Project) => {
+    const oldProj = projects.find(p => p.id === updatedProj.id);
     const updated = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
     saveToStorage('erp_projects', updated, setProjects);
+    
+    if (oldProj && oldProj.status !== updatedProj.status) {
+      notifyModuleResponsible('projects', 'تغییر وضعیت پروژه', `پروژه ${updatedProj.name} به وضعیت «${updatedProj.status}» تغییر یافت.`, updatedProj.id);
+    } else {
+      notifyModuleResponsible('projects', 'ویرایش اطلاعات پروژه', `پروژه ${updatedProj.name} بروزرسانی شد.`, updatedProj.id);
+    }
   };
 
   const deleteProject = (id: string) => {
@@ -659,6 +695,7 @@ export function useERPStore() {
         id: `act-item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         text,
         createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+        createdBy: currentUser?.fullName || "کاربر سیستم",
         attachment: null,
         referral: null
       };
@@ -688,11 +725,7 @@ export function useERPStore() {
         updatedGroups = [newGroup, ...prevGroups];
       }
 
-      try {
-        localStorage.setItem('erp_project_category_groups', JSON.stringify(updatedGroups));
-      } catch (e) {
-        console.error("Error saving updated category groups", e);
-      }
+      idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
       return updatedGroups;
     });
   };
@@ -730,7 +763,7 @@ export function useERPStore() {
       autoLogFactActivity(
         newProforma.projectId,
         'پیش‌فاکتور',
-        `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${newProforma.totalAmount.toLocaleString('fa-IR')} ریال در وضعیت «${statusLabel}» توسط محمد توکل مقدم ایجاد شد.`
+        `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${newProforma.totalAmount.toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`
       );
     }
 
@@ -740,6 +773,8 @@ export function useERPStore() {
         adjustProductStock(item.productId, -item.quantity);
       });
     }
+
+    notifyModuleResponsible('proformas', 'ثبت پیش‌فاکتور جدید', `پیش‌فاکتور شماره ${newProforma.proformaNumber} صادر شد.`, newProforma.projectId);
 
     return newProforma;
   };
@@ -828,6 +863,8 @@ export function useERPStore() {
       // Deduct new items
       updatedPf.items.forEach(item => adjustProductStock(item.productId, -item.quantity));
     }
+
+    notifyModuleResponsible('proformas', 'ویرایش پیش‌فاکتور', `پیش‌فاکتور شماره ${updatedPf.proformaNumber} ویرایش شد.`, updatedPf.projectId);
   };
 
   const deleteProforma = (id: string) => {
@@ -924,7 +961,7 @@ export function useERPStore() {
       autoLogFactActivity(
         newPO.projectId,
         'سفارش خرید',
-        `سفارش خرید شماره ${newPO.poNumber} با وضعیت «${newPO.status}» به تامین‌کننده توسط محمد توکل مقدم ثبت شد.`
+        `سفارش خرید شماره ${newPO.poNumber} با وضعیت «${newPO.status}» به تامین‌کننده توسط ${currentUser?.fullName || 'کاربر سیستم'} ثبت شد.`
       );
     }
 
@@ -934,6 +971,8 @@ export function useERPStore() {
         adjustProductStock(item.productId, item.quantity);
       });
     }
+
+    notifyModuleResponsible('purchaseOrders', 'ثبت سفارش خرید جدید', `سفارش خرید شماره ${newPO.poNumber} ثبت شد.`, newPO.projectId);
 
     return newPO;
   };
@@ -1006,6 +1045,8 @@ export function useERPStore() {
       oldPO.items.forEach(item => adjustProductStock(item.productId, -item.quantity));
       updatedPO.items.forEach(item => adjustProductStock(item.productId, item.quantity));
     }
+
+    notifyModuleResponsible('purchaseOrders', 'ویرایش سفارش خرید', `سفارش خرید شماره ${updatedPO.poNumber} ویرایش شد.`, updatedPO.projectId);
   };
 
   const deletePurchaseOrder = (id: string) => {
@@ -1034,6 +1075,9 @@ export function useERPStore() {
     };
     const updated = [newTransaction, ...transactions];
     saveToStorage('erp_transactions', updated, setTransactions);
+    
+    notifyModuleResponsible('transactions', 'ثبت تراکنش جدید', `یک تراکنش ${newTransaction.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} به مبلغ ${newTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال ثبت شد.`, newTransaction.projectId);
+    
     return newTransaction;
   };
 
@@ -1068,6 +1112,73 @@ export function useERPStore() {
     saveToStorage('erp_settings', newSettings, setSettings);
   };
 
+  // --- Module Notifications ---
+  const notifyModuleResponsible = (module: string, title: string, description: string, projectId?: string) => {
+    const targets: string[] = [];
+    
+    // 1. The responsible user for the module
+    const responsibleName = settings.moduleResponsibles?.[module];
+    if (responsibleName && currentUser?.fullName !== responsibleName) {
+      targets.push(responsibleName);
+    }
+    
+    // 2. Admin users (System Admins)
+    users.filter(u => u.role === 'admin' || u.isSystemAdmin).forEach(admin => {
+      if (admin.fullName === currentUser?.fullName) return;
+      
+      const pref = settings.adminNotificationPreferences?.[admin.id];
+      const receiveAll = pref ? pref.receiveAll : true;
+      const importantProjects = pref ? pref.importantProjectIds : [];
+      
+      let shouldReceive = false;
+      if (receiveAll) {
+        shouldReceive = true;
+      } else if (projectId && importantProjects.includes(projectId)) {
+        shouldReceive = true;
+      }
+      
+      if (shouldReceive && !targets.includes(admin.fullName)) {
+        targets.push(admin.fullName);
+      }
+    });
+
+    if (targets.length === 0) return;
+
+    const newNotifs: ModuleNotification[] = targets.map(targetName => ({
+      id: `mnotif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      module,
+      title,
+      description,
+      timestamp: Date.now(),
+      read: false,
+      responsibleName: targetName
+    }));
+    
+    // Use setState callback to avoid closure staleness on moduleNotifications
+    setModuleNotifications(prev => {
+      const updated = [...newNotifs, ...prev];
+      localStorage.setItem('erp_module_notifications', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const markModuleNotificationAsRead = (id: string) => {
+    setModuleNotifications(prev => {
+      const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
+      localStorage.setItem('erp_module_notifications', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const markAllModuleNotificationsAsRead = () => {
+    if (!currentUser) return;
+    setModuleNotifications(prev => {
+      const updated = prev.map(n => n.responsibleName === currentUser.fullName ? { ...n, read: true } : n);
+      localStorage.setItem('erp_module_notifications', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return {
     isInitialized,
     customers,
@@ -1079,6 +1190,7 @@ export function useERPStore() {
     purchaseOrders,
     transactions,
     tasks,
+    moduleNotifications,
     settings,
     userRole,
     changeRole,
@@ -1123,6 +1235,19 @@ export function useERPStore() {
     updateTask,
     deleteTask,
     
+    markModuleNotificationAsRead,
+    markAllModuleNotificationsAsRead,
+    readItems,
+    markItemsAsRead: (itemsToMark: string[]) => {
+      setReadItems(prev => {
+        const next = Array.from(new Set([...prev, ...itemsToMark]));
+        if (currentUser) {
+           localStorage.setItem(`read_notifications_${currentUser.id}`, JSON.stringify(next));
+        }
+        return next;
+      });
+    },
+    
     // --- Project Activities (Category Groups) CRUD ---
     addProjectCategoryGroup: (projectId: string, categoryId: string, categoryName: string) => {
       let isDuplicate = false;
@@ -1148,11 +1273,7 @@ export function useERPStore() {
 
       setProjectCategoryGroups(prev => {
         const updated = [newGroup, ...prev];
-        try {
-          localStorage.setItem('erp_project_category_groups', JSON.stringify(updated));
-        } catch (error) {
-          console.error("Failed to save erp_project_category_groups to localStorage:", error);
-        }
+        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
         return updated;
       });
 
@@ -1164,13 +1285,14 @@ export function useERPStore() {
       categoryGroupId: string,
       text: string,
       attachment: { name: string; size: string; content?: string } | null,
-      referral: { assignedTo: string; actionRequired: string; assignedBy: string } | null
+      referral: { assignedTo: string; actionRequired: string; assignedBy: string } | null,
+      createdBy?: string
     ) => {
       const newReferral: ProjectReferral | null = referral ? {
         id: `ref-${Date.now()}`,
         assignedTo: referral.assignedTo,
         actionRequired: referral.actionRequired,
-        assignedBy: referral.assignedBy || 'محمد توکل مقدم',
+        assignedBy: referral.assignedBy || currentUser?.fullName || 'کاربر سیستم',
         createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
         status: 'در انتظار اقدام',
         response: null
@@ -1180,6 +1302,7 @@ export function useERPStore() {
         id: `act-item-${Date.now()}`,
         text,
         createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+        createdBy: createdBy || 'کاربر سیستم',
         attachment,
         referral: newReferral
       };
@@ -1194,65 +1317,122 @@ export function useERPStore() {
           }
           return g;
         });
-        try {
-          localStorage.setItem('erp_project_category_groups', JSON.stringify(updated));
-        } catch (error) {
-          console.error("Failed to save erp_project_category_groups to localStorage:", error);
-          alert(
-            'خطا در ذخیره‌سازی محلی فعالیت!\n\n' +
-            'احتمالاً حجم فایل پیوست بیش از ظرفیت مرورگر است.\n' +
-            'لطفاً از فایل کوچک‌تری استفاده کنید.'
-          );
-        }
+        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
         return updated;
       });
 
       return newActivity;
     },
 
-    completeProjectCategoryGroup: (categoryGroupId: string) => {
+    completeProjectCategoryGroup: (categoryGroupId: string, createdBy?: string) => {
       setProjectCategoryGroups(prev => {
         const updated = prev.map(g => {
           if (g.id === categoryGroupId) {
+            const newActivity: ProjectActivity = {
+              id: `act-item-${Date.now()}`,
+              text: 'وضعیت دسته بندی به اتمام کار تغییر یافت.',
+              createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+              createdBy: createdBy || 'کاربر سیستم',
+        attachment: null,
+              referral: null
+            };
             return {
               ...g,
               status: 'اتمام کار' as const,
-              endDate: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
+              endDate: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+              activities: [...(g.activities || []), newActivity]
             };
           }
           return g;
         });
-        try {
-          localStorage.setItem('erp_project_category_groups', JSON.stringify(updated));
-        } catch (error) {
-          console.error("Failed to save erp_project_category_groups to localStorage:", error);
-        }
+        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
         return updated;
       });
     },
 
-    resumeProjectCategoryGroup: (categoryGroupId: string) => {
+    resumeProjectCategoryGroup: (categoryGroupId: string, createdBy?: string) => {
       setProjectCategoryGroups(prev => {
         const updated = prev.map(g => {
           if (g.id === categoryGroupId) {
+            const newActivity: ProjectActivity = {
+              id: `act-item-${Date.now()}`,
+              text: 'دسته بندی مجدداً به جریان انداخته شد.',
+              createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+              createdBy: createdBy || 'کاربر سیستم',
+        attachment: null,
+              referral: null
+            };
             return {
               ...g,
               status: 'جاری' as const,
-              endDate: null
+              endDate: null,
+              activities: [...(g.activities || []), newActivity]
             };
           }
           return g;
         });
-        try {
-          localStorage.setItem('erp_project_category_groups', JSON.stringify(updated));
-        } catch (error) {
-          console.error("Failed to save erp_project_category_groups to localStorage:", error);
-        }
+        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
         return updated;
       });
     },
 
-    respondToReferral: (categoryGroupId: string, activityId: string, responseText: string, responderName: string, attachment?: { name: string; size: string; content?: string } | null) => {
+    respondToReferral: (categoryGroupId: string, activityId: string, responseText: string, responderName: string, attachment?: { name: string; size: string; content?: string } | null, markAsDone?: boolean, forwardTo?: string) => {
+      let assignerName = '';
+      let projectName = '';
+
+      setProjectCategoryGroups(prev => {
+        const updated = prev.map(g => {
+          if (g.id === categoryGroupId) {
+            projectName = g.categoryName || 'پروژه';
+            return {
+              ...g,
+              activities: (g.activities || []).map(a => {
+                if (a.id === activityId && a.referral) {
+                  assignerName = a.referral.assignedBy;
+                  
+                  const newMessage = {
+                    id: `msg-${Date.now()}`,
+                    text: responseText,
+                    responder: responderName,
+                    createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+                    attachment: attachment || null
+                  };
+                  
+                  const newMessages = [...(a.referral.messages || [])];
+                  if (a.referral.response) {
+                    // Migrate old response to messages if it's not there yet
+                    if (newMessages.length === 0) {
+                       newMessages.push(a.referral.response);
+                    }
+                  }
+                  newMessages.push(newMessage);
+
+                  return {
+                    ...a,
+                    referral: {
+                       ...a.referral,
+                       status: markAsDone ? 'انجام شده' as const : (forwardTo ? 'در انتظار اقدام' as const : a.referral.status),
+                       assignedTo: forwardTo ? forwardTo : a.referral.assignedTo,
+                       assignedBy: forwardTo ? responderName : a.referral.assignedBy,
+                       response: markAsDone ? newMessage : a.referral.response, // keep response for backward compatibility
+                       messages: newMessages
+                    }
+                  };
+                }
+                return a;
+              })
+            };
+          }
+          return g;
+        });
+        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
+        return updated;
+      });
+
+
+    },
+
+    toggleReferralStatus: (categoryGroupId: string, activityId: string) => {
       setProjectCategoryGroups(prev => {
         const updated = prev.map(g => {
           if (g.id === categoryGroupId) {
@@ -1264,13 +1444,7 @@ export function useERPStore() {
                     ...a,
                     referral: {
                        ...a.referral,
-                       status: 'انجام شده' as const,
-                       response: {
-                         text: responseText,
-                         responder: responderName,
-                         createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
-                         attachment: attachment || null
-                       }
+                       status: a.referral.status === 'در انتظار اقدام' ? 'انجام شده' as const : 'در انتظار اقدام' as const
                     }
                   };
                 }
@@ -1280,16 +1454,7 @@ export function useERPStore() {
           }
           return g;
         });
-        try {
-          localStorage.setItem('erp_project_category_groups', JSON.stringify(updated));
-        } catch (error) {
-          console.error("Failed to save erp_project_category_groups to localStorage:", error);
-          alert(
-            'خطا در ذخیره‌سازی محلی اقدام!\n\n' +
-            'احتمالاً حجم فایل پیوست بیش از ظرفیت مرورگر است.\n' +
-            'لطفاً از فایل کوچک‌تری استفاده کنید.'
-          );
-        }
+        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
         return updated;
       });
     },

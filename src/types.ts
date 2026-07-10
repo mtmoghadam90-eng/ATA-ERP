@@ -216,6 +216,16 @@ export interface Transaction {
   customValues?: Record<string, any>;
 }
 
+export interface ModuleNotification {
+  id: string;
+  module: string;
+  title: string;
+  description: string;
+  timestamp: number;
+  read: boolean;
+  responsibleName: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -311,11 +321,17 @@ export interface ERPSettings {
     receiptTypes?: string[];
   };
   lossReasons: string[];
-  activityCategories: { id: string; name: string; module: string }[];
+  activityCategories: { id: string; name: string; module: string; responsibleUserId?: string }[];
   sidebarModuleOrder?: string[];
+  moduleResponsibles?: Record<string, string>;
+  adminNotificationPreferences?: Record<string, {
+    receiveAll: boolean;
+    importantProjectIds: string[];
+  }>;
 }
 
 export interface ProjectReferralResponse {
+  id?: string;
   text: string;
   responder: string;
   createdAt: string;
@@ -330,12 +346,14 @@ export interface ProjectReferral {
   createdAt: string;
   status: 'در انتظار اقدام' | 'انجام شده';
   response: ProjectReferralResponse | null;
+  messages?: ProjectReferralResponse[];
 }
 
 export interface ProjectActivity {
   id: string;
   text: string;
   createdAt: string;
+  createdBy?: string;
   attachment: { name: string; size: string; content?: string } | null;
   referral: ProjectReferral | null;
 }
@@ -358,6 +376,7 @@ export interface User {
   fullName: string;
   role: 'admin' | 'user';
   isSystemAdmin?: boolean;
+  position?: string;
   signatureImage?: string;
   permissions: {
     dashboard: boolean;

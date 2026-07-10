@@ -914,8 +914,6 @@ export default function ProformasView({
             <div class="buyer-horizontal-row">
                 <div><span style="color: #64748b;">نام خریدار / شرکت:</span> <strong>${pf.customerName}</strong></div>
                 <div><span style="color: #64748b;">مخاطب:</span> ${pf.contactName || (customerObj ? `${customerObj.contactName || ''} ${customerObj.contactLastName || ''}`.trim() : '') || 'نماینده خریدار'}</div>
-                <div><span style="color: #64748b;">تلفن تماس:</span> ${customerObj ? (customerObj.phone || customerObj.mobile || '-') : '-'}</div>
-                <div><span style="color: #64748b;">پست الکترونیکی:</span> ${customerObj ? (customerObj.email || '-') : '-'}</div>
             </div>
         </div>
 
@@ -1163,18 +1161,6 @@ export default function ProformasView({
                         <span className="text-slate-400 font-medium block mb-1">مخاطب:</span>
                         <span className="font-medium text-slate-800">
                           {selectedProforma.contactName || (customerObj ? `${customerObj.contactName || ''} ${customerObj.contactLastName || ''}`.trim() : '') || 'نماینده خریدار'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 font-medium block mb-1">تلفن تماس:</span>
-                        <span className="font-mono text-slate-800">
-                          {customerObj ? (customerObj.phone || customerObj.mobile || '-') : '-'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 font-medium block mb-1">پست الکترونیکی:</span>
-                        <span className="font-mono text-slate-800 truncate block" title={customerObj?.email}>
-                          {customerObj ? (customerObj.email || '-') : '-'}
                         </span>
                       </div>
                     </div>

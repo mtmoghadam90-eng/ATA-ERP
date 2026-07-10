@@ -1,59 +1,107 @@
-/**
- * Compresses and resizes an uploaded image file before converting it to a Base64 string.
- * This prevents localStorage QuotaExceededErrors and keeps database sizes minimal.
- */
 export function compressAndResizeImage(
   file: File,
-  maxWidth: number = 400,
-  maxHeight: number = 400,
-  quality: number = 0.7
+  maxWidth: number,
+  maxHeight: number,
+  quality: number
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('File is not an image'));
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
+        const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
 
-        // Calculate new dimensions while maintaining aspect ratio
         if (width > height) {
           if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
+            height = height * (maxWidth / width);
             width = maxWidth;
           }
         } else {
           if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
+            width = width * (maxHeight / height);
             height = maxHeight;
           }
         }
 
-        const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(event.target?.result as string);
-          return;
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          reject(new Error('Failed to get canvas context'));
         }
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Signatures are best kept as PNG to support transparency, but logos/seals can be JPEG
-        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        const base64 = canvas.toDataURL(mimeType, quality);
-        resolve(base64);
       };
-      img.onerror = () => {
-        reject(new Error('خطا در پردازش تصویر'));
-      };
-      img.src = event.target?.result as string;
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target?.result as string;
     };
-    reader.onerror = () => {
-      reject(new Error('خطا در خواندن فایل'));
-    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
+}
+
+export function compressImage(file: File, callback: (dataUrl: string, size: string) => void) {
+  if (!file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const sizeStr = file.size > 1024 * 1024 
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+        : `${(file.size / 1024).toFixed(1)} KB`;
+      callback(reader.result as string, sizeStr);
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 1000;
+      const MAX_HEIGHT = 1000;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height = height * (MAX_WIDTH / width);
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width = width * (MAX_HEIGHT / height);
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        // Output as JPEG with 0.6 quality
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        
+        // Calculate rough size
+        const roughBytes = Math.round((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4);
+        const sizeStr = roughBytes > 1024 * 1024 
+          ? `${(roughBytes / (1024 * 1024)).toFixed(2)} MB` 
+          : `${(roughBytes / 1024).toFixed(1)} KB`;
+          
+        callback(dataUrl, sizeStr);
+      } else {
+        callback(e.target?.result as string, 'Unknown');
+      }
+    };
+    img.src = e.target?.result as string;
+  };
+  reader.readAsDataURL(file);
 }

@@ -33,9 +33,11 @@ import {
   BarChart3,
   ArrowUp,
   ArrowDown,
-  Menu
+  Menu,
+  UserCog,
+  Bell
 } from 'lucide-react';
-import { ERPSettings, CustomField, ProjectCategoryGroup } from '../types';
+import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project } from '../types';
 import ConfirmModal from './ConfirmModal';
 import { compressAndResizeImage } from '../imageUtils';
 
@@ -45,6 +47,9 @@ interface SettingsViewProps {
   userRole?: 'admin' | 'user';
   changeRole?: (role: 'admin' | 'user') => void;
   projectCategoryGroups?: ProjectCategoryGroup[];
+  users?: User[];
+  currentUser?: User | null;
+  projects?: Project[];
 }
 
 export default function SettingsView({
@@ -52,7 +57,10 @@ export default function SettingsView({
   updateSettings,
   userRole = 'admin',
   changeRole,
-  projectCategoryGroups = []
+  projectCategoryGroups = [],
+  users = [],
+  currentUser = null,
+  projects = [],
 }: SettingsViewProps) {
   const template = settings?.proformaTemplates?.[0] || {
     name: 'قالب پیش‌فرض رسمی',
@@ -78,7 +86,7 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications'>('general');
 
   // Loss reasons state
   const [newLossReason, setNewLossReason] = useState('');
@@ -92,7 +100,7 @@ export default function SettingsView({
 
   // Delete confirm state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteType, setDeleteType] = useState<'dropdownItem' | 'activityCategory' | 'lossReason' | 'customField' | null>(null);
+  const [deleteType, setDeleteType] = useState<'dropdownItem' | 'activityCategory' | 'lossReason' | 'customField' | 'clearData' | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string>('');
   const [deleteTargetName, setDeleteTargetName] = useState<string>('');
   const [deleteTargetExtra, setDeleteTargetExtra] = useState<any>(null);
@@ -416,8 +424,19 @@ export default function SettingsView({
         ...settings,
         customFields: currentFields.filter(f => f.id !== deleteTargetId)
       });
+    } else if (deleteType === "clearData") {
+      localStorage.setItem("erp_customers", JSON.stringify([]));
+      localStorage.setItem("erp_products", JSON.stringify([]));
+      localStorage.setItem("erp_suppliers", JSON.stringify([]));
+      localStorage.setItem("erp_projects", JSON.stringify([]));
+      localStorage.setItem("erp_proformas", JSON.stringify([]));
+      localStorage.setItem("erp_purchase_orders", JSON.stringify([]));
+      localStorage.setItem("erp_transactions", JSON.stringify([]));
+      localStorage.setItem("erp_tasks", JSON.stringify([]));
+      localStorage.setItem("erp_project_category_groups", JSON.stringify([]));
+      alert("تمامی داده‌ها با موفقیت پاک شدند. لطفاً صفحه را بارگذاری مجدد (Refresh) کنید.");
+      window.location.reload();
     }
-
     setDeleteConfirmOpen(false);
     setDeleteType(null);
     setDeleteTargetId('');
@@ -493,6 +512,30 @@ export default function SettingsView({
           <Menu size={16} className="text-teal-500" />
           ترتیب منوی سایدبار
         </button>
+        <button
+          onClick={() => setActiveTab('moduleResponsibles')}
+          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+            activeTab === 'moduleResponsibles'
+              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
+              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+          }`}
+        >
+          <UserCog size={16} className="text-indigo-500" />
+          مسئولین ماژول‌ها
+        </button>
+        {userRole === 'admin' && (
+          <button
+            onClick={() => setActiveTab('adminNotifications')}
+            className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+              activeTab === 'adminNotifications'
+                ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
+                : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+            }`}
+          >
+            <Bell size={16} className="text-rose-500" />
+            تنظیمات اعلان‌های مدیر
+          </button>
+        )}
       </div>
 
       {activeTab === 'general' ? (
@@ -801,6 +844,17 @@ export default function SettingsView({
           {/* Form save footer */}
           <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100">
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteType('clearData');
+                  setDeleteConfirmOpen(true);
+                }}
+                className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-sm font-bold transition flex items-center gap-2 border border-red-200"
+              >
+                <Trash2 size={16} />
+                پاکسازی کامل داده‌ها
+              </button>
               {isSaved && (
                 <span className="text-emerald-600 text-xs font-bold flex items-center gap-1.5 animate-bounce-short">
                   <CheckCircle2 size={16} />
@@ -1202,12 +1256,13 @@ export default function SettingsView({
               </button>
             </form>
 
-            <div className="border border-slate-150 rounded-xl overflow-hidden max-w-2xl bg-slate-50/50">
+            <div className="hidden md:block border border-slate-150 rounded-xl overflow-hidden max-w-2xl bg-slate-50/50">
               <table className="w-full text-right border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold">
                     <th className="py-3 px-4">ردیف</th>
                     <th className="py-3 px-4">نام دسته‌بندی فعالیت</th>
+                    <th className="py-3 px-4">مسئول (تایید کننده اقدامات)</th>
                     <th className="py-3 px-4">وضعیت استفاده در پروژه‌ها</th>
                     <th className="py-3 px-4 text-left">عملیات</th>
                   </tr>
@@ -1219,6 +1274,23 @@ export default function SettingsView({
                       <tr key={cat.id} className="hover:bg-white transition bg-white/40">
                         <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
                         <td className="py-3 px-4 font-semibold text-slate-800">{cat.name}</td>
+                        <td className="py-3 px-4">
+                          <select
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1 outline-none focus:border-sky-500"
+                            value={cat.responsibleUserId || ''}
+                            onChange={(e) => {
+                              const updatedCats = (settings.activityCategories || []).map(c => 
+                                c.id === cat.id ? { ...c, responsibleUserId: e.target.value } : c
+                              );
+                              updateSettings({ ...settings, activityCategories: updatedCats });
+                            }}
+                          >
+                            <option value="">بدون مسئول خاص</option>
+                            {users?.map(u => (
+                              <option key={u.id} value={u.fullName}>{u.fullName}</option>
+                            ))}
+                          </select>
+                        </td>
                         <td className="py-3 px-4">
                           {isUsed ? (
                             <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
@@ -1248,7 +1320,7 @@ export default function SettingsView({
                   })}
                   {(settings.activityCategories || []).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-center py-6 text-slate-400 bg-white">
+                      <td colSpan={5} className="text-center py-6 text-slate-400 bg-white">
                         هیچ دسته‌بندی فعالیتی تعریف نشده است. لطفاً حداقل یک مورد را بیفزایید.
                       </td>
                     </tr>
@@ -1256,8 +1328,75 @@ export default function SettingsView({
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile View */}
+            <div className="md:hidden space-y-4">
+              {(settings.activityCategories || []).map((cat, idx) => {
+                const isUsed = (projectCategoryGroups || []).some(g => g.categoryId === cat.id);
+                return (
+                  <div key={`mob-${cat.id}`} className="bg-white rounded-xl border border-slate-200 p-4 space-y-4 shadow-sm relative">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <span className="text-slate-400 font-mono text-[10px]">ردیف {idx + 1}</span>
+                        <h4 className="font-bold text-slate-800 text-sm">{cat.name}</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                        disabled={isUsed}
+                        className={`p-1.5 rounded-lg transition ${
+                          isUsed 
+                            ? 'text-slate-300 cursor-not-allowed bg-slate-50' 
+                            : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
+                        }`}
+                        title={isUsed ? 'این دسته‌بندی در پروژه‌ها استفاده شده و قابل حذف نیست.' : 'حذف دسته‌بندی'}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <span className="text-xs text-slate-500 block mb-1 font-semibold">مسئول (تایید کننده اقدامات)</span>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-2 outline-none focus:border-sky-500"
+                          value={cat.responsibleUserId || ''}
+                          onChange={(e) => {
+                            const updatedCats = (settings.activityCategories || []).map(c => 
+                              c.id === cat.id ? { ...c, responsibleUserId: e.target.value } : c
+                            );
+                            updateSettings({ ...settings, activityCategories: updatedCats });
+                          }}
+                        >
+                          <option value="">بدون مسئول خاص</option>
+                          {users?.map(u => (
+                            <option key={u.id} value={u.fullName}>{u.fullName}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className="text-xs text-slate-500 font-semibold">وضعیت</span>
+                        {isUsed ? (
+                          <span className="text-amber-600 bg-amber-100 px-2.5 py-1 rounded-md font-bold text-[10px]">
+                            استفاده شده
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-medium text-[10px]">بدون استفاده</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {(settings.activityCategories || []).length === 0 && (
+                <div className="text-center py-6 text-slate-400 bg-white border border-slate-200 rounded-xl text-xs font-medium">
+                  هیچ دسته‌بندی فعالیتی تعریف نشده است. لطفاً حداقل یک مورد را بیفزایید.
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
+        ) : activeTab === 'sidebarOrder' ? (
           /* Sidebar Module Order Tab */
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-150 pb-4">
@@ -1408,7 +1547,153 @@ export default function SettingsView({
               })()}
             </div>
           </div>
-        ))}
+        ) : activeTab === 'moduleResponsibles' ? (
+          /* Module Responsibles Tab */
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
+              <UserCog size={18} className="text-sky-500" />
+              <h3 className="font-bold text-sm">تعیین مسئولین ماژول‌ها</h3>
+            </div>
+            
+            <p className="text-slate-500 text-xs leading-relaxed">
+              با تعیین مسئول برای هر ماژول، تمامی تغییرات و ثبت‌های جدید در آن ماژول مستقیماً به عنوان یک اعلان در تب "اعلان‌های ماژول‌ها" در کارتابل ارجاعات مسئول مربوطه نمایش داده خواهد شد.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)' },
+                { id: 'proformas', name: 'پیش‌فاکتورها' },
+                { id: 'purchaseOrders', name: 'سفارشات خرید خارجی' },
+                { id: 'transactions', name: 'تراکنش‌های مالی' }
+              ].map(mod => (
+                <div key={mod.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="font-bold text-sm text-slate-800">{mod.name}</div>
+                  <select
+                    value={settings.moduleResponsibles?.[mod.id] || ''}
+                    onChange={(e) => {
+                      updateSettings({
+                        ...settings,
+                        moduleResponsibles: {
+                          ...(settings.moduleResponsibles || {}),
+                          [mod.id]: e.target.value
+                        }
+                      });
+                    }}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 bg-white"
+                  >
+                    <option value="">بدون مسئول مشخص</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.fullName}>
+                        {u.fullName} ({u.role === 'admin' ? 'مدیر' : 'کاربر'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : activeTab === 'adminNotifications' && userRole === 'admin' && currentUser ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-150 pb-4">
+              <div className="flex items-center gap-2 text-slate-800">
+                <Bell size={18} className="text-rose-500" />
+                <div>
+                  <h3 className="font-bold text-sm">تنظیمات اعلان‌های سیستم (مخصوص مدیر)</h3>
+                  <p className="text-slate-400 text-[11px] mt-0.5">مدیریت دریافت اعلان‌های تمام ماژول‌ها و پروژه‌ها</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6 max-w-xl">
+              <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div className="space-y-1">
+                  <span className="text-sm font-bold text-slate-700 block">دریافت همه اعلان‌ها</span>
+                  <span className="text-xs text-slate-500 block">آیا می‌خواهید اعلان تمامی بخش‌ها و پروژه‌ها را دریافت کنید؟</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentPrefs = settings.adminNotificationPreferences || {};
+                    const userPrefs = currentPrefs[currentUser.id] || { receiveAll: true, importantProjectIds: [] };
+                    
+                    updateSettings({
+                      ...settings,
+                      adminNotificationPreferences: {
+                        ...currentPrefs,
+                        [currentUser.id]: {
+                          ...userPrefs,
+                          receiveAll: !userPrefs.receiveAll
+                        }
+                      }
+                    });
+                  }}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${
+                    (settings.adminNotificationPreferences?.[currentUser.id]?.receiveAll ?? true) 
+                      ? 'bg-emerald-500' 
+                      : 'bg-slate-300'
+                  }`}
+                >
+                  <div className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                    (settings.adminNotificationPreferences?.[currentUser.id]?.receiveAll ?? true) 
+                      ? 'left-1' 
+                      : 'left-7'
+                  }`} />
+                </button>
+              </div>
+
+              {!(settings.adminNotificationPreferences?.[currentUser.id]?.receiveAll ?? true) && (
+                <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-4">
+                  <div className="space-y-1">
+                    <span className="text-sm font-bold text-slate-700 block">پروژه‌های مهم</span>
+                    <span className="text-xs text-slate-500 block">در صورتی که دریافت همه اعلان‌ها غیرفعال باشد، فقط اعلان‌های مربوط به پروژه‌های انتخاب شده زیر را دریافت خواهید کرد.</span>
+                  </div>
+                  
+                  <div className="space-y-2 mt-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {projects.map(proj => {
+                      const userPrefs = settings.adminNotificationPreferences?.[currentUser.id] || { receiveAll: false, importantProjectIds: [] };
+                      const isSelected = userPrefs.importantProjectIds.includes(proj.id);
+                      
+                      return (
+                        <label key={proj.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 cursor-pointer transition">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const newImportant = e.target.checked
+                                ? [...userPrefs.importantProjectIds, proj.id]
+                                : userPrefs.importantProjectIds.filter(id => id !== proj.id);
+                                
+                              updateSettings({
+                                ...settings,
+                                adminNotificationPreferences: {
+                                  ...(settings.adminNotificationPreferences || {}),
+                                  [currentUser.id]: {
+                                    ...userPrefs,
+                                    importantProjectIds: newImportant
+                                  }
+                                }
+                              });
+                            }}
+                            className="rounded text-sky-500 focus:ring-sky-500 w-4 h-4"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-bold text-slate-700 block">{proj.name}</span>
+                            <span className="text-[10px] text-slate-500">{proj.code} - {proj.customerName}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                    {projects.length === 0 && (
+                      <div className="text-center p-4 text-xs text-slate-500 bg-slate-50 rounded-lg">
+                        هیچ پروژه‌ای در سیستم ثبت نشده است.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null)}
 
       {/* Confirm Delete Modal */}
       <ConfirmModal
@@ -1424,13 +1709,15 @@ export default function SettingsView({
           deleteType === 'dropdownItem' ? 'حذف گزینه لیست بازشو' :
           deleteType === 'activityCategory' ? 'حذف دسته‌بندی فعالیت' :
           deleteType === 'lossReason' ? 'حذف علت باخت' :
-          deleteType === 'customField' ? 'حذف فیلد سفارشی' : 'تایید حذف'
+          deleteType === 'customField' ? 'حذف فیلد سفارشی' : 
+          deleteType === 'clearData' ? 'هشدار: پاکسازی کامل داده‌ها' : 'تایید حذف'
         }
         message={
           deleteType === 'dropdownItem' ? `آیا از حذف گزینه "${deleteTargetName}" از لیست کشویی "${dropdownLabels[selectedDropdownKey]}" اطمینان دارید؟` :
           deleteType === 'activityCategory' ? `آیا از حذف دسته‌بندی فعالیت "${deleteTargetName}" اطمینان دارید؟` :
           deleteType === 'lossReason' ? `آیا از حذف علت باخت "${deleteTargetName}" اطمینان دارید؟` :
-          deleteType === 'customField' ? `آیا از حذف فیلد سفارشی "${deleteTargetName}" اطمینان دارید؟ تمامی مقادیر ذخیره شده برای این فیلد در رکوردهای موجود حذف خواهند شد.` : ''
+          deleteType === 'customField' ? `آیا از حذف فیلد سفارشی "${deleteTargetName}" اطمینان دارید؟ تمامی مقادیر ذخیره شده برای این فیلد در رکوردهای موجود حذف خواهند شد.` : 
+          deleteType === 'clearData' ? 'آیا مطمئن هستید که می‌خواهید تمامی داده‌های نرم‌افزار (شامل مشتریان، کالاها، پروژه‌ها و ...) را به طور کامل پاک کنید؟ این عملیات غیرقابل بازگشت است.' : ''
         }
       />
 

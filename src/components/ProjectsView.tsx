@@ -35,6 +35,7 @@ import CustomFieldsDetailView from './CustomFieldsDetailView';
 import { exportToCSV } from '../excelUtils';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
+import { compressImage } from '../imageUtils';
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -54,10 +55,11 @@ interface ProjectsViewProps {
     categoryGroupId: string,
     text: string,
     attachment: { name: string; size: string; content?: string } | null,
-    referral: { assignedTo: string; actionRequired: string; assignedBy: string } | null
+    referral: { assignedTo: string; actionRequired: string; assignedBy: string } | null,
+    createdBy?: string
   ) => any;
-  completeProjectCategoryGroup?: (categoryGroupId: string) => void;
-  resumeProjectCategoryGroup?: (categoryGroupId: string) => void;
+  completeProjectCategoryGroup?: (categoryGroupId: string, createdBy?: string) => void;
+  resumeProjectCategoryGroup?: (categoryGroupId: string, createdBy?: string) => void;
   currentUser?: ERPUser | null;
   users?: ERPUser[];
 }
@@ -1501,6 +1503,8 @@ export default function ProjectsView({
                         .map((group) => {
                           const isGroupClosed = group.status === 'اتمام کار';
                           const isExpanded = !!expandedGroups[group.id];
+                          const cat = settings.activityCategories?.find(c => c.id === group.categoryId);
+                          const canManageCompletion = !cat?.responsibleUserId || cat.responsibleUserId === currentUser?.fullName || currentUser?.role === 'admin' || currentUser?.isSystemAdmin;
                           
                           return (
                             <div 
@@ -1542,12 +1546,12 @@ export default function ProjectsView({
                                   </div>
                                   
                                   {/* Toggle Button */}
-                                  {isGroupClosed ? (
+                                  {canManageCompletion && (isGroupClosed ? (
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (resumeProjectCategoryGroup) resumeProjectCategoryGroup(group.id);
+                                        if (resumeProjectCategoryGroup) resumeProjectCategoryGroup(group.id, currentUser?.fullName || 'کاربر سیستم');
                                       }}
                                       className="px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded text-[10px] font-bold transition border border-sky-150 flex items-center gap-1"
                                     >
@@ -1559,14 +1563,14 @@ export default function ProjectsView({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (completeProjectCategoryGroup) completeProjectCategoryGroup(group.id);
+                                        if (completeProjectCategoryGroup) completeProjectCategoryGroup(group.id, currentUser?.fullName || 'کاربر سیستم');
                                       }}
                                       className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold transition shadow-sm flex items-center gap-1"
                                     >
                                       <Check size={11} />
                                       اتمام کار این دسته
                                     </button>
-                                  )}
+                                  ))}
                                 </div>
                               </div>
 
@@ -1582,7 +1586,15 @@ export default function ProjectsView({
                                     (group.activities || []).map((act) => (
                                       <div key={act.id} className="bg-slate-50/50 p-3.5 rounded-lg border border-slate-100 space-y-2.5 text-xs text-right">
                                         <div className="flex justify-between items-center text-[10px] text-slate-400">
-                                          <span className="font-mono">{act.createdAt}</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-mono">{act.createdAt}</span>
+                                            {act.createdBy && (
+                                              <span className="text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                <User size={10} />
+                                                {act.createdBy}
+                                              </span>
+                                            )}
+                                          </div>
                                           {act.attachment && (
                                             act.attachment.content ? (
                                               <a
@@ -1623,21 +1635,46 @@ export default function ProjectsView({
                                               {act.referral.actionRequired}
                                             </div>
 
-                                            {/* Response visually nested under referral */}
-                                            {act.referral.response && (
-                                              <div className="mt-2 pt-2 border-t border-slate-100 bg-emerald-50/20 p-2 rounded-md border border-emerald-100 space-y-1 text-right">
+                                            {/* Messages visually nested under referral */}
+                                            {(act.referral.messages?.length ? act.referral.messages : (act.referral.response ? [act.referral.response] : [])).map((msg, msgIdx) => (
+                                              <div key={msgIdx} className="mt-2 pt-2 border-t border-slate-100 bg-emerald-50/20 p-2 rounded-md border border-emerald-100 space-y-1 text-right">
                                                 <div className="flex justify-between items-center text-[8px] text-emerald-800 font-bold">
                                                   <span>پاسخ اقدام:</span>
-                                                  <span className="font-mono">{act.referral.response.createdAt}</span>
+                                                  <span className="font-mono">{msg.createdAt}</span>
                                                 </div>
                                                 <p className="text-[11px] text-slate-800 font-semibold leading-relaxed bg-white/70 p-2 rounded border border-emerald-100">
-                                                  {act.referral.response.text}
+                                                  {msg.text}
                                                 </p>
+
+                                                {/* Response attachment if any */}
+                                                {msg.attachment && (
+                                                  <div className="pt-1">
+                                                    {msg.attachment.content ? (
+                                                      <a
+                                                        href={msg.attachment.content}
+                                                        download={msg.attachment.name}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-100/60 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 hover:text-emerald-900 text-[10px] font-bold mt-1 transition"
+                                                        title="دانلود فایل پیوست اقدام"
+                                                      >
+                                                        <Paperclip size={11} className="text-emerald-600" />
+                                                        <span>فایل پیوست پاسخ: {msg.attachment.name}</span>
+                                                        <span className="text-emerald-500">({msg.attachment.size})</span>
+                                                      </a>
+                                                    ) : (
+                                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold mt-1">
+                                                        <Paperclip size={11} />
+                                                        <span>فایل پیوست پاسخ: {msg.attachment.name}</span>
+                                                        <span className="text-emerald-500">({msg.attachment.size})</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                )}
+
                                                 <div className="text-[8px] text-slate-400">
-                                                  اقدام‌کننده: {act.referral.response.responder}
+                                                  ارسال‌کننده: {msg.responder}
                                                 </div>
                                               </div>
-                                            )}
+                                            ))}
                                           </div>
                                         )}
                                       </div>
@@ -1674,25 +1711,21 @@ export default function ProjectsView({
                                               onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) {
-                                                  // limit to 1MB to prevent QuotaExceededError in localStorage
-                                                  if (file.size > 1024 * 1024) {
-                                                    alert('حداکثر حجم مجاز برای فایل پیوست ۱ مگابایت (1MB) می‌باشد. لطفاً فایل کوچک‌تری انتخاب کنید.');
+                                                  if (file.size > 2 * 1024 * 1024 && !file.type.startsWith('image/')) {
+                                                    alert('حداکثر حجم مجاز برای فایل‌های غیرتصویری ۲ مگابایت می‌باشد.');
                                                     return;
                                                   }
-                                                  const reader = new FileReader();
-                                                  reader.onload = () => {
+                                                  
+                                                  compressImage(file, (dataUrl, sizeStr) => {
                                                     setNewActivityAttachment(prev => ({
                                                       ...prev,
-                                                      [group.id]: { 
-                                                        name: file.name, 
-                                                        size: file.size > 1024 * 1024 
-                                                          ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
-                                                          : `${(file.size / 1024).toFixed(1)} KB`,
-                                                        content: reader.result as string
+                                                      [group.id]: {
+                                                        name: file.name,
+                                                        size: sizeStr,
+                                                        content: dataUrl
                                                       }
                                                     }));
-                                                  };
-                                                  reader.readAsDataURL(file);
+                                                  });
                                                 }
                                               }}
                                             />
@@ -1771,9 +1804,11 @@ export default function ProjectsView({
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            const text = newActivityText[group.id];
-                                            if (!text || !text.trim()) {
-                                              alert('لطفاً ابتدا شرح فعالیت را بنویسید.');
+                                            const text = newActivityText[group.id] || '';
+                                            const attachmentData = newActivityAttachment[group.id] || null;
+
+                                            if (!text.trim() && !attachmentData) {
+                                              alert('لطفاً ابتدا شرح فعالیت یا پیوست را وارد کنید.');
                                               return;
                                             }
 
@@ -1796,15 +1831,14 @@ export default function ProjectsView({
                                               };
                                             }
 
-                                            const attachmentData = newActivityAttachment[group.id] || null;
-
                                             if (addProjectActivity) {
                                               addProjectActivity(
                                                 selectedProjectForActivities.id,
                                                 group.id,
                                                 text.trim(),
                                                 attachmentData,
-                                                referralData
+                                                referralData,
+                                                currentUser?.fullName || 'کاربر سیستم'
                                               );
                                               
                                               // Reset forms

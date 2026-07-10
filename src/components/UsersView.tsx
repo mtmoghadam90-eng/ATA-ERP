@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from '../types';
+import { User, ERPSettings } from '../types';
 import ConfirmModal from './ConfirmModal';
 import { compressAndResizeImage } from '../imageUtils';
 import { 
@@ -20,13 +20,14 @@ import {
 
 interface UsersViewProps {
   users: User[];
+  settings: ERPSettings;
   currentUser: User | null;
   addUser: (user: Omit<User, 'id'>) => User;
   updateUser: (updatedUser: User) => void;
   deleteUser: (id: string) => void;
 }
 
-export default function UsersView({ users, currentUser, addUser, updateUser, deleteUser }: UsersViewProps) {
+export default function UsersView({ users, settings, currentUser, addUser, updateUser, deleteUser }: UsersViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -37,6 +38,7 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<'admin' | 'user'>('user');
+  const [position, setPosition] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [signatureImage, setSignatureImage] = useState('');
 
@@ -118,6 +120,7 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
     setPassword('');
     setFullName('');
     setRole('user');
+    setPosition('');
     setSignatureImage('');
     setPermissions({
       dashboard: true,
@@ -157,6 +160,7 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
       password: password,
       fullName: fullName.trim(),
       role: role,
+      position: position,
       signatureImage: signatureImage,
       permissions: permissions
     });
@@ -170,6 +174,7 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
     setPassword(user.password || '');
     setFullName(user.fullName);
     setRole(user.role);
+    setPosition(user.position || '');
     setSignatureImage(user.signatureImage || '');
     setPermissions({
       ...user.permissions
@@ -199,6 +204,7 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
       password: password,
       fullName: fullName.trim(),
       role: role,
+      position: position,
       signatureImage: signatureImage,
       permissions: permissions
     });
@@ -309,6 +315,9 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
                       )}
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5 font-mono">
+                      {user.position && (
+                        <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-bold font-sans ml-2 border border-emerald-100">{user.position}</span>
+                      )}
                       <span>نام کاربری:</span>
                       <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">{user.username}</span>
                       {user.isSystemAdmin && (
@@ -403,13 +412,26 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">نقش سازمانی *</label>
+                  <label className="text-xs font-semibold text-slate-500">سمت سازمانی / حقیقی</label>
+                  <select
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                  >
+                    <option value="">-- انتخاب سمت --</option>
+                    {(settings.dropdownItems.positions || []).map((pos, idx) => (
+                      <option key={idx} value={pos}>{pos}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-500">سطح دسترسی (نقش سیستمی) *</label>
                   <select
                     value={role}
                     onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'user')}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                   >
-                    <option value="user">کارشناس فنی / بازرگانی خارجی</option>
+                    <option value="user">کاربر عادی (تعیین دسترسی در پایین)</option>
                     <option value="admin">مدیر سیستم (دسترسی کامل)</option>
                   </select>
                 </div>
@@ -585,14 +607,27 @@ export default function UsersView({ users, currentUser, addUser, updateUser, del
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">نقش سازمانی *</label>
+                  <label className="text-xs font-semibold text-slate-500">سمت سازمانی / حقیقی</label>
+                  <select
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                  >
+                    <option value="">-- انتخاب سمت --</option>
+                    {(settings.dropdownItems.positions || []).map((pos, idx) => (
+                      <option key={idx} value={pos}>{pos}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-500">سطح دسترسی (نقش سیستمی) *</label>
                   <select
                     value={role}
                     disabled={selectedUser.isSystemAdmin}
                     onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'user')}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white disabled:bg-slate-100 disabled:text-slate-400"
                   >
-                    <option value="user">کارشناس فنی / بازرگانی خارجی</option>
+                    <option value="user">کاربر عادی (تعیین دسترسی در پایین)</option>
                     <option value="admin">مدیر سیستم (دسترسی کامل)</option>
                   </select>
                 </div>
