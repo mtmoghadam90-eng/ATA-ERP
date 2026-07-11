@@ -42,7 +42,7 @@ if (count.count === 0) {
 
   const initialData = {
     'erp_settings': DEFAULT_SETTINGS,
-    'erp_rates': SEED_EXCHANGE_RATES,
+    'erp_exchange_rates': SEED_EXCHANGE_RATES,
     'erp_customers': SEED_CUSTOMERS,
     'erp_products': SEED_PRODUCTS,
     'erp_suppliers': SEED_SUPPLIERS,
