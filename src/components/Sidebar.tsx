@@ -17,7 +17,10 @@ import {
   X,
   Clock,
   Inbox,
-  ShieldCheck
+  ShieldCheck,
+  HelpCircle,
+  Boxes,
+  Wrench
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -61,12 +64,14 @@ export default function Sidebar({
     { id: 'proformas', name: 'پیش‌فاکتورها', icon: FileText },
     { id: 'products', name: 'کالاها و تجهیزات', icon: Package },
     { id: 'suppliers', name: 'تأمین‌کنندگان', icon: Truck },
+    { id: 'supplierInquiries', name: 'استعلام از تأمین‌کنندگان', icon: HelpCircle },
     { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', icon: ShoppingCart },
+    { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا', icon: Boxes },
+    { id: 'afterSalesServices', name: 'خدمات پس از فروش', icon: Wrench },
     { id: 'transactions', name: 'دریافت و پرداخت ریالی', icon: ArrowDownLeft },
     { id: 'rates', name: 'نرخ ارز روزانه', icon: TrendingUp },
     { id: 'tasks', name: 'وظایف و پیگیری', icon: CheckSquare, badge: taskCount > 0 ? String(taskCount) : null, badgeColor: 'bg-sky-500 text-white' },
     { id: 'referrals', name: 'کارتابل ارجاعات کار', icon: Inbox, badge: referralsCount > 0 ? String(referralsCount) : null, badgeColor: 'bg-amber-500 text-slate-900 font-extrabold animate-pulse' },
-    { id: 'reports', name: 'گزارشات و نمودارها', icon: BarChart3 },
     { id: 'users', name: 'مدیریت کاربران', icon: ShieldCheck },
     { id: 'settings', name: 'تنظیمات سیستم', icon: SettingsIcon },
   ];
@@ -94,25 +99,15 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Mobile toggle button */}
-      <div className="lg:hidden fixed top-4 right-4 z-50">
-        <button 
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-2 bg-slate-800 text-white rounded-md shadow-md hover:bg-slate-700 transition"
-        >
-          {isOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-      </div>
-
       {/* Sidebar container */}
       <div className={`
-        fixed lg:relative inset-y-0 right-0 z-40 bg-slate-900 text-slate-100 flex flex-col h-screen border-l border-slate-800
+        relative inset-y-0 right-0 z-40 bg-slate-900 text-slate-100 flex flex-col h-screen border-l border-slate-800
         transition-all duration-300 ease-in-out shadow-2xl flex-shrink-0
         ${isOpen ? 'w-64' : 'w-0 lg:w-20'}
         overflow-hidden
       `}>
         {/* Brand Header */}
-        <div className={`p-4 border-b border-slate-800 flex ${isOpen ? 'justify-between' : 'flex-col gap-3 justify-center'} items-center bg-slate-950 transition-all duration-300`}>
+        <div className={`p-4 border-b border-slate-800 flex ${isOpen ? 'justify-start' : 'justify-center'} items-center bg-slate-950 transition-all duration-300`}>
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-sky-500 rounded-lg text-white flex items-center justify-center shadow-lg shadow-sky-500/20 flex-shrink-0">
               <Clock className="animate-spin-slow text-white" size={20} />
@@ -124,14 +119,6 @@ export default function Sidebar({
               </div>
             )}
           </div>
-          {/* Toggle Button */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-100 rounded-md transition flex-shrink-0"
-            title={isOpen ? "بستن منو" : "باز کردن منو"}
-          >
-            {isOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
         </div>
 
         {/* User profile brief */}

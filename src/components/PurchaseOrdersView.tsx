@@ -93,6 +93,7 @@ export default function PurchaseOrdersView({
   const [statusDateInput, setStatusDateInput] = useState<string>('');
 
   // Form states
+  const [status, setStatus] = useState<PurchaseOrder['status']>('پیش‌نویس');
   const [supplierId, setSupplierId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [proformaId, setProformaId] = useState('');
@@ -115,6 +116,14 @@ export default function PurchaseOrdersView({
   const [receivedDate, setReceivedDate] = useState('');
 
   const [notes, setNotes] = useState('');
+
+  const determineStatusFromDates = (pay: string, ship: string, clear: string, rec: string): PurchaseOrder['status'] => {
+    if (rec) return 'تحویل شده (رسید انبار)';
+    if (clear) return 'ترخیص گمرک';
+    if (ship) return 'در حال حمل';
+    if (pay) return 'سفارش داده شده';
+    return 'پیش‌نویس';
+  };
 
   // Quick Supplier Creation States
   const [showQuickSupplierModal, setShowQuickSupplierModal] = useState(false);
@@ -150,6 +159,7 @@ export default function PurchaseOrdersView({
   // Open create
   const handleOpenCreate = () => {
     setEditingPO(null);
+    setStatus('پیش‌نویس');
     setSupplierId(suppliers[0]?.id || '');
     setProjectId('');
     setProformaId('');
@@ -175,6 +185,7 @@ export default function PurchaseOrdersView({
   // Open edit
   const handleOpenEdit = (po: PurchaseOrder) => {
     setEditingPO(po);
+    setStatus(po.status);
     setSupplierId(po.supplierId);
     setProjectId(po.projectId || '');
     setProformaId(po.proformaId || '');
@@ -301,6 +312,7 @@ export default function PurchaseOrdersView({
         remittanceFeeForeign,
         calculatedLandedCostRIYAL: calculatedLandedCost,
         calculatedLandedCostForeign,
+        status,
         paymentDate: paymentDate || undefined,
         goodsReadyDate: goodsReadyDate || undefined,
         shipmentDate: shipmentDate || undefined,
@@ -330,7 +342,7 @@ export default function PurchaseOrdersView({
         remittanceFeeForeign,
         calculatedLandedCostRIYAL: calculatedLandedCost,
         calculatedLandedCostForeign,
-        status: 'پیش‌نویس',
+        status,
         paymentDate: paymentDate || undefined,
         goodsReadyDate: goodsReadyDate || undefined,
         shipmentDate: shipmentDate || undefined,
@@ -503,6 +515,7 @@ export default function PurchaseOrdersView({
                     )}
                     <div>تاریخ ثبت سفارش: <span className="font-mono">{po.orderDate}</span></div>
                     <div>تاریخ تحویل احتمالی: <span className="font-mono text-amber-600 font-semibold">{po.expectedDeliveryDate}</span></div>
+                    <div>تاریخ تحویل نهایی در انبار: <span className="font-mono text-emerald-650 font-bold">{po.receivedDate || 'ثبت نشده'}</span></div>
                   </div>
 
                   {/* Dynamic Custom Fields Read-Only View */}
@@ -627,13 +640,14 @@ export default function PurchaseOrdersView({
                   <span className="text-xs font-bold text-slate-600">چرخه زمانی فرآیند تامین و واردات:</span>
                   <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-150 font-bold">زمان واقعی فرآیند</span>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 text-center">
                   {[
                     { label: '۱. ثبت سفارش اولیه', date: po.orderDate, color: 'text-slate-700 border-slate-200 bg-slate-50' },
                     { label: '۲. پرداخت صرافی و جاری شدن', date: po.paymentDate, color: 'text-blue-700 border-blue-200 bg-blue-50' },
                     { label: '۳. آماده‌سازی سازنده', date: po.goodsReadyDate, color: 'text-amber-700 border-amber-200 bg-amber-50' },
                     { label: '۴. حمل و ترانزیت بین‌الملل', date: po.shipmentDate, color: 'text-sky-700 border-sky-200 bg-sky-50' },
                     { label: '۵. ترخیص گمرکی نهایی', date: po.clearanceDate, color: 'text-purple-700 border-purple-200 bg-purple-50' },
+                    { label: '۶. تحویل نهایی (رسید انبار)', date: po.receivedDate, color: 'text-emerald-700 border-emerald-200 bg-emerald-50' },
                   ].map((step, idx) => (
                     <div 
                       key={idx} 
@@ -1008,6 +1022,22 @@ export default function PurchaseOrdersView({
                   />
                 </div>
 
+                {/* Status Selection */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 font-bold text-sky-700">وضعیت سفارش خرید</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as PurchaseOrder['status'])}
+                    className="w-full border border-sky-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-semibold text-sky-800"
+                  >
+                    <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
+                    <option value="سفارش داده شده">سفارش داده شده به سازنده (Ordered)</option>
+                    <option value="در حال حمل">در حال حمل و ترانزیت (In Transit)</option>
+                    <option value="ترخیص گمرک">در حال ترخیص از گمرکات (Customs)</option>
+                    <option value="تحویل شده (رسید انبار)">تحویل شده نهایی (رسید انبار) ★</option>
+                  </select>
+                </div>
+
               </div>
 
               {/* Multi-Row items */}
@@ -1224,7 +1254,10 @@ export default function PurchaseOrdersView({
                   <ShamsiDatePicker
                     label="تاریخ پرداخت و جاری شدن"
                     value={paymentDate}
-                    onChange={(val) => setPaymentDate(val)}
+                    onChange={(val) => {
+                      setPaymentDate(val);
+                      setStatus(determineStatusFromDates(val, shipmentDate, clearanceDate, receivedDate));
+                    }}
                   />
 
                   <ShamsiDatePicker
@@ -1236,19 +1269,28 @@ export default function PurchaseOrdersView({
                   <ShamsiDatePicker
                     label="تاریخ حمل بین‌المللی"
                     value={shipmentDate}
-                    onChange={(val) => setShipmentDate(val)}
+                    onChange={(val) => {
+                      setShipmentDate(val);
+                      setStatus(determineStatusFromDates(paymentDate, val, clearanceDate, receivedDate));
+                    }}
                   />
 
                   <ShamsiDatePicker
                     label="تاریخ ترخیص گمرکی"
                     value={clearanceDate}
-                    onChange={(val) => setClearanceDate(val)}
+                    onChange={(val) => {
+                      setClearanceDate(val);
+                      setStatus(determineStatusFromDates(paymentDate, shipmentDate, val, receivedDate));
+                    }}
                   />
 
                   <ShamsiDatePicker
                     label="تاریخ تحویل نهایی / دریافت کالا"
                     value={receivedDate}
-                    onChange={(val) => setReceivedDate(val)}
+                    onChange={(val) => {
+                      setReceivedDate(val);
+                      setStatus(determineStatusFromDates(paymentDate, shipmentDate, clearanceDate, val));
+                    }}
                   />
 
                 </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
 import CustomersView from './components/CustomersView';
@@ -10,19 +10,114 @@ import ProjectsView from './components/ProjectsView';
 import TransactionsView from './components/TransactionsView';
 import RatesView from './components/RatesView';
 import TasksView from './components/TasksView';
-import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import ReferralsView from './components/ReferralsView';
 import UsersView from './components/UsersView';
+import SupplierInquiriesView from './components/SupplierInquiriesView';
+import AfterSalesServicesView from './components/AfterSalesServicesView';
+import PackagingDeliveryView from './components/PackagingDeliveryView';
 import LoginView from './components/LoginView';
 import { useERPStore } from './useERPStore';
-import { ShieldAlert, Bell, Inbox, Menu } from 'lucide-react';
+import { ShieldAlert, Bell, Inbox, Menu, Calendar, CheckCircle2, Clock, User } from 'lucide-react';
+import TaskCalendarModal from './components/TaskCalendarModal';
+import { getTodayShamsi, toShamsiStr } from './dateUtils';
+import ShamsiDatePicker from './components/ShamsiDatePicker';
+import ConfirmModal from './components/ConfirmModal';
 
 export default function App() {
   const store = useERPStore();
   const [activeView, setActiveView] = useState<string>('dashboard');
   const [referralsTab, setReferralsTab] = useState<'toMe' | 'fromMe' | 'notifications'>('toMe');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [selectedProjectIdForActivities, setSelectedProjectIdForActivities] = useState<string | null>(null);
+  const [selectedCustomerNameForSearch, setSelectedCustomerNameForSearch] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
+  const [triggeredReminders, setTriggeredReminders] = useState<string[]>([]);
+  const [activeReminderTask, setActiveReminderTask] = useState<any>(null);
+  
+  // Snooze options state
+  const [showSnoozeOptions, setShowSnoozeOptions] = useState<boolean>(false);
+  const [customSnoozeDate, setCustomSnoozeDate] = useState<string>('');
+  const [customSnoozeTime, setCustomSnoozeTime] = useState<string>('');
+
+  const handleApplySnooze = (minutes: number) => {
+    if (!activeReminderTask) return;
+
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + minutes);
+
+    const shamsiDate = toShamsiStr(now);
+    const shamsiTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    store.updateTask({
+      ...activeReminderTask,
+      reminderEnabled: true,
+      reminderDate: shamsiDate,
+      reminderTime: shamsiTime,
+    });
+
+    setTriggeredReminders(prev => prev.filter(id => id !== activeReminderTask.id));
+    setActiveReminderTask(null);
+    setShowSnoozeOptions(false);
+  };
+
+  const handleSaveCustomSnooze = () => {
+    if (!activeReminderTask || !customSnoozeDate || !customSnoozeTime) return;
+
+    store.updateTask({
+      ...activeReminderTask,
+      reminderEnabled: true,
+      reminderDate: customSnoozeDate,
+      reminderTime: customSnoozeTime,
+    });
+
+    setTriggeredReminders(prev => prev.filter(id => id !== activeReminderTask.id));
+    setActiveReminderTask(null);
+    setShowSnoozeOptions(false);
+  };
+
+  // Real-time reminders checker effect
+  useEffect(() => {
+    if (!store.isInitialized || !store.tasks) return;
+
+    const interval = setInterval(() => {
+      const today = getTodayShamsi();
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      // Find any task with matching reminder date and time
+      const matchingTask = store.tasks.find(t => 
+        t.reminderEnabled && 
+        t.reminderDate === today && 
+        t.reminderTime === currentTime && 
+        t.status !== 'انجام شده' &&
+        !triggeredReminders.includes(t.id)
+      );
+
+      if (matchingTask) {
+        setTriggeredReminders(prev => [...prev, matchingTask.id]);
+        setActiveReminderTask(matchingTask);
+        
+        // Play clean notification sound using Web Audio API
+        try {
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.35);
+        } catch (e) {
+          console.log("Audio notify blocked or failed");
+        }
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [store.isInitialized, store.tasks, triggeredReminders]);
 
   if (!store.isInitialized) {
     return (
@@ -53,7 +148,11 @@ export default function App() {
               activeView === 'users' ? 'مدیریت کاربران' : 
               activeView === 'settings' ? 'تنظیمات سیستم' : 
               activeView === 'transactions' ? 'دریافت و پرداخت ریالی' :
-              activeView === 'reports' ? 'گزارشات و نمودارها' : 
+              activeView === 'supplierInquiries' ? 'استعلام از تأمین‌کنندگان' :
+              
+              activeView === 'packagingDelivery' ? 'بسته‌بندی و تحویل کالا' :
+              activeView === 'afterSalesServices' ? 'خدمات پس از فروش' :
+
               activeView
             }» را ندارد.
             لطفاً در صورت نیاز به این بخش، با مدیریت ارشد سیستم (محمد توکل مقدم) هماهنگ فرمایید.
@@ -75,6 +174,9 @@ export default function App() {
             tasks={store.tasks}
             setActiveTab={setActiveView}
             lowStockProducts={store.products.filter(p => p.stockLevel <= p.minStockLevel)}
+            currentUser={store.currentUser}
+            projectCategoryGroups={store.projectCategoryGroups}
+            onUpdateTask={store.updateTask}
           />
         );
       case 'customers':
@@ -87,6 +189,8 @@ export default function App() {
             batchUpdateCustomers={store.batchUpdateCustomers}
             industries={store.settings.dropdownItems.industries}
             settings={store.settings}
+            initialSearchQuery={selectedCustomerNameForSearch}
+            onClearInitialSearchQuery={() => setSelectedCustomerNameForSearch(null)}
           />
         );
       case 'products':
@@ -174,6 +278,8 @@ export default function App() {
             addCustomer={store.addCustomer}
             addProduct={store.addProduct}
             users={store.users}
+            initialSelectedProjectId={selectedProjectIdForActivities}
+            onClearInitialSelectedProject={() => setSelectedProjectIdForActivities(null)}
           />
         );
       case 'referrals':
@@ -192,6 +298,14 @@ export default function App() {
             moduleNotifications={store.moduleNotifications}
             markModuleNotificationAsRead={store.markModuleNotificationAsRead}
             markAllModuleNotificationsAsRead={store.markAllModuleNotificationsAsRead}
+            onViewProjectActivities={(projId) => {
+              setSelectedProjectIdForActivities(projId);
+              setActiveView('projects');
+            }}
+            onViewCustomerDetails={(custName) => {
+              setSelectedCustomerNameForSearch(custName);
+              setActiveView('customers');
+            }}
           />
         );
       case 'transactions':
@@ -202,6 +316,7 @@ export default function App() {
             suppliers={store.suppliers}
             projects={store.projects}
             addTransaction={store.addTransaction}
+            updateTransaction={store.updateTransaction}
             deleteTransaction={store.deleteTransaction}
             settings={store.settings}
             addCustomer={store.addCustomer}
@@ -223,6 +338,7 @@ export default function App() {
             tasks={store.tasks}
             customers={store.customers}
             projects={store.projects}
+            users={store.users}
             addTask={store.addTask}
             updateTask={store.updateTask}
             deleteTask={store.deleteTask}
@@ -232,19 +348,51 @@ export default function App() {
             addProject={store.addProject}
           />
         );
-      case 'reports':
+      case 'supplierInquiries':
         return (
-          <ReportsView 
+          <SupplierInquiriesView 
             projects={store.projects}
-            products={store.products}
-            transactions={store.transactions}
             proformas={store.proformas}
-            purchaseOrders={store.purchaseOrders}
+            suppliers={store.suppliers}
+            supplierInquiries={store.supplierInquiries}
+            addSupplierInquiry={store.addSupplierInquiry}
+            updateSupplierInquiry={store.updateSupplierInquiry}
+            deleteSupplierInquiry={store.deleteSupplierInquiry}
+            addSupplierInquiryStep={store.addSupplierInquiryStep}
+            selectSupplierInquiryWinner={store.selectSupplierInquiryWinner}
             settings={store.settings}
-            projectCategoryGroups={store.projectCategoryGroups}
+            currentUser={store.currentUser}
+          />
+        );
+      case 'packagingDelivery':
+        return (
+          <PackagingDeliveryView 
+            projects={store.projects}
+            proformas={store.proformas}
+            packagingDeliveries={store.packagingDeliveries}
+            addPackagingDelivery={store.addPackagingDelivery}
+            updatePackagingDelivery={store.updatePackagingDelivery}
+            deletePackagingDelivery={store.deletePackagingDelivery}
+            settings={store.settings}
+            currentUser={store.currentUser}
+          />
+        );
+      
+      case 'afterSalesServices':
+        return (
+          <AfterSalesServicesView 
+            afterSalesServices={store.afterSalesServices}
+            projects={store.projects}
+            proformas={store.proformas}
+            addAfterSalesService={store.addAfterSalesService}
+            updateAfterSalesService={store.updateAfterSalesService}
+            deleteAfterSalesService={store.deleteAfterSalesService}
+            settings={store.settings}
+            currentUser={store.currentUser}
           />
         );
       case 'settings':
+
         return (
           <SettingsView 
             settings={store.settings}
@@ -315,7 +463,7 @@ export default function App() {
       <Sidebar 
         activeTab={activeView} 
         setActiveTab={setActiveView} 
-        taskCount={store.tasks.filter(t => t.status !== 'انجام شده').length}
+        taskCount={store.tasks.filter(t => t.status !== 'انجام شده' && t.status !== 'کنسل شده').length}
         lowStockCount={store.products.filter(p => p.stockLevel <= p.minStockLevel).length}
         userRole={store.userRole}
         changeRole={store.changeRole}
@@ -354,6 +502,18 @@ export default function App() {
                )}
              </button>
              <button 
+               className="relative text-slate-500 hover:text-sky-600 transition p-1"
+               onClick={() => setCalendarOpen(true)}
+               title="تقویم پیگیری و وظایف روزانه"
+             >
+               <Calendar size={22} />
+               {store.tasks.filter(t => (!t.assignedTo || t.assignedTo === store.currentUser?.fullName) && t.status !== 'انجام شده' && t.status !== 'کنسل شده').length > 0 && (
+                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-sky-500 text-[10px] font-bold flex justify-center items-center rounded-full text-white shadow-sm border-2 border-white">
+                   {store.tasks.filter(t => (!t.assignedTo || t.assignedTo === store.currentUser?.fullName) && t.status !== 'انجام شده' && t.status !== 'کنسل شده').length}
+                 </span>
+               )}
+             </button>
+             <button 
                className="relative text-slate-500 hover:text-rose-600 transition p-1"
                onClick={() => { setReferralsTab('notifications'); setActiveView('referrals'); }} 
                title="اعلان‌های سیستم"
@@ -373,6 +533,187 @@ export default function App() {
         </div>
       </main>
 
+      {/* Task Calendar Modal */}
+      <TaskCalendarModal 
+        isOpen={calendarOpen} 
+        onClose={() => setCalendarOpen(false)} 
+        tasks={store.tasks} 
+        onUpdateTask={store.updateTask}
+        currentUser={store.currentUser}
+      />
+
+      {/* Active Reminder Alert Modal */}
+      {activeReminderTask && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md overflow-hidden animate-scale-in flex flex-col">
+            <div className="bg-amber-500 p-4 text-white flex items-center gap-3 shrink-0">
+              <div className="bg-white/10 p-2 rounded-xl text-white animate-bounce">
+                <Bell size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-white">یادآوری زمان‌بندی شده وظیفه</h3>
+                <p className="text-white/80 text-[10px] sm:text-xs">سیستم خودکار یادآوری ابزار تامین ارشیا</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4 text-right overflow-y-auto max-h-[calc(100vh-10rem)]">
+              {!showSnoozeOptions ? (
+                <>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100 inline-block">
+                      سررسید و موعد مقرر اقدام
+                    </span>
+                    <h4 className="font-bold text-base text-slate-800 leading-snug">
+                      {activeReminderTask.title}
+                    </h4>
+                  </div>
+
+                  {activeReminderTask.description && (
+                    <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100 leading-relaxed">
+                      {activeReminderTask.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-4 text-xs text-slate-400 border-t border-slate-100 pt-3">
+                    <div className="flex items-center gap-1.5">
+                      <User size={12} />
+                      <span>مسئول: {activeReminderTask.assignedTo || 'شخصی (خود شما)'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mr-auto font-mono">
+                      <Clock size={12} />
+                      <span>زمان یادآور: {activeReminderTask.reminderTime}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => {
+                        store.updateTask({
+                          ...activeReminderTask,
+                          status: 'انجام شده'
+                        });
+                        setActiveReminderTask(null);
+                        setShowSnoozeOptions(false);
+                      }}
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/10 cursor-pointer"
+                    >
+                      <CheckCircle2 size={14} />
+                      تغییر وضعیت به انجام شده
+                    </button>
+                    <button
+                      onClick={() => {
+                        const now = new Date();
+                        setCustomSnoozeDate(getTodayShamsi());
+                        setCustomSnoozeTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+                        setShowSnoozeOptions(true);
+                      }}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+                    >
+                      بستن و بعداً پیگیری می‌کنم
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="border-b border-slate-100 pb-3 text-right">
+                    <h4 className="font-bold text-sm text-slate-800">تعیین زمان یادآوری بعدی</h4>
+                    <p className="text-[10px] text-slate-400 mt-1">زمان مناسب برای یادآوری مجدد این وظیفه را مشخص کنید:</p>
+                  </div>
+
+                  {/* Quick Snooze Presets */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleApplySnooze(10)}
+                      className="p-2.5 bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 hover:border-amber-300 rounded-xl text-xs font-medium transition cursor-pointer text-center"
+                    >
+                      ۱۰ دقیقه دیگر
+                    </button>
+                    <button
+                      onClick={() => handleApplySnooze(30)}
+                      className="p-2.5 bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 hover:border-amber-300 rounded-xl text-xs font-medium transition cursor-pointer text-center"
+                    >
+                      ۳۰ دقیقه دیگر
+                    </button>
+                    <button
+                      onClick={() => handleApplySnooze(60)}
+                      className="p-2.5 bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 hover:border-amber-300 rounded-xl text-xs font-medium transition cursor-pointer text-center"
+                    >
+                      ۱ ساعت دیگر
+                    </button>
+                    <button
+                      onClick={() => handleApplySnooze(1440)}
+                      className="p-2.5 bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 hover:border-amber-300 rounded-xl text-xs font-medium transition cursor-pointer text-center"
+                    >
+                      فردا همین ساعت
+                    </button>
+                  </div>
+
+                  <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-slate-200"></div>
+                    <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 bg-white px-2">یا تاریخ و ساعت دلخواه</span>
+                    <div className="flex-grow border-t border-slate-200"></div>
+                  </div>
+
+                  {/* Custom Shamsi Date & Time Selector */}
+                  <div className="space-y-3">
+                    <div>
+                      <ShamsiDatePicker
+                        label="تاریخ یادآوری مجدد"
+                        required
+                        value={customSnoozeDate}
+                        onChange={(val) => setCustomSnoozeDate(val)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 block">ساعت یادآوری مجدد</label>
+                      <input
+                        type="time"
+                        required
+                        value={customSnoozeTime}
+                        onChange={(e) => setCustomSnoozeTime(e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none text-right font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      onClick={handleSaveCustomSnooze}
+                      className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10 cursor-pointer text-center"
+                    >
+                      ثبت زمان یادآوری جدید
+                    </button>
+                    <button
+                      onClick={() => setShowSnoozeOptions(false)}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+                    >
+                      بازگشت
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Category Completion Prompt Modal */}
+      <ConfirmModal
+        isOpen={!!store.completionPrompt}
+        onClose={() => store.setCompletionPrompt(null)}
+        onConfirm={() => {
+          if (store.completionPrompt) {
+            store.completeCategoryGroup(store.completionPrompt.projectId, store.completionPrompt.categoryName);
+            store.setCompletionPrompt(null);
+          }
+        }}
+        title="اتمام کار فعالیت"
+        message={store.completionPrompt?.message || ''}
+        confirmText="بله، تغییر یابد"
+        cancelText="انصراف"
+      />
     </div>
   );
 }
+

@@ -42,6 +42,8 @@ interface ReferralsViewProps {
   users: User[];
   readItems: string[];
   markItemsAsRead: (items: string[]) => void;
+  onViewProjectActivities?: (projectId: string) => void;
+  onViewCustomerDetails?: (customerName: string) => void;
 }
 
 export default function ReferralsView({
@@ -57,7 +59,9 @@ export default function ReferralsView({
   currentUser,
   users,
   readItems,
-  markItemsAsRead
+  markItemsAsRead,
+  onViewProjectActivities,
+  onViewCustomerDetails
 }: ReferralsViewProps) {
   const readItemsSet = new Set(readItems);
   const currentUserName = currentUser?.fullName || 'محمد توکل مقدم';
@@ -398,7 +402,16 @@ export default function ReferralsView({
                   <div className="flex flex-wrap items-center gap-4 text-xs">
                     <div className="flex items-center gap-1.5 font-bold text-slate-700">
                       <Briefcase size={14} className="text-sky-500" />
-                      <span>
+                      <span
+                        onClick={(e) => {
+                          if (onViewProjectActivities) {
+                            e.stopPropagation();
+                            onViewProjectActivities(group.projectId);
+                          }
+                        }}
+                        className="text-sky-600 hover:text-sky-800 hover:underline cursor-pointer transition-colors"
+                        title="مشاهده فعالیت‌های پروژه"
+                      >
                         {project ? `${project.name} (${project.code})` : (group.projectId === 'proj-1' ? 'مخازن اهواز ۳' : 'پروژه')}
                       </span>
                     </div>
@@ -519,7 +532,16 @@ export default function ReferralsView({
                     <div className="flex items-center gap-1.5">
                       <Briefcase size={14} className="text-slate-400" />
                       <span className="font-bold text-slate-700">پروژه:</span>
-                      <span className="font-bold text-sky-700">
+                      <span
+                        onClick={(e) => {
+                          if (onViewProjectActivities) {
+                            e.stopPropagation();
+                            onViewProjectActivities(group.projectId);
+                          }
+                        }}
+                        className="font-bold text-sky-600 hover:text-sky-800 hover:underline cursor-pointer transition-colors"
+                        title="مشاهده فعالیت‌های پروژه"
+                      >
                         {proj ? `${proj.name} (${proj.code})` : (group.projectId === 'proj-1' ? 'نوسازی مخازن اهواز ۳' : group.projectId)}
                       </span>
                     </div>
@@ -528,7 +550,18 @@ export default function ReferralsView({
                         <span className="text-slate-300 hidden md:inline">|</span>
                         <div className="flex items-center gap-1">
                           <span className="font-bold text-slate-700">مشتری:</span>
-                          <span className="font-semibold text-slate-600">{proj.customerName}</span>
+                          <span 
+                            onClick={(e) => {
+                              if (onViewCustomerDetails) {
+                                e.stopPropagation();
+                                onViewCustomerDetails(proj.customerName);
+                              }
+                            }}
+                            className="font-semibold text-sky-600 hover:text-sky-800 hover:underline cursor-pointer transition-colors"
+                            title="مشاهده اطلاعات مشتری"
+                          >
+                            {proj.customerName}
+                          </span>
                         </div>
                       </>
                     )}

@@ -9,7 +9,7 @@ import {
   Printer, 
   CheckCircle, 
   Clock, 
-  XCircle, 
+  XCircle, Ban, 
   AlertCircle,
   Eye,
   PlusCircle,
@@ -28,7 +28,6 @@ import { getTodayShamsi, addDaysToShamsi } from '../dateUtils';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
-
 interface ProformasViewProps {
   proformas: Proforma[];
   customers: Customer[];
@@ -47,7 +46,6 @@ interface ProformasViewProps {
   users?: User[];
   currentUser?: User | null;
 }
-
 export default function ProformasView({
   proformas,
   customers,
@@ -70,46 +68,43 @@ export default function ProformasView({
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [quickAddType, setQuickAddType] = useState<'customer' | 'project' | 'supplier' | 'product' | null>(null);
   const [quickAddProductIndex, setQuickAddProductIndex] = useState<number | null>(null);
-  
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProforma, setEditingProforma] = useState<Proforma | null>(null);
   const [showPrintView, setShowPrintView] = useState(false);
   const [selectedProforma, setSelectedProforma] = useState<Proforma | null>(null);
-  
   // Status change helper state
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusTargetId, setStatusTargetId] = useState<string>('');
   const [newStatusSelected, setNewStatusSelected] = useState<Proforma['status']>('پیش‌نویس');
   const [lossReason, setLossReason] = useState('');
-
   // Individual items status states
   const [showItemsModal, setShowItemsModal] = useState(false);
   const [selectedProformaForItems, setSelectedProformaForItems] = useState<Proforma | null>(null);
   const [editingItemsList, setEditingItemsList] = useState<ProformaItem[]>([]);
-
   // Bulk project proformas status change state
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkProjectId, setBulkProjectId] = useState('');
   const [bulkProjectName, setBulkProjectName] = useState('');
   const [bulkStatusSelected, setBulkStatusSelected] = useState<Proforma['status']>('پیش‌نویس');
   const [bulkLossReason, setBulkLossReason] = useState('');
-
   // Delete confirm state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [proformaToDeleteId, setProformaToDeleteId] = useState<string | null>(null);
   const [proformaToDeleteNumber, setProformaToDeleteNumber] = useState<string>('');
-
+  
+  // Cancel all confirm state
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelProjectId, setCancelProjectId] = useState('');
+  const [cancelProjectName, setCancelProjectName] = useState('');
   // Expanded project sections state
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
-
   const toggleProjectExpand = (projId: string) => {
     setExpandedProjects(prev => ({
       ...prev,
       [projId]: prev[projId] === false ? true : false
     }));
   };
-
   // Item status modal helpers
   const handleOpenItemsModal = (pf: Proforma) => {
     setSelectedProformaForItems(pf);
@@ -120,7 +115,6 @@ export default function ProformasView({
     })));
     setShowItemsModal(true);
   };
-
   const handleSaveItemsStatus = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProformaForItems) return;
@@ -130,7 +124,6 @@ export default function ProformasView({
     });
     setShowItemsModal(false);
   };
-
   const handleItemStatusChangeInList = (index: number, st: ProformaItem['status']) => {
     setEditingItemsList(
       editingItemsList.map((item, idx) =>
@@ -138,7 +131,6 @@ export default function ProformasView({
       )
     );
   };
-
   const handleItemLossReasonChangeInList = (index: number, reason: string) => {
     setEditingItemsList(
       editingItemsList.map((item, idx) =>
@@ -146,7 +138,6 @@ export default function ProformasView({
       )
     );
   };
-
   // Bulk project update modal helpers
   const handleOpenBulkModal = (projId: string, projName: string) => {
     setBulkProjectId(projId);
@@ -155,17 +146,16 @@ export default function ProformasView({
     setBulkLossReason('');
     setShowBulkModal(true);
   };
-
   const handleSaveBulkStatus = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkProjectId) return;
     batchUpdateProjectProformasStatus(bulkProjectId, bulkStatusSelected, bulkStatusSelected === 'باخته' ? bulkLossReason : undefined);
     setShowBulkModal(false);
   };
-
   // Form states for creating/editing proforma
   const [customerId, setCustomerId] = useState('');
   const [contactCustomerId, setContactCustomerId] = useState('');
+  const [contactPrefix, setContactPrefix] = useState('');
   const [projectId, setProjectId] = useState('');
   const [issueDate, setIssueDate] = useState(getTodayShamsi());
   const [expiryDate, setExpiryDate] = useState(() => addDaysToShamsi(getTodayShamsi(), 30));
@@ -176,7 +166,6 @@ export default function ProformasView({
   const [taxPercent, setTaxPercent] = useState<number>(10); // Standard Iranian VAT is 10% since 1403
   const [notes, setNotes] = useState(settings?.proformaTemplates?.[0]?.termsAndConditions || '');
   const [items, setItems] = useState<Omit<ProformaItem, 'id' | 'totalPriceRIYAL'>[]>([]);
-
   // Quick Customer Creation States
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
   const [quickCustType, setQuickCustType] = useState<'حقوقی' | 'حقیقی'>('حقوقی');
@@ -188,19 +177,30 @@ export default function ProformasView({
   const [quickCustIndustry, setQuickCustIndustry] = useState('نفت و گاز');
   const [quickCustKeyPerson, setQuickCustKeyPerson] = useState('');
   const [quickCustPosition, setQuickCustPosition] = useState('');
-
   // Quick Project Creation States
   const [showQuickProjectModal, setShowQuickProjectModal] = useState(false);
   const [quickProjName, setQuickProjName] = useState('');
   const [quickProjCustomerId, setQuickProjCustomerId] = useState('');
   const [quickProjStage, setQuickProjStage] = useState('استعلام اولیه');
   const [quickProjSalesExpert, setQuickProjSalesExpert] = useState('');
-
   // Open Create Modal
   const handleOpenCreate = () => {
     setEditingProforma(null);
-    setCustomerId(customers[0]?.id || '');
+    const firstCust = customers[0];
+    setCustomerId(firstCust?.id || '');
     setContactCustomerId('');
+    // Initialize default prefix based on first customer gender if they are a real person
+    if (firstCust && firstCust.customerType === 'حقیقی') {
+      if (firstCust.gender === 'مرد') {
+        setContactPrefix('جناب آقای مهندس');
+      } else if (firstCust.gender === 'زن') {
+        setContactPrefix('سرکار خانم مهندس');
+      } else {
+        setContactPrefix('');
+      }
+    } else {
+      setContactPrefix('');
+    }
     setProjectId('');
     setIssueDate(getTodayShamsi());
     setExpiryDate(addDaysToShamsi(getTodayShamsi(), 30));
@@ -222,12 +222,12 @@ export default function ProformasView({
     }]);
     setShowCreateModal(true);
   };
-
   // Open Edit Modal
   const handleOpenEdit = (pf: Proforma) => {
     setEditingProforma(pf);
     setCustomerId(pf.customerId);
     setContactCustomerId(pf.contactCustomerId || '');
+    setContactPrefix(pf.contactPrefix || '');
     setProjectId(pf.projectId || '');
     setIssueDate(pf.issueDate);
     setExpiryDate(pf.expiryDate);
@@ -249,21 +249,17 @@ export default function ProformasView({
     })));
     setShowCreateModal(true);
   };
-
   // Handle Currency selection conversion
   const handleCurrencyChange = (newCurrency: Proforma['currency']) => {
     const prevCurrency = currency;
     setCurrency(newCurrency);
-
     // Convert existing items' prices from prevCurrency to newCurrency
     const prevEng = mapPersianCurrencyToEnglish(prevCurrency || 'ریال');
     const prevRateObj = prevEng ? exchangeRates.find(r => r.currency === prevEng) : undefined;
     const prevRate = prevRateObj ? prevRateObj.rateToRIYAL : 1;
-
     const newEng = mapPersianCurrencyToEnglish(newCurrency || 'ریال');
     const newRateObj = newEng ? exchangeRates.find(r => r.currency === newEng) : undefined;
     const newRate = newRateObj ? newRateObj.rateToRIYAL : 1;
-
     const updatedItems = items.map(item => {
       // First, convert unit price from prevCurrency back to IRR
       const priceInRial = item.unitPriceRIYAL * (prevCurrency === 'ریال' ? 1 : prevRate);
@@ -276,18 +272,15 @@ export default function ProformasView({
     });
     setItems(updatedItems);
   };
-
   // Add Item line
   const handleAddItemLine = () => {
     const firstProd = products[0];
     if (!firstProd) return;
-
     // Convert first product's IRR basePrice to the selected currency
     const engCurrency = mapPersianCurrencyToEnglish(currency || 'ریال');
     const rateObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
     const rate = rateObj ? rateObj.rateToRIYAL : 1;
     const basePriceInSelectedCurrency = currency === 'ریال' ? firstProd.basePriceRIYAL : (firstProd.basePriceRIYAL / rate);
-
     setItems([...items, {
       productId: firstProd.id,
       productName: firstProd.displayName,
@@ -299,24 +292,20 @@ export default function ProformasView({
       selectedImage: firstProd.images && firstProd.images.length > 0 ? firstProd.images[0] : undefined
     }]);
   };
-
   // Remove Item line
   const handleRemoveItemLine = (index: number) => {
     if (items.length === 1) return;
     setItems(items.filter((_, i) => i !== index));
   };
-
   // Handle Item Select product
   const handleItemProductChange = (index: number, prodId: string) => {
     const prod = products.find(p => p.id === prodId);
     if (!prod) return;
-
     // Convert product's basePriceRIYAL to current currency
     const engCurrency = mapPersianCurrencyToEnglish(currency || 'ریال');
     const rateObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
     const rate = rateObj ? rateObj.rateToRIYAL : 1;
     const basePriceInSelectedCurrency = currency === 'ریال' ? prod.basePriceRIYAL : (prod.basePriceRIYAL / rate);
-
     const newItems = [...items];
     newItems[index] = {
       productId: prodId,
@@ -330,7 +319,6 @@ export default function ProformasView({
     };
     setItems(newItems);
   };
-
   // Handle Item fields modifications (generic to support strings or numbers)
   const handleItemFieldChange = (index: number, field: string, value: any) => {
     const newItems = [...items];
@@ -344,36 +332,30 @@ export default function ProformasView({
     };
     setItems(newItems);
   };
-
   // Calculate totals for Form (now calculated entirely in selected currency!)
   const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPriceRIYAL), 0);
   const discountAmount = Math.round(subTotal * (discountPercent / 100));
   const afterDiscount = subTotal - discountAmount;
   const taxAmount = Math.round(afterDiscount * (taxPercent / 100));
   const finalAmount = afterDiscount + taxAmount;
-
   // Handle Save (Add / Update)
   const handleSaveProforma = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerId) return;
-    
     const selectedCustObj = customers.find(c => c.id === customerId);
     const isLegal = selectedCustObj?.customerType === 'حقوقی';
     const contactObj = isLegal ? customers.find(c => c.id === contactCustomerId) : null;
     const finalContactName = contactObj 
       ? `${contactObj.firstName || ''} ${contactObj.lastName || ''}`.trim() 
       : undefined;
-
     const customerName = selectedCustObj?.companyName || 'مشتری نامشخص';
     const projName = projects.find(p => p.id === projectId)?.name || '';
-
     // Reconstruct items with subtotal price and correct item ID structure
     const formattedItems: ProformaItem[] = items.map((item, i) => ({
       id: `pfi-${Date.now()}-${i}`,
       ...item,
       totalPriceRIYAL: item.quantity * item.unitPriceRIYAL
     }));
-
     if (editingProforma) {
       updateProforma({
         ...editingProforma,
@@ -381,6 +363,7 @@ export default function ProformasView({
         customerName,
         contactCustomerId: isLegal ? contactCustomerId : undefined,
         contactName: isLegal ? finalContactName : undefined,
+        contactPrefix: contactPrefix || undefined,
         projectId: projectId || undefined,
         projectName: projectId ? projName : undefined,
         issueDate,
@@ -404,6 +387,7 @@ export default function ProformasView({
         customerName,
         contactCustomerId: isLegal ? contactCustomerId : undefined,
         contactName: isLegal ? finalContactName : undefined,
+        contactPrefix: contactPrefix || undefined,
         projectId: projectId || undefined,
         projectName: projectId ? projName : undefined,
         issueDate,
@@ -421,10 +405,8 @@ export default function ProformasView({
         notes
       });
     }
-
     setShowCreateModal(false);
   };
-
   // Trigger Status adjustment modal
   const handleOpenStatusChange = (pfId: string, currentStatus: Proforma['status']) => {
     setStatusTargetId(pfId);
@@ -432,19 +414,16 @@ export default function ProformasView({
     setLossReason('');
     setShowStatusModal(true);
   };
-
   const handleSaveStatusChange = (e: React.FormEvent) => {
     e.preventDefault();
     updateProformaStatus(statusTargetId, newStatusSelected, newStatusSelected === 'باخته' ? lossReason : undefined);
     setShowStatusModal(false);
   };
-
   // Open Preview layout
   const handleOpenPrint = (pf: Proforma) => {
     setSelectedProforma(pf);
     setShowPrintView(true);
   };
-
   const handleCopyProforma = (pf: Proforma) => {
     const copiedItems: ProformaItem[] = pf.items.map((item, i) => ({
       ...item,
@@ -452,12 +431,12 @@ export default function ProformasView({
       status: 'جاری',
       lossReason: undefined
     }));
-
     addProforma({
       customerId: pf.customerId,
       customerName: pf.customerName,
       contactCustomerId: pf.contactCustomerId,
       contactName: pf.contactName,
+      contactPrefix: pf.contactPrefix,
       projectId: pf.projectId,
       projectName: pf.projectName,
       issueDate: pf.issueDate,
@@ -476,19 +455,15 @@ export default function ProformasView({
       customValues: pf.customValues ? { ...pf.customValues } : undefined
     });
   };
-
   // Filter proformas
   const filteredProformas = proformas.filter(p => {
     const matchesSearch = 
       p.proformaNumber.toLowerCase().includes(search.toLowerCase()) ||
       p.customerName.toLowerCase().includes(search.toLowerCase()) ||
       (p.projectName && p.projectName.toLowerCase().includes(search.toLowerCase()));
-    
     const matchesStatus = selectedStatus === 'all' || p.status === selectedStatus;
-
     return matchesSearch && matchesStatus;
   });
-
   const getStatusColor = (st: Proforma['status']) => {
     switch (st) {
       case 'پیش‌نویس': return 'bg-slate-100 text-slate-700 border-slate-200';
@@ -498,11 +473,9 @@ export default function ProformasView({
       case 'باخته': return 'bg-red-50 text-red-700 border-red-200';
     }
   };
-
   const getProjectDetails = (projId: string) => {
     return projects.find(p => p.id === projId);
   };
-
   const getProjectStatusColor = (st: Project['status']) => {
     switch (st) {
       case 'جدید': return 'bg-blue-50 text-blue-700 border-blue-200';
@@ -515,28 +488,23 @@ export default function ProformasView({
       default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
-
   // Format Persian currency
   const formatToman = (num: number) => {
     return (num / 10).toLocaleString('fa-IR') + ' تومان';
   };
-
   const formatRawRIYAL = (num: number) => {
     return num.toLocaleString('fa-IR') + ' ریال';
   };
-
   const mapPersianCurrencyToEnglish = (cur: string): 'USD' | 'EUR' | 'AED' | undefined => {
     if (cur === 'دلار') return 'USD';
     if (cur === 'یورو') return 'EUR';
     if (cur === 'درهم') return 'AED';
     return undefined;
   };
-
   const formatCurrency = (num: number, cur?: Proforma['currency']) => {
     const unit = cur || 'ریال';
     return num.toLocaleString('fa-IR') + ' ' + unit;
   };
-
   const activeTemplate = settings?.proformaTemplates?.[0] || {
     name: 'قالب پیش‌فرض رسمی',
     companyName: 'ابزار تامین ارشیا (سهامی خاص)',
@@ -559,20 +527,17 @@ export default function ProformasView({
     showSignatures: true,
     showTotals: true
   };
-
   const downloadProformaHTML = (pf: Proforma) => {
     const template = activeTemplate;
     if (!template) return;
     const customerObj = customers.find(c => c.id === pf.customerId);
     const creatorUser = pf.creatorId ? users.find(u => u.id === pf.creatorId) : currentUser;
-    
     const targetCurrency = pf.currency || 'ریال';
     const engCurrency = mapPersianCurrencyToEnglish(targetCurrency);
     const currencyObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
     const currentRate = currencyObj ? currencyObj.rateToRIYAL : 1;
     const equivalentRiyal = pf.finalAmount * (targetCurrency === 'ریال' ? 1 : currentRate);
     const equivalentToman = Math.round(equivalentRiyal / 10);
-    
     const itemsRows = pf.items.map((item, index) => {
       const prod = products.find(p => p.id === item.productId);
       const imgToRender = item.selectedImage && item.selectedImage !== 'none'
@@ -599,9 +564,7 @@ export default function ProformasView({
       </tr>
       `;
     }).join('');
-
     const formattedToman = formatToman(pf.finalAmount);
-
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -896,27 +859,23 @@ export default function ProformasView({
                 </div>
                 ` : ''}
             </div>
-            
             <div class="title-box">
                 <h1 class="title">${(template.documentTitle || '').replace('رسمی', '').trim()}</h1>
             </div>
-            
             <div class="doc-specs">
                 <div class="specs-item"><span class="specs-label">شماره پیش‌فاکتور:</span> ${pf.proformaNumber}</div>
                 <div class="specs-item"><span class="specs-label">تاریخ صدور:</span> ${pf.issueDate}</div>
                 <div class="specs-item"><span class="specs-label">تاریخ اعتبار:</span> ${pf.expiryDate}</div>
             </div>
         </div>
-
         <!-- Buyer details horizontally in a single row -->
         <div class="section-card" style="margin-bottom: 14px;">
             <h4 class="section-title">مشخصات خریدار</h4>
             <div class="buyer-horizontal-row">
-                <div><span style="color: #64748b;">نام خریدار / شرکت:</span> <strong>${pf.customerName}</strong></div>
-                <div><span style="color: #64748b;">مخاطب:</span> ${pf.contactName || (customerObj ? `${customerObj.contactName || ''} ${customerObj.contactLastName || ''}`.trim() : '') || 'نماینده خریدار'}</div>
+                <div><span style="color: #64748b;">نام خریدار / شرکت:</span> <strong>${customerObj?.customerType === 'حقیقی' && pf.contactPrefix ? pf.contactPrefix + ' ' : ''}${pf.customerName}</strong></div>
+                <div><span style="color: #64748b;">مخاطب:</span> ${customerObj?.customerType === 'حقوقی' && pf.contactPrefix ? pf.contactPrefix + ' ' : ''}${pf.contactName || (customerObj ? `${customerObj.contactName || ''} ${customerObj.contactLastName || ''}`.trim() : '') || 'نماینده خریدار'}</div>
             </div>
         </div>
-
         <!-- Items Table -->
         <div class="table-container">
             <table>
@@ -936,7 +895,6 @@ export default function ProformasView({
                 </tbody>
             </table>
         </div>
-
         <!-- Financial Calculations -->
         <div class="financial-grid">
             <div class="notes-card">
@@ -944,7 +902,6 @@ export default function ProformasView({
                 <div style="font-weight: bold; margin-bottom: 8px; font-size: 11px; color: #0284c7;">📅 زمان تحویل: ${pf.deliveryDate || 'فوری'}</div>
                 <div style="white-space: pre-line; line-height: 1.6; font-size: 12px;">${pf.notes}</div>
             </div>
-            
             <div class="totals-card">
                 <div class="totals-row">
                     <span style="color: #64748b;">جمع ناخالص ردیف‌ها:</span>
@@ -972,7 +929,6 @@ export default function ProformasView({
                 </div>
             </div>
         </div>
-
         <!-- Signatures -->
         ${template.showSignatures ? `
         <div class="signatures">
@@ -1010,7 +966,6 @@ export default function ProformasView({
         </div>
         ` : ''}
     </div>
-
     <!-- Running print footer repeating on all pages when printing -->
     <div class="print-footer">
         <div class="print-footer-info">
@@ -1020,7 +975,6 @@ export default function ProformasView({
         </div>
         <div class="page-number"></div>
     </div>
-
     <!-- Auto Print Script -->
     <script>
         window.onload = function() {
@@ -1032,7 +986,6 @@ export default function ProformasView({
 </body>
 </html>
     `;
-
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1043,7 +996,6 @@ export default function ProformasView({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
-
   // Grouping proformas by project
   const proformasByProject = filteredProformas.reduce((acc, pf) => {
     const pId = pf.projectId || 'no-project';
@@ -1053,7 +1005,6 @@ export default function ProformasView({
     acc[pId].push(pf);
     return acc;
   }, {} as Record<string, Proforma[]>);
-
   // Sorting within each project group: latest version of proforma on top
   Object.keys(proformasByProject).forEach(pId => {
     proformasByProject[pId].sort((a, b) => {
@@ -1062,12 +1013,10 @@ export default function ProformasView({
       return b.proformaNumber.localeCompare(a.proformaNumber);
     });
   });
-
   // Project IDs ordered: real projects first (by code/name), then 'no-project'
   const projectIdsOrdered = Object.keys(proformasByProject).sort((a, b) => {
     if (a === 'no-project') return 1;
     if (b === 'no-project') return -1;
-    
     // Sort real projects based on code descending or name
     const projA = projects.find(p => p.id === a);
     const projB = projects.find(p => p.id === b);
@@ -1075,10 +1024,8 @@ export default function ProformasView({
     if (!projB) return -1;
     return projB.code.localeCompare(projA.code);
   });
-
   return (
     <div className="space-y-6 animate-fade-in">
-      
       {/* Print View Overlay */}
       {showPrintView && selectedProforma && activeTemplate && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs overflow-y-auto p-4 md:p-8 z-50 flex justify-center">
@@ -1102,10 +1049,8 @@ export default function ProformasView({
                 بستن پیش‌نمایش
               </button>
             </div>
-
             {/* Printable Document Sheet */}
             <div className="print-sheet space-y-6">
-              
               {/* Document Header */}
               <div className="flex flex-col md:flex-row justify-between items-center md:items-start text-center md:text-right gap-4 border-b-2 pb-4" style={{ borderColor: activeTemplate.titleColor }}>
                 {/* Logo Placeholder */}
@@ -1129,7 +1074,6 @@ export default function ProformasView({
                     </div>
                   </div>
                 )}
-                
                 {/* Title */}
                 <div className="text-center">
                   <h1 className="text-xl font-extrabold" style={{ color: activeTemplate.titleColor }}>
@@ -1137,7 +1081,6 @@ export default function ProformasView({
                   </h1>
                   <p className="text-[10px] text-slate-400 mt-1">سامانه صدور خودکار Arshia ERP</p>
                 </div>
-
                 {/* Doc Specs */}
                 <div className="text-xs space-y-1 text-slate-600 font-mono">
                   <div>شماره پیش‌فاکتور: <span className="font-bold text-slate-900">{selectedProforma.proformaNumber}</span></div>
@@ -1145,7 +1088,6 @@ export default function ProformasView({
                   <div>تاریخ اعتبار: <span>{selectedProforma.expiryDate}</span></div>
                 </div>
               </div>
-
               {/* Buyer details - designed horizontally in a single row */}
               {(() => {
                 const customerObj = customers.find(c => c.id === selectedProforma.customerId);
@@ -1155,11 +1097,15 @@ export default function ProformasView({
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                       <div>
                         <span className="text-slate-400 font-medium block mb-1">نام خریدار / شرکت:</span>
-                        <span className="font-bold text-slate-800">{selectedProforma.customerName}</span>
+                        <span className="font-bold text-slate-800">
+                          {customerObj?.customerType === 'حقیقی' && selectedProforma.contactPrefix ? `${selectedProforma.contactPrefix} ` : ''}
+                          {selectedProforma.customerName}
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-400 font-medium block mb-1">مخاطب:</span>
                         <span className="font-medium text-slate-800">
+                          {customerObj?.customerType === 'حقوقی' && selectedProforma.contactPrefix ? `${selectedProforma.contactPrefix} ` : ''}
                           {selectedProforma.contactName || (customerObj ? `${customerObj.contactName || ''} ${customerObj.contactLastName || ''}`.trim() : '') || 'نماینده خریدار'}
                         </span>
                       </div>
@@ -1167,7 +1113,6 @@ export default function ProformasView({
                   </div>
                 );
               })()}
-
               {/* Items Table */}
               <div className="border border-slate-200 rounded-xl overflow-x-auto">
                 <table className="w-full text-right text-xs border-collapse min-w-[650px]">
@@ -1217,7 +1162,6 @@ export default function ProformasView({
                   </tbody>
                 </table>
               </div>
-
               {/* Financial Calculation Totals */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-150 text-slate-600 space-y-2">
@@ -1225,7 +1169,6 @@ export default function ProformasView({
                   <p className="font-bold text-sky-600">📅 زمان تحویل: {selectedProforma.deliveryDate || 'فوری'}</p>
                   <p className="whitespace-pre-line leading-relaxed text-[11px]">{selectedProforma.notes}</p>
                 </div>
-
                 <div className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-150 divide-y divide-slate-200 space-y-2">
                   <div className="flex justify-between items-center py-1">
                     <span className="text-slate-500">جمع ناخالص ردیف‌ها:</span>
@@ -1260,7 +1203,6 @@ export default function ProformasView({
                   </div>
                 </div>
               </div>
-
               {/* Signatures */}
               {activeTemplate.showSignatures && (() => {
                 const previewCreatorUser = selectedProforma.creatorId ? users.find(u => u.id === selectedProforma.creatorId) : currentUser;
@@ -1269,7 +1211,6 @@ export default function ProformasView({
                     <div className="text-center w-80 border border-slate-100 rounded-2xl p-4 bg-slate-50/30">
                       <p className="text-xs text-slate-400 font-bold mb-1">مهر و امضای صادرکننده پیش‌فاکتور</p>
                       <p className="text-xs font-bold text-slate-700 mb-3">{previewCreatorUser ? previewCreatorUser.fullName : activeTemplate.signatureLabel1}</p>
-                      
                       {activeTemplate.companySealUrl ? (
                         <div className="grid grid-cols-2 gap-2 h-24 bg-white/50 rounded-xl border border-slate-100 p-2">
                           <div className="flex flex-col items-center justify-center border-l border-slate-100">
@@ -1314,7 +1255,6 @@ export default function ProformasView({
                   </div>
                 );
               })()}
-
               {/* Beautiful Footer displaying email, phone number, and address of the company, and page number */}
               <div className="border-t border-slate-200 pt-6 mt-12 flex flex-col sm:flex-row justify-between items-center text-[10px] text-slate-500 gap-4">
                 <div className="flex flex-wrap justify-center sm:justify-start gap-y-2 gap-x-6">
@@ -1326,12 +1266,10 @@ export default function ProformasView({
                   صفحه ۱ از ۱
                 </div>
               </div>
-
             </div>
           </div>
         </div>
       )}
-
       {/* Main View Page */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div>
@@ -1346,7 +1284,6 @@ export default function ProformasView({
           صدور پیش‌فاکتور جدید
         </button>
       </div>
-
       {/* Search and Filters row */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 items-center">
         <div className="relative w-full md:flex-1">
@@ -1359,7 +1296,6 @@ export default function ProformasView({
             className="w-full pr-10 pl-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition text-right"
           />
         </div>
-
         <div className="relative w-full md:w-64 flex items-center gap-2">
           <Filter size={16} className="text-slate-400 flex-shrink-0" />
           <select
@@ -1376,17 +1312,14 @@ export default function ProformasView({
           </select>
         </div>
       </div>
-
       {/* Grouped by Project Accordions */}
       <div className="space-y-4">
         {projectIdsOrdered.map((pId) => {
           const pfs = proformasByProject[pId];
           if (!pfs || pfs.length === 0) return null;
-
           const isNoProject = pId === 'no-project';
           const project = isNoProject ? null : getProjectDetails(pId);
           const isExpanded = expandedProjects[pId] !== false; // default to true
-
           return (
             <div 
               key={pId} 
@@ -1412,7 +1345,6 @@ export default function ProformasView({
                     </p>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-3 mr-auto sm:mr-0">
                   <span className="text-xs text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-full font-bold">
                     {pfs.length} نسخه پیش‌فاکتور
@@ -1422,6 +1354,20 @@ export default function ProformasView({
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getProjectStatusColor(project.status)}`}>
                         وضعیت پروژه: {project.status}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCancelProjectId(project.id);
+                          setCancelProjectName(project.name);
+                          setCancelConfirmOpen(true);
+                        }}
+                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 hover:border-amber-300 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                        title="لغو تمام نسخه‌های پیش‌فاکتور این پروژه"
+                      >
+                        <Ban size={10} />
+                        لغو تمام نسخه‌ها
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1442,7 +1388,6 @@ export default function ProformasView({
                   </span>
                 </div>
               </div>
-
               {/* Accordion Content */}
               {isExpanded && (
                 <div className="overflow-x-auto">
@@ -1451,9 +1396,10 @@ export default function ProformasView({
                       <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-xs font-bold">
                         <th className="p-4 w-32">شماره نسخه/سند</th>
                         <th className="p-4 w-48">تاریخ صدور / انقضا</th>
-                        <th className="p-4">اقلام و شرح فنی پیشنهاد قیمت</th>
+                        <th className="p-4 min-w-[300px]">مشتری/اقلام</th>
                         <th className="p-4 text-left w-52">مبلغ کل نهایی</th>
-                        <th className="p-4 text-center w-36">وضعیت مدرک</th>
+                        <th className="p-4 text-center w-36">وضعیت ارسال</th>
+                        <th className="p-4 text-center w-32">وضعیت پیش‌فاکتور</th>
                         <th className="p-4 text-center w-60">عملیات مدیریت</th>
                       </tr>
                     </thead>
@@ -1466,7 +1412,6 @@ export default function ProformasView({
                               {pf.proformaNumber}
                             </span>
                           </td>
-                          
                           {/* Dates */}
                           <td className="p-4 font-mono text-[11px] text-slate-600 space-y-1">
                             <div className="flex items-center gap-1.5">
@@ -1478,10 +1423,9 @@ export default function ProformasView({
                               <span className="font-extrabold">{pf.expiryDate}</span>
                             </div>
                           </td>
-
                           {/* Items description column */}
                           <td className="p-4">
-                            <div className="max-w-md space-y-1">
+                            <div className="space-y-1">
                               <div className="font-semibold text-slate-800 line-clamp-1">
                                 {pf.customerName}
                               </div>
@@ -1492,7 +1436,6 @@ export default function ProformasView({
                               </div>
                             </div>
                           </td>
-
                           {/* Amount */}
                           <td className="p-4 text-left font-mono font-bold text-slate-950 text-sm">
                             <div>{formatCurrency(pf.finalAmount, pf.currency)}</div>
@@ -1509,7 +1452,6 @@ export default function ProformasView({
                               </span>
                             )}
                           </td>
-
                           {/* Status Badge */}
                           <td className="p-4 text-center">
                             <div className="flex flex-col items-center gap-1">
@@ -1523,7 +1465,22 @@ export default function ProformasView({
                               )}
                             </div>
                           </td>
-
+                          {/* Computed Status Badge */}
+                          <td className="p-4 text-center">
+                            {(() => {
+                               if (pf.status === 'لغو شده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-200 text-slate-700 border-slate-300 shadow-sm">لغو شده</span>;
+                               const items = pf.items || [];
+                               if (items.length === 0) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-100 text-slate-600 border-slate-200">بررسی نشده</span>;
+                               const wonCount = items.filter(i => i.status === 'برنده').length;
+                               const lostCount = items.filter(i => i.status === 'بازنده').length;
+                               
+                               if (wonCount === items.length) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-500/10">برنده</span>;
+                               if (lostCount === items.length) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-red-50 text-red-700 border-red-200 shadow-sm shadow-red-500/10">بازنده</span>;
+                               if (wonCount > 0) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-500/10">نیمه برنده</span>;
+                               if (lostCount > 0) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-orange-50 text-orange-700 border-orange-200">نیمه بازنده</span>;
+                               return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-sky-50 text-sky-700 border-sky-200">جاری</span>;
+                            })()}
+                          </td>
                           {/* Actions */}
                           <td className="p-4">
                             <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -1535,7 +1492,6 @@ export default function ProformasView({
                               >
                                 <Eye size={14} />
                               </button>
-
                               {/* Edit Proforma */}
                               <button
                                 onClick={() => handleOpenEdit(pf)}
@@ -1544,7 +1500,6 @@ export default function ProformasView({
                               >
                                 <Edit size={14} />
                               </button>
-
                               {/* Copy Proforma */}
                               <button
                                 onClick={() => handleCopyProforma(pf)}
@@ -1553,7 +1508,6 @@ export default function ProformasView({
                               >
                                 <Copy size={14} />
                               </button>
-
                               {/* Prominent status update button - Exactly fixing user complaint */}
                               <button
                                 onClick={() => handleOpenStatusChange(pf.id, pf.status)}
@@ -1563,7 +1517,6 @@ export default function ProformasView({
                                 <Settings size={10} />
                                 تغییر وضعیت
                               </button>
-
                               {/* Manage Items Status */}
                               <button
                                 onClick={() => handleOpenItemsModal(pf)}
@@ -1572,7 +1525,6 @@ export default function ProformasView({
                               >
                                 ردیف‌ها
                               </button>
-
                               {/* Delete */}
                               <button
                                 onClick={() => {
@@ -1596,7 +1548,6 @@ export default function ProformasView({
             </div>
           );
         })}
-
         {filteredProformas.length === 0 && (
           <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center text-slate-400">
             <FileText className="mx-auto text-slate-300 mb-3" size={40} />
@@ -1604,7 +1555,6 @@ export default function ProformasView({
           </div>
         )}
       </div>
-
       {/* Status Adjustment Modal */}
       {showStatusModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
@@ -1615,7 +1565,6 @@ export default function ProformasView({
                 <X size={18} />
               </button>
             </div>
-
             <form onSubmit={handleSaveStatusChange} className="p-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500">وضعیت جدید را انتخاب کنید</label>
@@ -1626,14 +1575,9 @@ export default function ProformasView({
                 >
                   <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
                   <option value="ارسال شده">ارسال شده به کارفرما (Sent)</option>
-                  <option value="تأیید شده (برنده)">تأیید شده (برنده نهایی) ★</option>
                   <option value="لغو شده">لغو شده (Cancelled)</option>
-                  <option value="باخته">باخته (عدم تایید فنی یا مالی)</option>
                 </select>
               </div>
-
-
-
               {newStatusSelected === 'باخته' && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">دلیل عدم موافقت و باخت پیشنهاد</label>
@@ -1650,7 +1594,6 @@ export default function ProformasView({
                   </select>
                 </div>
               )}
-
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -1670,7 +1613,6 @@ export default function ProformasView({
           </div>
         </div>
       )}
-
       {/* Manage Individual Items Status Modal */}
       {showItemsModal && selectedProformaForItems && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -1684,12 +1626,29 @@ export default function ProformasView({
                 <X size={18} />
               </button>
             </div>
-
             <form onSubmit={handleSaveItemsStatus} className="p-6 space-y-4">
               <p className="text-slate-500 text-xs">
                 چنانچه بعضی از ردیف‌های پیش‌فاکتور برنده و بعضی دیگر بازنده شده‌اند، وضعیت هر ردیف را به صورت مستقل به همراه علت باخت ثبت کنید. این کار به صورت اتوماتیک وضعیت کل پروژه مادری را نیز همگام‌سازی خواهد کرد.
               </p>
-
+              
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingItemsList(prev => prev.map(item => ({ ...item, status: 'برنده' })))}
+                  className="px-3 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                >
+                  <CheckCircle size={14} />
+                  همه برنده
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingItemsList(prev => prev.map(item => ({ ...item, status: 'بازنده' })))}
+                  className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                >
+                  <XCircle size={14} />
+                  همه بازنده
+                </button>
+              </div>
               <div className="border border-slate-150 rounded-xl overflow-x-auto">
                 <table className="w-full text-right border-collapse text-xs min-w-[750px]">
                   <thead>
@@ -1742,7 +1701,6 @@ export default function ProformasView({
                   </tbody>
                 </table>
               </div>
-
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -1762,9 +1720,6 @@ export default function ProformasView({
           </div>
         </div>
       )}
-
-
-
       {/* Create / Edit Proforma Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -1777,11 +1732,9 @@ export default function ProformasView({
                 <X size={18} />
               </button>
             </div>
-
             <form onSubmit={handleSaveProforma} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               {/* Header Info */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                
                 {/* Project Select */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">مرتبط با پروژه مادری (کد پروژه) *</label>
@@ -1833,7 +1786,6 @@ export default function ProformasView({
                     )}
                   </div>
                 </div>
-
                 {/* Customer Select */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">انتخاب خریدار / کارفرما *</label>
@@ -1845,6 +1797,19 @@ export default function ProformasView({
                         setCustomerId(newCustId);
                         // Reset contact choice on customer change
                         setContactCustomerId('');
+                        // Auto set prefix for Real Customer
+                        const selectedCust = customers.find(c => c.id === newCustId);
+                        if (selectedCust && selectedCust.customerType === 'حقیقی') {
+                          if (selectedCust.gender === 'مرد') {
+                            setContactPrefix('جناب آقای مهندس');
+                          } else if (selectedCust.gender === 'زن') {
+                            setContactPrefix('سرکار خانم مهندس');
+                          } else {
+                            setContactPrefix('');
+                          }
+                        } else {
+                          setContactPrefix('');
+                        }
                       }}
                       required
                       className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
@@ -1866,7 +1831,24 @@ export default function ProformasView({
                     )}
                   </div>
                 </div>
-
+                {/* Prefix for Individual (حقیقی) Customer (rendered after Customer Name) */}
+                {(() => {
+                  const selectedCustObj = customers.find(c => c.id === customerId);
+                  const isRealCustomer = selectedCustObj?.customerType === 'حقیقی';
+                  if (!isRealCustomer) return null;
+                  return (
+                    <div className="space-y-1.5 animate-fade-in">
+                      <label className="text-xs font-semibold text-slate-500">پیشوند نام مشتری *</label>
+                      <input
+                        type="text"
+                        value={contactPrefix}
+                        onChange={(e) => setContactPrefix(e.target.value)}
+                        placeholder="مانند: جناب آقای مهندس"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                      />
+                    </div>
+                  );
+                })()}
                 {/* Contact Select (مخاطب) when Customer is Legal (حقوقی) */}
                 {(() => {
                   const selectedCustObj = customers.find(c => c.id === customerId);
@@ -1878,31 +1860,57 @@ export default function ProformasView({
                          c.companyName === selectedCustObj.companyName)
                       )
                     : [];
-                  
                   if (!isLegalCustomer) return null;
-
                   return (
-                    <div className="space-y-1.5 animate-fade-in">
-                      <label className="text-xs font-semibold text-slate-500">مخاطب *</label>
-                      <div className="flex gap-1.5 items-center">
-                        <select
-                          value={contactCustomerId}
-                          onChange={(e) => setContactCustomerId(e.target.value)}
-                          required
-                          className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                        >
-                          <option value="">-- انتخاب مخاطب --</option>
-                          {filteredContacts.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {`${c.firstName || ''} ${c.lastName || ''}`.trim() || c.companyName}
-                            </option>
-                          ))}
-                        </select>
+                    <>
+                      <div className="space-y-1.5 animate-fade-in">
+                        <label className="text-xs font-semibold text-slate-500">مخاطب *</label>
+                        <div className="flex gap-1.5 items-center">
+                          <select
+                            value={contactCustomerId}
+                            onChange={(e) => {
+                              const newContactId = e.target.value;
+                              setContactCustomerId(newContactId);
+                              // Auto set prefix for Contact Customer
+                              const selectedContact = customers.find(c => c.id === newContactId);
+                              if (selectedContact) {
+                                if (selectedContact.gender === 'مرد') {
+                                  setContactPrefix('جناب آقای مهندس');
+                                } else if (selectedContact.gender === 'زن') {
+                                  setContactPrefix('سرکار خانم مهندس');
+                                } else {
+                                  setContactPrefix('');
+                                }
+                              } else {
+                                setContactPrefix('');
+                              }
+                            }}
+                            required
+                            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                          >
+                            <option value="">-- انتخاب مخاطب --</option>
+                            {filteredContacts.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {`${c.firstName || ''} ${c.lastName || ''}`.trim() || c.companyName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    </div>
+                      {/* Prefix after Contact field */}
+                      <div className="space-y-1.5 animate-fade-in">
+                        <label className="text-xs font-semibold text-slate-500">پیشوند مخاطب *</label>
+                        <input
+                          type="text"
+                          value={contactPrefix}
+                          onChange={(e) => setContactPrefix(e.target.value)}
+                          placeholder="مانند: جناب آقای مهندس"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                        />
+                      </div>
+                    </>
                   );
                 })()}
-
                 {/* Dates */}
                 <div className="space-y-1.5" id="proforma-issue-date-picker-wrapper">
                   <ShamsiDatePicker
@@ -1912,7 +1920,6 @@ export default function ProformasView({
                     onChange={(val) => setIssueDate(val)}
                   />
                 </div>
-
                 <div className="space-y-1.5" id="proforma-expiry-date-picker-wrapper">
                   <ShamsiDatePicker
                     label="تاریخ انقضای اعتبار پیشنهاد"
@@ -1921,7 +1928,6 @@ export default function ProformasView({
                     onChange={(val) => setExpiryDate(val)}
                   />
                 </div>
-
                 <div className="space-y-1.5" id="proforma-delivery-date-picker-wrapper">
                   <label className="text-xs font-semibold text-slate-500">مدت و زمان تحویل کالا (تعهد تحویل) *</label>
                   <input
@@ -1934,7 +1940,6 @@ export default function ProformasView({
                   />
                   <span className="text-[10px] text-slate-400 block mt-1">مدت تحویل به صورت متنی (مثال: ۳ هفته کاری، ۱۰ روز تقویمی، فوری)</span>
                 </div>
-
                 {/* Status */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">وضعیت سند</label>
@@ -1947,7 +1952,6 @@ export default function ProformasView({
                     <option value="ارسال شده">ارسال شده به کارفرما</option>
                   </select>
                 </div>
-
                 {/* Currency Selection */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">نوع ارز پیش‌فاکتور *</label>
@@ -1964,7 +1968,6 @@ export default function ProformasView({
                   </select>
                 </div>
               </div>
-
               {/* Items multi-row block */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
@@ -1978,7 +1981,6 @@ export default function ProformasView({
                     افزودن ردیف کالا
                   </button>
                 </div>
-
                 {/* Grid headers */}
                 <div className="hidden md:grid grid-cols-12 gap-3 px-3 py-1 text-slate-400 font-bold text-[10px]">
                   <div className="col-span-5">انتخاب کالا</div>
@@ -1987,13 +1989,11 @@ export default function ProformasView({
                   <div className="col-span-2 text-left">بهای کل ردیف ({currency})</div>
                   <div className="col-span-1 text-center">حذف</div>
                 </div>
-
                 {/* Items rows */}
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pl-1">
                   {items.map((item, idx) => (
                     <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-150 space-y-3">
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                        
                         {/* Product Selector */}
                         <div className="col-span-5">
                           <div className="flex gap-1 items-center">
@@ -2022,7 +2022,6 @@ export default function ProformasView({
                             )}
                           </div>
                         </div>
-
                         {/* Quantity */}
                         <div className="col-span-2 flex items-center justify-center gap-1">
                           <input
@@ -2034,7 +2033,6 @@ export default function ProformasView({
                             className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center bg-white"
                           />
                         </div>
-
                         {/* Unit Price */}
                         <div className="col-span-2">
                           <input
@@ -2045,12 +2043,10 @@ export default function ProformasView({
                             className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-left bg-white"
                           />
                         </div>
-
                         {/* Total price for line */}
                         <div className="col-span-2 text-left font-mono font-bold text-xs text-slate-700 px-2">
                           {(item.quantity * item.unitPriceRIYAL).toLocaleString()} {currency}
                         </div>
-
                         {/* Remove item line button */}
                         <div className="col-span-1 text-center">
                           <button
@@ -2063,7 +2059,6 @@ export default function ProformasView({
                           </button>
                         </div>
                       </div>
-
                       {/* Technical specifications manual input */}
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-400 block">مشخصات فنی و توضیحات اختصاصی ردیف (مثال: سایز، متریال، سیگنال خروجی و ...)</label>
@@ -2075,7 +2070,6 @@ export default function ProformasView({
                           className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none text-right bg-white leading-relaxed"
                         />
                       </div>
-
                       {/* Product Image Selection */}
                       {(() => {
                         const prod = products.find(p => p.id === item.productId);
@@ -2125,10 +2119,8 @@ export default function ProformasView({
                   ))}
                 </div>
               </div>
-
               {/* Financial Bottom Block */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t border-slate-100 pt-5">
-                
                 {/* Notes and custom variables */}
                 <div className="space-y-3 text-xs">
                   <div className="space-y-1.5">
@@ -2142,14 +2134,12 @@ export default function ProformasView({
                     />
                   </div>
                 </div>
-
                 {/* Numerical Totals Panel */}
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-2.5 text-xs">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500">جمع ناخالص اقلام:</span>
                     <span className="font-mono text-slate-700">{subTotal.toLocaleString()} {currency}</span>
                   </div>
-
                   {/* Discount percentage input */}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500">اعمال درصد تخفیف کلی:</span>
@@ -2166,7 +2156,6 @@ export default function ProformasView({
                       <span className="font-mono text-red-600 font-semibold">({discountAmount.toLocaleString()} {currency})</span>
                     </div>
                   </div>
-
                   {/* Tax percentage input */}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500">مالیات بر ارزش افزوده (VAT):</span>
@@ -2183,7 +2172,6 @@ export default function ProformasView({
                       <span className="font-mono text-slate-600 font-semibold">({taxAmount.toLocaleString()} {currency})</span>
                     </div>
                   </div>
-
                   <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-sm font-bold text-sky-700">
                     <span>مبلغ کل خالص فاکتور:</span>
                     <span className="font-mono text-base">{finalAmount.toLocaleString()} {currency}</span>
@@ -2204,9 +2192,7 @@ export default function ProformasView({
                     </div>
                   )}
                 </div>
-
               </div>
-
               {/* Form Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
@@ -2223,12 +2209,10 @@ export default function ProformasView({
                   {editingProforma ? 'اعمال تغییرات پیش‌فاکتور' : 'ذخیره و ثبت پیش‌فاکتور خودکار'}
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       )}
-
       {/* Confirm Delete Modal */}
       <ConfirmModal
         isOpen={deleteConfirmOpen}
@@ -2245,7 +2229,25 @@ export default function ProformasView({
         title="حذف پیش‌فاکتور"
         message={`آیا از حذف پیش‌فاکتور "${proformaToDeleteNumber}" اطمینان دارید؟ این عمل غیرقابل بازگشت است.`}
       />
-
+      
+      {/* Confirm Cancel All Modal */}
+      <ConfirmModal
+        isOpen={cancelConfirmOpen}
+        onClose={() => {
+          setCancelConfirmOpen(false);
+          setCancelProjectId('');
+          setCancelProjectName('');
+        }}
+        onConfirm={() => {
+          if (cancelProjectId) {
+            batchUpdateProjectProformasStatus(cancelProjectId, 'لغو شده');
+            setCancelConfirmOpen(false);
+          }
+        }}
+        title="لغو تمام نسخه‌ها"
+        message={`آیا از لغو تمام نسخه‌های پیش‌فاکتور مربوط به پروژه "${cancelProjectName}" اطمینان دارید؟`}
+        confirmText="بله، لغو شود"
+      />
       {/* Quick Customer Add Modal */}
       {showQuickCustomerModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -2263,7 +2265,6 @@ export default function ProformasView({
                 <X size={18} />
               </button>
             </div>
-
             <div className="p-5 space-y-4 text-right">
               {/* Customer Type Choice */}
               <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
@@ -2290,7 +2291,6 @@ export default function ProformasView({
                   حقیقی (شخصی)
                 </button>
               </div>
-
               {quickCustType === 'حقوقی' ? (
                 <>
                   <div className="space-y-1">
@@ -2365,7 +2365,6 @@ export default function ProformasView({
                   </div>
                 </>
               )}
-
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-500">شماره تلفن</label>
@@ -2389,7 +2388,6 @@ export default function ProformasView({
                 </div>
               </div>
             </div>
-
             <div className="bg-slate-50 p-4 border-t border-slate-150 flex justify-end gap-2">
               <button
                 type="button"
@@ -2409,7 +2407,6 @@ export default function ProformasView({
                     alert('لطفاً نام و نام خانوادگی را وارد کنید.');
                     return;
                   }
-
                   const custData: any = {
                     type: quickCustType,
                     status: 'فعال',
@@ -2422,7 +2419,6 @@ export default function ProformasView({
                     tags: '',
                     linkedCustomerIds: []
                   };
-
                   if (quickCustType === 'حقوقی') {
                     custData.companyName = quickCustName;
                     custData.industry = quickCustIndustry;
@@ -2438,7 +2434,6 @@ export default function ProformasView({
                     custData.contactName = quickCustFirstName;
                     custData.contactLastName = quickCustLastName;
                   }
-
                   if (addCustomer) {
                     const created = addCustomer(custData);
                     if (created && created.id) {
@@ -2455,7 +2450,6 @@ export default function ProformasView({
           </div>
         </div>
       )}
-
       {/* Quick Project Add Modal */}
       {showQuickProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -2473,7 +2467,6 @@ export default function ProformasView({
                 <X size={18} />
               </button>
             </div>
-
             <div className="p-5 space-y-4 text-right">
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-500">نام پروژه *</label>
@@ -2485,7 +2478,6 @@ export default function ProformasView({
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs text-right focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
               </div>
-
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-500">نام مشتری / کارفرما *</label>
                 <select
@@ -2499,7 +2491,6 @@ export default function ProformasView({
                   ))}
                 </select>
               </div>
-
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-500">مرحله فرصت</label>
@@ -2513,7 +2504,6 @@ export default function ProformasView({
                     ))}
                   </select>
                 </div>
-
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-500">مسئول فروش</label>
                   <select
@@ -2528,7 +2518,6 @@ export default function ProformasView({
                 </div>
               </div>
             </div>
-
             <div className="bg-slate-50 p-4 border-t border-slate-150 flex justify-end gap-2">
               <button
                 type="button"
@@ -2548,10 +2537,8 @@ export default function ProformasView({
                     alert('لطفاً مشتری را انتخاب کنید.');
                     return;
                   }
-
                   const selectedCust = customers.find(c => c.id === quickProjCustomerId);
                   const customerName = selectedCust ? selectedCust.companyName : 'مشتری نامشخص';
-
                   const projData: any = {
                     name: quickProjName,
                     customerId: quickProjCustomerId,
@@ -2569,7 +2556,6 @@ export default function ProformasView({
                     itemsNeeded: [],
                     customValues: {}
                   };
-
                   if (addProject) {
                     const created = addProject(projData);
                     if (created && created.id) {
@@ -2587,7 +2573,6 @@ export default function ProformasView({
           </div>
         </div>
       )}
-
       {/* Bulk Status Update (Change all to Lost) Modal */}
       {showBulkModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -2605,12 +2590,10 @@ export default function ProformasView({
                 <X size={18} />
               </button>
             </div>
-
             <form onSubmit={handleSaveBulkStatus} className="p-5 space-y-4 text-right">
               <p className="text-xs text-slate-600 leading-relaxed">
                 شما در حال تغییر وضعیت تمام پیش‌فاکتورهای پروژه <span className="font-extrabold text-slate-900">«{bulkProjectName}»</span> به وضعیت <span className="font-extrabold text-red-600">«باخته»</span> هستید. لطفاً علت باخت را جهت تحلیل‌های مدیریتی مشخص نمایید:
               </p>
-
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-500">علت باخت پیش‌فاکتورها *</label>
                 <select
@@ -2633,7 +2616,6 @@ export default function ProformasView({
                   ))}
                 </select>
               </div>
-
               <div className="bg-slate-50 p-4 -mx-5 -mb-5 border-t border-slate-150 flex justify-end gap-2 mt-4">
                 <button
                   type="button"
@@ -2654,7 +2636,6 @@ export default function ProformasView({
           </div>
         </div>
       )}
-
       {quickAddType && (
         <QuickAddModal
           isOpen={!!quickAddType}
@@ -2683,7 +2664,6 @@ export default function ProformasView({
           }}
         />
       )}
-
     </div>
   );
 }

@@ -30,6 +30,7 @@ interface TransactionsViewProps {
   suppliers: Supplier[];
   projects: Project[];
   addTransaction: (tr: Omit<Transaction, 'id'> & { customValues?: Record<string, any> }) => void;
+  updateTransaction: (tr: Transaction) => void;
   deleteTransaction: (id: string) => void;
   settings: ERPSettings;
   addCustomer?: (customer: Omit<Customer, 'id' | 'createdAt'>) => Customer;
@@ -43,6 +44,7 @@ export default function TransactionsView({
   suppliers,
   projects,
   addTransaction,
+  updateTransaction,
   deleteTransaction,
   settings,
   addCustomer,
@@ -52,6 +54,7 @@ export default function TransactionsView({
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [quickAddType, setQuickAddType] = useState<'customer' | 'project' | 'supplier' | 'product' | null>(null);
 
   // Dynamic Custom Fields State
@@ -150,6 +153,7 @@ export default function TransactionsView({
     const initialCustId = customers[0]?.id || '';
     const initialSuppId = suppliers[0]?.id || '';
     
+    setEditingTransaction(null);
     setPartyType('customer');
     setCustomerId(initialCustId);
     setSupplierId(initialSuppId);
@@ -167,6 +171,33 @@ export default function TransactionsView({
     
     const initialDocNo = generateAutoDocNo('دریافت', 'customer', initialCustId, initialSuppId, '', '');
     setDocumentNumber(initialDocNo);
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (tr: Transaction) => {
+    setEditingTransaction(tr);
+    setType(tr.type);
+    setReceiptType(tr.receiptType || '');
+    setDocumentNumber(tr.documentNumber);
+    
+    if (tr.customerId) {
+      setPartyType('customer');
+      setCustomerId(tr.customerId);
+    } else if (tr.supplierId) {
+      setPartyType('supplier');
+      setSupplierId(tr.supplierId);
+    } else {
+      setPartyType('other');
+      setPartyNameManual(tr.customerName || tr.supplierName || '');
+    }
+    
+    setProjectId(tr.projectId || '');
+    setAmountRIYAL(tr.amountRIYAL);
+    setDate(tr.date);
+    setPaymentType(tr.paymentType);
+    setReferenceNumber(tr.referenceNumber || '');
+    setNotes(tr.notes || '');
+    setCustomValues(tr.customValues || {});
     setShowModal(true);
   };
 
@@ -201,12 +232,12 @@ export default function TransactionsView({
 
     const linkedProjName = projects.find(p => p.id === projectId)?.name;
 
-    addTransaction({
+    const transactionPayload = {
       type,
       receiptType,
       documentNumber,
       customerId: resolvedCustomerId,
-      customerName: resolvedCustomerId ? resolvedPartyName : undefined,
+      customerName: resolvedCustomerId ? resolvedPartyName : (partyType === 'other' ? resolvedPartyName : undefined),
       supplierId: resolvedSupplierId,
       supplierName: resolvedSupplierId ? resolvedPartyName : undefined,
       projectId: projectId || undefined,
@@ -217,7 +248,16 @@ export default function TransactionsView({
       referenceNumber,
       notes,
       customValues
-    });
+    };
+
+    if (editingTransaction) {
+      updateTransaction({
+        id: editingTransaction.id,
+        ...transactionPayload
+      });
+    } else {
+      addTransaction(transactionPayload);
+    }
 
     setShowModal(false);
   };
@@ -326,7 +366,7 @@ export default function TransactionsView({
                 <th className="p-4">تاریخ ثبت</th>
                 <th className="p-4">شیوه پرداخت و کد مرجع</th>
                 <th className="p-4 text-left">مبلغ سند ریال</th>
-                <th className="p-4 text-center">حذف</th>
+                <th className="p-4 text-center">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
@@ -388,16 +428,26 @@ export default function TransactionsView({
 
                     {/* Actions */}
                     <td className="p-4 text-center">
-                      <button
-                        onClick={() => {
-                          setTransactionToDeleteId(t.id);
-                          setTransactionToDeleteDoc(t.documentNumber || '');
-                          setDeleteConfirmOpen(true);
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleOpenEdit(t)}
+                          className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
+                          title="ویرایش سند"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTransactionToDeleteId(t.id);
+                            setTransactionToDeleteDoc(t.documentNumber || '');
+                            setDeleteConfirmOpen(true);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="حذف سند"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
 
                   </tr>
@@ -422,7 +472,9 @@ export default function TransactionsView({
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-xl overflow-hidden animate-scale-in flex flex-col my-4 max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-              <h3 className="font-bold text-slate-800 text-sm sm:text-base">ثبت سند دریافت / پرداخت صندوق</h3>
+              <h3 className="font-bold text-slate-800 text-sm sm:text-base">
+                {editingTransaction ? 'ویرایش سند دریافت / پرداخت صندوق' : 'ثبت سند دریافت / پرداخت صندوق'}
+              </h3>
               <button onClick={() => setShowModal(false)} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition" title="بستن فرم">
                 <X size={18} />
               </button>
@@ -743,7 +795,7 @@ export default function TransactionsView({
                   type="submit"
                   className="px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-medium transition"
                 >
-                  ثبت قطعی در دفاتر حسابداری
+                  {editingTransaction ? 'ثبت تغییرات سند' : 'ثبت قطعی در دفاتر حسابداری'}
                 </button>
               </div>
 

@@ -96,6 +96,7 @@ export interface Proforma {
   customerName: string;
   contactCustomerId?: string; // مخاطب انتخاب شده (مشتری حقیقی مرتبط)
   contactName?: string; // نام مخاطب جهت ثبت نهایی
+  contactPrefix?: string; // پیشوند مخاطب یا مشتری حقیقی
   projectId?: string;
   projectName?: string;
   issueDate: string;
@@ -236,8 +237,11 @@ export interface Task {
   priority: 'پایین' | 'متوسط' | 'بالا' | 'فوری';
   dueDate: string;
   assignedTo: string;
-  status: 'در انتظار' | 'در حال انجام' | 'انجام شده' | 'کنسل شده';
+  status: 'در حال انجام' | 'انجام شده' | 'کنسل شده';
   customValues?: Record<string, any>;
+  reminderEnabled?: boolean;
+  reminderDate?: string;
+  reminderTime?: string;
 }
 
 export interface ExchangeRate {
@@ -250,7 +254,7 @@ export interface ExchangeRate {
 
 export interface CustomField {
   id: string;
-  module: 'customers' | 'projects' | 'products' | 'proformas' | 'suppliers' | 'purchaseOrders' | 'transactions' | 'tasks';
+  module: 'customers' | 'projects' | 'products' | 'proformas' | 'suppliers' | 'purchaseOrders' | 'transactions' | 'tasks' | 'supplierInquiries' | 'packagingDelivery' | 'afterSalesServices';
   name: string;
   type: 'text' | 'textarea' | 'number' | 'select' | 'date' | 'file' | 'boolean';
   options?: string[];
@@ -319,6 +323,10 @@ export interface ERPSettings {
     purchaseOrderStatuses: string[];
     positions?: string[];
     receiptTypes?: string[];
+    supplierInquiryActionTypes?: string[];
+    shippingMethods?: string[];
+    packageTypes?: string[];
+    returnReasons?: string[];
   };
   lossReasons: string[];
   activityCategories: { id: string; name: string; module: string; responsibleUserId?: string }[];
@@ -328,6 +336,7 @@ export interface ERPSettings {
     receiveAll: boolean;
     importantProjectIds: string[];
   }>;
+  deliveryChecklistTemplate?: string[];
 }
 
 export interface ProjectReferralResponse {
@@ -390,9 +399,98 @@ export interface User {
     rates: boolean;
     tasks: boolean;
     referrals: boolean;
-    reports: boolean;
     settings: boolean;
     users: boolean;
+    supplierInquiries?: boolean;
+    packagingDelivery?: boolean;
   };
 }
 
+export interface InquiryStep {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+  type: 'creation' | 'sent' | 'response' | 'winner' | 'update' | 'other';
+  sentMethod?: string;
+  sentTo?: string;
+}
+
+export interface SupplierInquiry {
+  id: string;
+  projectId: string;
+  projectName: string;
+  proformaId?: string;
+  proformaNumber?: string;
+  proformaItemId?: string; // ID of the ProformaItem
+  proformaItemName?: string; // name of the proforma item (product name or combined specs)
+  supplierId: string;
+  supplierName: string;
+  inquiryDate: string;
+  status: 'پیش‌نویس' | 'ارسال شده' | 'در انتظار پاسخ' | 'پاسخ داده شده' | 'لغو شده' | 'برنده' | 'بازنده';
+  priceRIYAL?: number;
+  priceForeign?: number;
+  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال';
+  deliveryTime?: string;
+  technicalProposalFile?: string;
+  financialProposalFile?: string;
+  technicalProposalFileSize?: string;
+  financialProposalFileSize?: string;
+  notes?: string;
+  steps: InquiryStep[];
+  createdAt: string;
+  winnerSelectedDate?: string;
+  isWinner?: boolean;
+}
+
+export interface PackingItem {
+  id: string;
+  itemOrDocName: string;
+  productId?: string;
+  quantity: number;
+  packageType: string; // e.g. کارتن، جعبه چوبی، پالت، کیسه
+  dimensions: string; // e.g. 50x40x30 سانتی‌متر
+  weight: number; // وزن به کیلوگرم
+  boxNumber?: string;
+}
+
+export interface DeliveryChecklistItem {
+  name: string;
+  completed: boolean;
+  completedAt?: string;
+}
+
+export interface PackagingDelivery {
+  id: string;
+  projectId: string;
+  projectName: string;
+  proformaId?: string; // پیش‌فاکتور تایید شده مرتبط
+  proformaNumber?: string;
+  packingListNumber: string; // شماره پکینگ لیست
+  deliveryDate: string; // تاریخ تحویل
+  shippingMethod: string; // نحوه ارسال کالا
+  preDeliveryTestNotes: string; // گزارش تست قبل از تحویل تجهیز
+  checklist: DeliveryChecklistItem[]; // چک‌لیست تحویل تیک‌خورده
+  items: PackingItem[]; // اقلام پکینگ لیست
+  photos: string[]; // تصاویر آپلود شده بسته‌بندی و ارسال (base64)
+  createdAt: string;
+}
+
+
+
+export interface AfterSalesService {
+  id: string;
+  projectId: string;
+  projectName: string;
+  proformaNumber?: string;
+  proformaItemName?: string;
+  itemName: string;
+  issueDescription: string;
+  actionsTaken: string;
+  startDate: string;
+  endDate?: string;
+  returnDate?: string;
+  status: 'در حال بررسی' | 'در حال تعمیر/خدمات' | 'تکمیل شده' | 'تحویل داده شده';
+  createdAt: string;
+  createdBy: string;
+}

@@ -14,17 +14,19 @@ import {
   CheckCircle2,
   ListTodo
 } from 'lucide-react';
-import { Task, Customer, Project, ERPSettings } from '../types';
+import { Task, Customer, Project, ERPSettings, User as ERPUser } from '../types';
 import { getTodayShamsi } from '../dateUtils';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import QuickAddModal from './QuickAddModal';
+import { Bell, BellOff } from 'lucide-react';
 
 interface TasksViewProps {
   tasks: Task[];
   customers: Customer[];
   projects: Project[];
+  users: ERPUser[];
   addTask: (task: Omit<Task, 'id'> & { customValues?: Record<string, any> }) => void;
   updateTask: (task: Task) => void;
   deleteTask: (id: string) => void;
@@ -38,6 +40,7 @@ export default function TasksView({
   tasks,
   customers,
   projects,
+  users,
   addTask,
   updateTask,
   deleteTask,
@@ -49,6 +52,7 @@ export default function TasksView({
   const [search, setSearch] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [quickAddType, setQuickAddType] = useState<'customer' | 'project' | 'supplier' | 'product' | null>(null);
 
   // Dynamic Custom Fields State
@@ -61,19 +65,43 @@ export default function TasksView({
   const [relatedToId, setRelatedToId] = useState('');
   const [priority, setPriority] = useState<Task['priority']>('متوسط');
   const [dueDate, setDueDate] = useState(getTodayShamsi());
-  const [assignedTo, setAssignedTo] = useState(currentUser?.fullName || 'محمد توکل مقدم');
-  const [status, setStatus] = useState<Task['status']>('در انتظار');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [status, setStatus] = useState<Task['status']>('در حال انجام');
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderDate, setReminderDate] = useState(getTodayShamsi());
+  const [reminderTime, setReminderTime] = useState('09:00');
 
   const handleOpenAdd = () => {
+    setEditingTask(null);
     setTitle('');
     setDescription('');
     setRelatedToType('عمومی');
     setRelatedToId('');
     setPriority('متوسط');
     setDueDate(getTodayShamsi());
-    setAssignedTo(currentUser?.fullName || 'محمد توکل مقدم');
-    setStatus('در انتظار');
+    setAssignedTo('');
+    setStatus('در حال انجام');
+    setReminderEnabled(false);
+    setReminderDate(getTodayShamsi());
+    setReminderTime('09:00');
     setCustomValues({});
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (task: Task) => {
+    setEditingTask(task);
+    setTitle(task.title);
+    setDescription(task.description);
+    setRelatedToType(task.relatedToType);
+    setRelatedToId(task.relatedToId || '');
+    setPriority(task.priority);
+    setDueDate(task.dueDate);
+    setAssignedTo(task.assignedTo || '');
+    setStatus(task.status);
+    setReminderEnabled(task.reminderEnabled || false);
+    setReminderDate(task.reminderDate || getTodayShamsi());
+    setReminderTime(task.reminderTime || '09:00');
+    setCustomValues(task.customValues || {});
     setShowModal(true);
   };
 
@@ -99,7 +127,7 @@ export default function TasksView({
       resolvedRelatedName = projects.find(p => p.id === relatedToId)?.name || '';
     }
 
-    addTask({
+    const taskPayload = {
       title,
       description,
       relatedToType,
@@ -109,8 +137,20 @@ export default function TasksView({
       dueDate,
       assignedTo,
       status,
-      customValues
-    });
+      customValues,
+      reminderEnabled,
+      reminderDate: reminderEnabled ? reminderDate : undefined,
+      reminderTime: reminderEnabled ? reminderTime : undefined,
+    };
+
+    if (editingTask) {
+      updateTask({
+        id: editingTask.id,
+        ...taskPayload
+      });
+    } else {
+      addTask(taskPayload);
+    }
 
     setShowModal(false);
   };
@@ -118,7 +158,7 @@ export default function TasksView({
   const handleToggleComplete = (task: Task) => {
     updateTask({
       ...task,
-      status: task.status === 'انجام شده' ? 'در انتظار' : 'انجام شده'
+      status: task.status === 'انجام شده' ? 'در حال انجام' : 'انجام شده'
     });
   };
 
@@ -257,13 +297,29 @@ export default function TasksView({
 
               <div className="text-[11px] text-slate-400 flex items-center gap-1.5 font-sans bg-slate-50 px-2 py-1 rounded border">
                 <User size={12} />
-                <span>مسئول: {task.assignedTo}</span>
+                <span>مسئول: {task.assignedTo || 'شخصی (بدون ارجاع)'}</span>
               </div>
+
+              {task.reminderEnabled && (
+                <div className="text-[11px] text-amber-700 flex items-center gap-1.5 font-mono bg-amber-50 px-2 py-1 rounded border border-amber-200" title={`یادآور فعال برای ${task.reminderDate} ساعت ${task.reminderTime}`}>
+                  <Bell size={12} className="text-amber-500 animate-pulse" />
+                  <span>یادآور: {task.reminderDate} {task.reminderTime}</span>
+                </div>
+              )}
+
+              {/* Edit */}
+              <button
+                onClick={() => handleOpenEdit(task)}
+                className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition"
+                title="ویرایش وظیفه"
+              >
+                <Edit size={14} />
+              </button>
 
               {/* Delete */}
               <button
                 onClick={() => deleteTask(task.id)}
-                className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg transition mr-auto md:mr-0"
+                className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg transition"
                 title="حذف وظیفه"
               >
                 <Trash2 size={14} />
@@ -421,17 +477,81 @@ export default function TasksView({
                 </div>
 
                 {/* Assignee */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">ارجاع کار به همکار</label>
+                <div className="space-y-1.5" id="task-assignee-select-wrapper">
+                  <label className="text-xs font-semibold text-slate-500">ارجاع کار به همکار (اختیاری)</label>
                   <select
                     value={assignedTo}
                     onChange={(e) => setAssignedTo(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-medium"
                   >
-                    {(settings.dropdownItems?.salesExperts || ['محمد توکل مقدم', 'آنتونی فیرو', 'مهندس حسینی']).map((exp, idx) => (
-                      <option key={idx} value={exp}>{exp}</option>
+                    <option value="">-- بدون ارجاع (شخصی / خود من) --</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.fullName}>{u.fullName} ({u.role === 'admin' ? 'مدیر سیستم' : 'کاربر'})</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Status select (only in Edit mode) */}
+                {editingTask && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">وضعیت انجام کار</label>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as Task['status'])}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-medium"
+                    >
+                      <option value="در حال انجام">در حال انجام</option>
+                      <option value="انجام شده">انجام شده</option>
+                      <option value="کنسل شده">کنسل شده</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Reminder Option */}
+                <div className="sm:col-span-2 border-t border-slate-100 pt-3 mt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg ${reminderEnabled ? 'bg-amber-50 text-amber-500' : 'bg-slate-50 text-slate-400'}`}>
+                        <Bell size={16} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-slate-700 block">تنظیم یادآور برای این وظیفه</span>
+                        <span className="text-[10px] text-slate-400 block">اطلاع‌رسانی خودکار سیستم در تاریخ و ساعت مشخص شده</span>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reminderEnabled}
+                        onChange={(e) => setReminderEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+
+                  {reminderEnabled && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-3 bg-amber-50/40 border border-amber-100 rounded-xl">
+                      <div>
+                        <ShamsiDatePicker
+                          label="تاریخ یادآوری"
+                          required
+                          value={reminderDate}
+                          onChange={(val) => setReminderDate(val)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">ساعت یادآوری</label>
+                        <input
+                          type="time"
+                          required
+                          value={reminderTime}
+                          onChange={(e) => setReminderTime(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none text-right font-mono"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -458,7 +578,7 @@ export default function TasksView({
                   type="submit"
                   className="px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-sky-500/15"
                 >
-                  افزودن به تقویم پیگیری
+                  {editingTask ? 'ثبت تغییرات پیگیری' : 'افزودن به تقویم پیگیری'}
                 </button>
               </div>
 

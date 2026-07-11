@@ -15,7 +15,13 @@ import {
   ProjectActivity,
   ProjectReferral,
   ProjectReferralResponse,
-  User
+  User,
+  SupplierInquiry,
+  InquiryStep,
+  PackingItem,
+  DeliveryChecklistItem,
+  PackagingDelivery,
+  AfterSalesService
 } from './types';
 import { 
   SEED_PRODUCTS, 
@@ -55,9 +61,10 @@ export const SEED_USERS: User[] = [
       rates: true,
       tasks: true,
       referrals: true,
-      reports: true,
       settings: true,
-      users: true
+      users: true,
+      supplierInquiries: true,
+      packagingDelivery: true
     }
   },
   {
@@ -79,9 +86,10 @@ export const SEED_USERS: User[] = [
       rates: true,
       tasks: true,
       referrals: true,
-      reports: true,
       settings: false,
-      users: false
+      users: false,
+      supplierInquiries: true,
+      packagingDelivery: true
     }
   },
   {
@@ -103,12 +111,15 @@ export const SEED_USERS: User[] = [
       rates: true,
       tasks: true,
       referrals: true,
-      reports: true,
       settings: false,
-      users: false
+      users: false,
+      supplierInquiries: true,
+      packagingDelivery: true
     }
   }
 ];
+
+export interface CompletionPrompt { projectId: string; categoryName: string; message: string; }
 
 export function useERPStore() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -120,6 +131,9 @@ export function useERPStore() {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [supplierInquiries, setSupplierInquiries] = useState<SupplierInquiry[]>([]);
+  const [packagingDeliveries, setPackagingDeliveries] = useState<PackagingDelivery[]>([]);
+  const [afterSalesServices, setAfterSalesServices] = useState<AfterSalesService[]>([]);
   const [moduleNotifications, setModuleNotifications] = useState<ModuleNotification[]>([]);
   const [projectCategoryGroups, setProjectCategoryGroups] = useState<ProjectCategoryGroup[]>([]);
   const [readItems, setReadItems] = useState<string[]>([]);
@@ -127,7 +141,47 @@ export function useERPStore() {
   const [isInitialized, setIsInitialized] = useState(false);
   
   const [users, setUsers] = useState<User[]>([]);
+  
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  const [completionPrompt, setCompletionPrompt] = useState<{projectId: string, categoryName: string, message: string} | null>(null);
+
+  const completeCategoryGroup = (projectId: string, categoryName: string) => {
+    const normalize = (str: string) => str.replace(/[\s‌]/g, '').trim();
+    setProjectCategoryGroups(prevGroups => {
+      const updatedGroups = prevGroups.map(g => {
+        if (g.projectId === projectId && normalize(g.categoryName) === normalize(categoryName)) {
+          return {
+            ...g,
+            status: 'اتمام کار',
+            endDate: getTodayShamsi()
+          };
+        }
+        return g;
+      });
+      import('idb-keyval').then(idb => idb.set('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err)));
+      return updatedGroups;
+    });
+  };
+
+
+  useEffect(() => {
+    if (currentUser) {
+      try {
+        const storedReadNotifs = localStorage.getItem(`read_notifications_${currentUser.id}`);
+        if (storedReadNotifs) {
+          setReadItems(JSON.parse(storedReadNotifs));
+        } else {
+          setReadItems([]);
+        }
+      } catch (e) {
+        console.error("Failed to parse read notifications from localStorage", e);
+        setReadItems([]);
+      }
+    } else {
+      setReadItems([]);
+    }
+  }, [currentUser]);
   
   // Simulated User Role state ('admin' = Manager/Administrator, 'user' = Standard Employee/Expert)
   const [userRole, setUserRole] = useState<'admin' | 'user'>(() => {
@@ -257,6 +311,28 @@ export function useERPStore() {
       else {
         setModuleNotifications([]);
         localStorage.setItem('erp_module_notifications', JSON.stringify([]));
+      }
+
+      const storedInquiries = localStorage.getItem('erp_supplier_inquiries');
+      if (storedInquiries) setSupplierInquiries(JSON.parse(storedInquiries));
+      else {
+        setSupplierInquiries([]);
+        localStorage.setItem('erp_supplier_inquiries', JSON.stringify([]));
+      }
+
+      
+      const storedAfterSales = localStorage.getItem('erp_after_sales_services');
+      if (storedAfterSales) {
+        setAfterSalesServices(JSON.parse(storedAfterSales));
+      } else {
+        localStorage.setItem('erp_after_sales_services', JSON.stringify([]));
+      }
+
+      const storedDeliveries = localStorage.getItem('erp_packaging_deliveries');
+      if (storedDeliveries) setPackagingDeliveries(JSON.parse(storedDeliveries));
+      else {
+        setPackagingDeliveries([]);
+        localStorage.setItem('erp_packaging_deliveries', JSON.stringify([]));
       }
 
 
@@ -683,7 +759,7 @@ export function useERPStore() {
 
   const autoLogFactActivity = (
     projectId: string | undefined,
-    categoryName: 'پیش‌فاکتور' | 'سفارش خرید',
+    categoryName: 'پیش‌فاکتور' | 'سفارش خرید' | 'مالی' | 'استعلام قیمت از تامین کننده ها' | 'بسته‌بندی و تحویل کالا' | 'خدمات پس از فروش',
     text: string
   ) => {
     if (!projectId) return;
@@ -716,10 +792,14 @@ export function useERPStore() {
           return g;
         });
       } else {
+        const catId = categoryName === 'پیش‌فاکتور' ? 'pf' : 
+                      categoryName === 'سفارش خرید' ? 'po' : 
+                      categoryName === 'مالی' ? 'fi' : 
+                      categoryName === 'بسته‌بندی و تحویل کالا' ? 'pd' : 'inq';
         const newGroup: ProjectCategoryGroup = {
           id: `cg-fact-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           projectId,
-          categoryId: `cat-fact-${categoryName === 'پیش‌فاکتور' ? 'pf' : 'po'}`,
+          categoryId: `cat-fact-${catId}`,
           categoryName,
           status: 'جاری',
           startDate: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
@@ -843,11 +923,21 @@ export function useERPStore() {
       saveToStorage('erp_projects', syncedProjects, setProjects);
       
       const statusChanged = oldPf.status !== updatedPf.status;
+
       const logText = statusChanged
         ? `پیش‌فاکتور شماره ${updatedPf.proformaNumber} ویرایش شد و وضعیت آن به «${updatedPf.status}» تغییر یافت.`
         : `پیش‌فاکتور شماره ${updatedPf.proformaNumber} ویرایش و اطلاعات آن بروزرسانی شد.`;
       
       autoLogFactActivity(updatedPf.projectId, 'پیش‌فاکتور', logText);
+      
+      if (statusChanged && updatedPf.status === 'تایید شده') {
+        setCompletionPrompt({
+          projectId: updatedPf.projectId,
+          categoryName: 'پیش‌فاکتور',
+          message: `پیش‌فاکتور ${updatedPf.proformaNumber} تایید شد. آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
+        });
+      }
+
     }
 
     // If won state changed
@@ -1028,10 +1118,20 @@ export function useERPStore() {
 
     if (updatedPO.projectId) {
       const statusChanged = oldPO.status !== updatedPO.status;
+
       const logText = statusChanged
         ? `سفارش خرید شماره ${updatedPO.poNumber} ویرایش شد و وضعیت آن به «${updatedPO.status}» تغییر داده شد.`
         : `سفارش خرید شماره ${updatedPO.poNumber} ویرایش و اطلاعات آن بروزرسانی شد.`;
       autoLogFactActivity(updatedPO.projectId, 'سفارش خرید', logText);
+      
+      if (statusChanged && updatedPO.status === 'تحویل شده (رسید انبار)') {
+        setCompletionPrompt({
+          projectId: updatedPO.projectId,
+          categoryName: 'سفارش خرید',
+          message: `سفارش خرید ${updatedPO.poNumber} به انبار تحویل شد. آیا می‌خواهید وضعیت فعالیت‌های سفارش خرید این پروژه را به «اتمام کار» تغییر دهید؟`
+        });
+      }
+
     }
 
     // Handle delivered state stock updates
@@ -1082,12 +1182,177 @@ export function useERPStore() {
     
     notifyModuleResponsible('transactions', 'ثبت تراکنش جدید', `یک تراکنش ${newTransaction.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} به مبلغ ${newTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال ثبت شد.`, newTransaction.projectId);
     
+    if (newTransaction.projectId) {
+      const typeStr = newTransaction.type === 'دریافت' ? 'دریافت' : 'پرداخت';
+      const paymentTypeStr = newTransaction.paymentType || '';
+      const receiptTypeStr = newTransaction.receiptType ? ` بابت ${newTransaction.receiptType}` : '';
+      const refStr = newTransaction.referenceNumber ? ` (شماره ارجاع/چک: ${newTransaction.referenceNumber})` : '';
+      const logText = `ثبت تراکنش جدید ${typeStr}${receiptTypeStr} به شماره سند ${newTransaction.documentNumber || 'بدون شماره'} به مبلغ ${newTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال از طریق ${paymentTypeStr}${refStr}`;
+      autoLogFactActivity(newTransaction.projectId, 'مالی', logText);
+    }
+
     return newTransaction;
   };
 
   const deleteTransaction = (id: string) => {
+    const tr = transactions.find(t => t.id === id);
     const updated = transactions.filter(t => t.id !== id);
     saveToStorage('erp_transactions', updated, setTransactions);
+
+    if (tr && tr.projectId) {
+      const typeStr = tr.type === 'دریافت' ? 'دریافت' : 'پرداخت';
+      const receiptTypeStr = tr.receiptType ? ` بابت ${tr.receiptType}` : '';
+      const logText = `حذف تراکنش ${typeStr}${receiptTypeStr} به شماره سند ${tr.documentNumber || 'بدون شماره'} به مبلغ ${tr.amountRIYAL.toLocaleString('fa-IR')} ریال`;
+      autoLogFactActivity(tr.projectId, 'مالی', logText);
+    }
+  };
+
+  const updateTransaction = (updatedTransaction: Transaction) => {
+    const updated = transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t);
+    saveToStorage('erp_transactions', updated, setTransactions);
+    
+    notifyModuleResponsible('transactions', 'ویرایش تراکنش', `تراکنش شماره ${updatedTransaction.documentNumber} ویرایش شد.`, updatedTransaction.projectId);
+
+    if (updatedTransaction.projectId) {
+      const typeStr = updatedTransaction.type === 'دریافت' ? 'دریافت' : 'پرداخت';
+      const paymentTypeStr = updatedTransaction.paymentType || '';
+      const receiptTypeStr = updatedTransaction.receiptType ? ` بابت ${updatedTransaction.receiptType}` : '';
+      const refStr = updatedTransaction.referenceNumber ? ` (شماره ارجاع/چک: ${updatedTransaction.referenceNumber})` : '';
+      const logText = `بروزرسانی تراکنش ${typeStr}${receiptTypeStr} به شماره سند ${updatedTransaction.documentNumber || 'بدون شماره'} به مبلغ ${updatedTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال از طریق ${paymentTypeStr}${refStr}`;
+      autoLogFactActivity(updatedTransaction.projectId, 'مالی', logText);
+    }
+  };
+
+  // --- Supplier Inquiries CRUD ---
+  const addSupplierInquiry = (inquiry: Omit<SupplierInquiry, 'id' | 'createdAt' | 'steps'> & { steps?: InquiryStep[] }) => {
+    const today = getTodayShamsi();
+    const creationTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+    const creationStep: InquiryStep = {
+      id: `step-${Date.now()}-init`,
+      date: today + ' ' + creationTime,
+      title: 'ایجاد استعلام',
+      description: `استعلام اولیه ایجاد شد. پروژه: ${inquiry.projectName}${inquiry.proformaNumber ? `، پیش‌فاکتور: ${inquiry.proformaNumber}` : ''}${inquiry.proformaItemName ? `، ردیف: ${inquiry.proformaItemName}` : ''}`,
+      type: 'creation'
+    };
+    
+    const newInquiry: SupplierInquiry = {
+      ...inquiry,
+      id: `inq-${Date.now()}`,
+      createdAt: today + ' ' + creationTime,
+      steps: inquiry.steps || [creationStep]
+    };
+    
+    const updated = [newInquiry, ...supplierInquiries];
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+    
+    const logText = `ثبت استعلام جدید از تامین‌کننده ${inquiry.supplierName} بابت پروژه ${inquiry.projectName}${inquiry.proformaNumber ? ` (پیش‌فاکتور ${inquiry.proformaNumber})` : ''}${inquiry.proformaItemName ? ` - ردیف: ${inquiry.proformaItemName}` : ''}`;
+    autoLogFactActivity(inquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+    
+    return newInquiry;
+  };
+
+  const updateSupplierInquiry = (updatedInquiry: SupplierInquiry) => {
+    const updated = supplierInquiries.map(inq => inq.id === updatedInquiry.id ? updatedInquiry : inq);
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+    
+    const logText = `بروزرسانی استعلام تامین‌کننده ${updatedInquiry.supplierName} - وضعیت جدید: ${updatedInquiry.status}`;
+    autoLogFactActivity(updatedInquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+  };
+
+  const deleteSupplierInquiry = (id: string, deleteLogs: boolean = false) => {
+    const inq = supplierInquiries.find(i => i.id === id);
+    const updated = supplierInquiries.filter(i => i.id !== id);
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+    
+    if (inq) {
+      if (deleteLogs) {
+        const normalize = (str: string) => str.replace(/[\s\u200c]/g, '').trim();
+        const targetCategory = 'استعلام قیمت از تامین کننده ها';
+        setProjectCategoryGroups(prevGroups => {
+          const updatedGroups = prevGroups.filter(g => 
+            !(g.projectId === inq.projectId && normalize(g.categoryName) === normalize(targetCategory))
+          );
+          idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
+          return updatedGroups;
+        });
+      } else {
+        const logText = `حذف استعلام تامین‌کننده ${inq.supplierName} بابت پروژه ${inq.projectName}`;
+        autoLogFactActivity(inq.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+      }
+    }
+  };
+
+  const addSupplierInquiryStep = (inquiryId: string, step: Omit<InquiryStep, 'id'>) => {
+    const newStep: InquiryStep = {
+      ...step,
+      id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`
+    };
+    
+    const inq = supplierInquiries.find(i => i.id === inquiryId);
+    if (!inq) return;
+    
+    const updatedSteps = [...inq.steps, newStep];
+    const updatedInquiry: SupplierInquiry = {
+      ...inq,
+      steps: updatedSteps,
+      status: step.type === 'sent' ? 'ارسال شده' : (step.type === 'response' ? 'پاسخ داده شده' : (step.type === 'winner' ? 'برنده' : inq.status))
+    };
+    
+    const updated = supplierInquiries.map(i => i.id === inquiryId ? updatedInquiry : i);
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+    
+    const logText = `اقدام استعلام تامین‌کننده ${inq.supplierName}: ${step.title} - ${step.description}`;
+    autoLogFactActivity(inq.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+  };
+
+  const selectSupplierInquiryWinner = (inquiryId: string, isWinner: boolean) => {
+    const inq = supplierInquiries.find(i => i.id === inquiryId);
+    if (!inq) return;
+
+    const updated = supplierInquiries.map(i => {
+      if (i.id === inquiryId) {
+        const today = getTodayShamsi();
+        const winnerStep: InquiryStep = {
+          id: `step-${Date.now()}-winner`,
+          date: today + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+          title: isWinner ? 'انتخاب به عنوان برنده' : 'خروج از وضعیت برنده',
+          description: isWinner ? 'این پیشنهاد به عنوان آفر برنده برای این کالا انتخاب شد.' : 'انتخاب برنده لغو شد.',
+          type: 'winner'
+        };
+        return {
+          ...i,
+          isWinner,
+          status: (isWinner ? 'برنده' : 'پاسخ داده شده') as any,
+          winnerSelectedDate: isWinner ? today : undefined,
+          steps: [...i.steps, winnerStep]
+        };
+      }
+      if (isWinner && i.projectId === inq.projectId && i.proformaId === inq.proformaId && i.proformaItemId === inq.proformaItemId && i.id !== inquiryId) {
+        return {
+          ...i,
+          isWinner: false,
+          status: 'بازنده' as any
+        };
+      }
+      return i;
+    });
+
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+
+
+    const logText = isWinner 
+      ? `انتخاب پیشنهاد تامین‌کننده ${inq.supplierName} به عنوان برنده بابت پروژه ${inq.projectName}` 
+      : `لغو وضعیت برنده برای پیشنهاد تامین‌کننده ${inq.supplierName}`;
+    autoLogFactActivity(inq.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+    
+    if (isWinner) {
+      setCompletionPrompt({
+        projectId: inq.projectId,
+        categoryName: 'استعلام قیمت از تامین کننده ها',
+        message: `پیشنهاد تامین‌کننده ${inq.supplierName} به عنوان برنده انتخاب شد. آیا می‌خواهید وضعیت این دسته فعالیت را به «اتمام کار» تغییر دهید؟`
+      });
+    }
+
   };
 
   // --- Tasks CRUD ---
@@ -1109,6 +1374,138 @@ export function useERPStore() {
   const deleteTask = (id: string) => {
     const updated = tasks.filter(t => t.id !== id);
     saveToStorage('erp_tasks', updated, setTasks);
+  };
+
+  const addPackagingDelivery = (delivery: Omit<PackagingDelivery, 'id' | 'createdAt' | 'packingListNumber'>) => {
+    const seqNum = packagingDeliveries.length + 1;
+    const proj = projects.find(p => p.id === delivery.projectId);
+    const projectCode = proj ? proj.code : 'PRJ';
+    const packingListNumber = `PK-${projectCode}-${String(seqNum).padStart(3, '0')}`;
+    
+    const newDelivery: PackagingDelivery = {
+      ...delivery,
+      id: `pack-${Date.now()}`,
+      packingListNumber,
+      createdAt: new Date().toISOString()
+    };
+    const updated = [newDelivery, ...packagingDeliveries];
+    saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
+    
+
+    const logText = `ثبت پکینگ لیست و تحویل کالا به شماره ${packingListNumber} با روش ارسال ${delivery.shippingMethod}`;
+    autoLogFactActivity(delivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
+    
+    setCompletionPrompt({
+      projectId: delivery.projectId,
+      categoryName: 'بسته‌بندی و تحویل کالا',
+      message: `پکینگ لیست ${packingListNumber} صادر شد. آیا می‌خواهید وضعیت دسته فعالیت بسته‌بندی را به «اتمام کار» تغییر دهید؟`
+    });
+
+    
+    return newDelivery;
+  };
+
+  const updatePackagingDelivery = (updatedDelivery: PackagingDelivery) => {
+    const updated = packagingDeliveries.map(d => d.id === updatedDelivery.id ? updatedDelivery : d);
+    saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
+    
+    const logText = `بروزرسانی پکینگ لیست و تحویل کالا به شماره ${updatedDelivery.packingListNumber}`;
+    autoLogFactActivity(updatedDelivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
+  };
+
+  const deletePackagingDelivery = (id: string, deleteLogs: boolean = false) => {
+    const delivery = packagingDeliveries.find(d => d.id === id);
+    const updated = packagingDeliveries.filter(d => d.id !== id);
+    saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
+    
+    if (delivery) {
+      if (deleteLogs) {
+        // Delete activities related to this packing list
+        setProjectCategoryGroups(prevGroups => {
+          const normalize = (str: string) => str.replace(/[\s\u200c]/g, '').trim();
+          const targetCategory = 'بسته‌بندی و تحویل کالا';
+          const updatedGroups = prevGroups.map(g => {
+            if (g.projectId === delivery.projectId && normalize(g.categoryName) === normalize(targetCategory)) {
+              return {
+                ...g,
+                activities: g.activities.filter(a => !a.text.includes(delivery.packingListNumber))
+              };
+            }
+            return g;
+          });
+          idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
+          return updatedGroups;
+        });
+      } else {
+        const logText = `حذف پکینگ لیست و تحویل کالا به شماره ${delivery.packingListNumber}`;
+        autoLogFactActivity(delivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
+      }
+    }
+  };
+
+
+  // --- After Sales Services CRUD ---
+  const addAfterSalesService = (service: Omit<AfterSalesService, 'id' | 'createdAt'>) => {
+    const newService: AfterSalesService = {
+      ...service,
+      id: `ass-${Date.now()}`,
+      createdAt: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
+    };
+    const updated = [newService, ...afterSalesServices];
+    saveToStorage('erp_after_sales_services', updated, setAfterSalesServices);
+    
+    const logText = `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName}`;
+    autoLogFactActivity(service.projectId, 'خدمات پس از فروش', logText);
+    
+    return newService;
+  };
+
+
+  const updateAfterSalesService = (updatedService: AfterSalesService) => {
+    const oldService = afterSalesServices.find(s => s.id === updatedService.id);
+    const updated = afterSalesServices.map(s => s.id === updatedService.id ? updatedService : s);
+    saveToStorage('erp_after_sales_services', updated, setAfterSalesServices);
+    
+    const logText = `بروزرسانی خدمات پس از فروش کالای ${updatedService.itemName} - وضعیت: ${updatedService.status}`;
+    autoLogFactActivity(updatedService.projectId, 'خدمات پس از فروش', logText);
+    
+    if (oldService && oldService.status !== updatedService.status && updatedService.status === 'تحویل داده شده') {
+      setCompletionPrompt({
+        projectId: updatedService.projectId,
+        categoryName: 'خدمات پس از فروش',
+        message: `کالای ${updatedService.itemName} تحویل مشتری داده شد. آیا می‌خواهید وضعیت دسته فعالیت مربوط به خدمات پس از فروش را به «اتمام کار» تغییر دهید؟`
+      });
+    }
+  };
+
+
+  const deleteAfterSalesService = (id: string, deleteLogs: boolean = false) => {
+    const service = afterSalesServices.find(s => s.id === id);
+    const updated = afterSalesServices.filter(s => s.id !== id);
+    saveToStorage('erp_after_sales_services', updated, setAfterSalesServices);
+    
+    if (service) {
+      if (deleteLogs) {
+        setProjectCategoryGroups(prevGroups => {
+          const normalize = (str: string) => str.replace(/[\s‌]/g, '').trim();
+          const targetCategory = 'خدمات پس از فروش';
+          const updatedGroups = prevGroups.map(g => {
+            if (g.projectId === service.projectId && normalize(g.categoryName) === normalize(targetCategory)) {
+              return {
+                ...g,
+                activities: g.activities.filter(a => !a.text.includes(service.itemName))
+              };
+            }
+            return g;
+          });
+          idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
+          return updatedGroups;
+        });
+      } else {
+        const logText = `حذف رکورد خدمات پس از فروش برای کالای ${service.itemName}`;
+        autoLogFactActivity(service.projectId, 'خدمات پس از فروش', logText);
+      }
+    }
   };
 
   // --- Settings Customizer ---
@@ -1194,6 +1591,8 @@ export function useERPStore() {
     purchaseOrders,
     transactions,
     tasks,
+    supplierInquiries,
+    packagingDeliveries,
     moduleNotifications,
     settings,
     userRole,
@@ -1233,11 +1632,28 @@ export function useERPStore() {
     deletePurchaseOrder,
     
     addTransaction,
+    updateTransaction,
     deleteTransaction,
     
     addTask,
     updateTask,
     deleteTask,
+    
+    addSupplierInquiry,
+    updateSupplierInquiry,
+    deleteSupplierInquiry,
+    addSupplierInquiryStep,
+    selectSupplierInquiryWinner,
+
+
+    afterSalesServices,
+    addAfterSalesService,
+    updateAfterSalesService,
+    deleteAfterSalesService,
+
+    addPackagingDelivery,
+    updatePackagingDelivery,
+    deletePackagingDelivery,
     
     markModuleNotificationAsRead,
     markAllModuleNotificationsAsRead,
@@ -1468,6 +1884,9 @@ export function useERPStore() {
     },
 
     users,
+    completionPrompt,
+    setCompletionPrompt,
+    completeCategoryGroup,
     currentUser,
     addUser: (user: Omit<User, 'id'>) => {
       const newUser: User = {

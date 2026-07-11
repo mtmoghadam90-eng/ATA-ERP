@@ -62,6 +62,8 @@ interface ProjectsViewProps {
   resumeProjectCategoryGroup?: (categoryGroupId: string, createdBy?: string) => void;
   currentUser?: ERPUser | null;
   users?: ERPUser[];
+  initialSelectedProjectId?: string | null;
+  onClearInitialSelectedProject?: () => void;
 }
 
 export default function ProjectsView({
@@ -81,7 +83,9 @@ export default function ProjectsView({
   completeProjectCategoryGroup,
   resumeProjectCategoryGroup,
   currentUser,
-  users = []
+  users = [],
+  initialSelectedProjectId,
+  onClearInitialSelectedProject
 }: ProjectsViewProps) {
   const [search, setSearch] = useState('');
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
@@ -97,6 +101,27 @@ export default function ProjectsView({
 
   // Activities panel states
   const [selectedProjectForActivities, setSelectedProjectForActivities] = useState<Project | null>(null);
+
+  React.useEffect(() => {
+    if (selectedProjectForActivities) {
+      const updatedProject = projects.find(p => p.id === selectedProjectForActivities.id);
+      if (updatedProject && updatedProject !== selectedProjectForActivities) {
+        setSelectedProjectForActivities(updatedProject);
+      }
+    }
+  }, [projects, selectedProjectForActivities]);
+
+  React.useEffect(() => {
+    if (initialSelectedProjectId) {
+      const proj = projects.find(p => p.id === initialSelectedProjectId);
+      if (proj) {
+        setSelectedProjectForActivities(proj);
+      }
+      if (onClearInitialSelectedProject) {
+        onClearInitialSelectedProject();
+      }
+    }
+  }, [initialSelectedProjectId, projects, onClearInitialSelectedProject]);
   const [newActivityText, setNewActivityText] = useState<Record<string, string>>({});
   const [newActivityAttachment, setNewActivityAttachment] = useState<Record<string, { name: string; size: string; content?: string } | null>>({});
   const [referralEnabled, setReferralEnabled] = useState<Record<string, boolean>>({});

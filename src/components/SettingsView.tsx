@@ -36,7 +36,9 @@ import {
   ArrowDown,
   Menu,
   UserCog,
-  Bell
+  Bell,
+  Boxes,
+  Wrench
 } from 'lucide-react';
 import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project } from '../types';
 import ConfirmModal from './ConfirmModal';
@@ -87,7 +89,7 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist'>('general');
 
   // Loss reasons state
   const [newLossReason, setNewLossReason] = useState('');
@@ -126,6 +128,10 @@ export default function SettingsView({
     purchaseOrderStatuses: 'وضعیت‌های سفارشات خرید خارجی',
     positions: 'سمت‌های افراد حقیقی',
     receiptTypes: 'انواع دریافت و پرداخت (بابت)',
+    supplierInquiryActionTypes: 'انواع اقدام ثبت شده برای استعلام‌های تامین‌کننده',
+    shippingMethods: 'نحوه ارسال کالا (پکینگ لیست)',
+    packageTypes: 'نوع بسته‌بندی (پکینگ لیست)',
+    returnReasons: 'دلایل برگشت کالا (خدمات پس از فروش)',
     lossReasons: 'دلایل باخت پروژه/اقلام پیش‌فاکتور',
   };
 
@@ -149,6 +155,10 @@ export default function SettingsView({
     purchaseOrderStatuses: 'مراحل پیگیری سفارشات خرید خارجی.',
     positions: 'لیست سمت‌های پیش‌فرض و انتخابی برای مخاطبین و افراد حقیقی در بخش مشتریان.',
     receiptTypes: 'دسته‌بندی‌ها و بابت‌های دریافت و پرداخت در دفتر صندوق (مانند پیش‌پرداخت، میاندوره، تسویه و غیره).',
+    supplierInquiryActionTypes: 'لیست انواع اقدام قابل انتخاب هنگام ثبت اقدامات جدید برای استعلام‌های قیمت از تامین‌کنندگان.',
+    shippingMethods: 'لیست روش‌ها و شرکت‌های حمل و نقل جهت انتخاب در زمان صدور پکینگ لیست و تحویل کالا.',
+    packageTypes: 'لیست انواع پیش‌فرض بسته‌بندی کالاها در پکینگ لیست (مانند کارتن، پالت، جعبه چوبی و غیره).',
+    returnReasons: 'لیست دلایل و مشکلات خرابی یا برگشت کالا در بخش خدمات پس از فروش.',
     lossReasons: 'دلایل باخت تعریف شده که کاربر می‌تواند هنگام مشخص کردن وضعیت بازنده یا لغو پروژه/پیش‌فاکتور انتخاب کند.',
   };
 
@@ -298,7 +308,10 @@ export default function SettingsView({
     { id: 'products', name: 'کالاها و تجهیزات' },
     { id: 'proformas', name: 'پیش‌فاکتورها' },
     { id: 'suppliers', name: 'تأمین‌کنندگان' },
+    { id: 'supplierInquiries', name: 'استعلام از تأمین‌کنندگان' },
     { id: 'purchaseOrders', name: 'سفارشات خرید خارجی' },
+    { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا' },
+    { id: 'afterSalesServices', name: 'خدمات پس از فروش' },
     { id: 'transactions', name: 'دریافت و پرداخت ریالی' },
     { id: 'tasks', name: 'وظایف و پیگیری' },
   ] as const;
@@ -465,13 +478,13 @@ export default function SettingsView({
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-2 gap-2 md:flex md:gap-0 md:border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 pb-2 md:pb-0">
+      <div className="flex flex-wrap gap-2 md:gap-3 border-b border-slate-200 pb-4">
         <button
           onClick={() => setActiveTab('general')}
-          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
             activeTab === 'general'
-              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
-              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
           }`}
         >
           <Building size={16} />
@@ -479,10 +492,10 @@ export default function SettingsView({
         </button>
         <button
           onClick={() => setActiveTab('customFields')}
-          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
             activeTab === 'customFields'
-              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
-              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
           }`}
         >
           <Sliders size={16} />
@@ -491,10 +504,10 @@ export default function SettingsView({
         </button>
         <button
           onClick={() => setActiveTab('activityCategories')}
-          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
             activeTab === 'activityCategories'
-              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
-              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
           }`}
         >
           <Sliders size={16} className="text-sky-500" />
@@ -502,10 +515,10 @@ export default function SettingsView({
         </button>
         <button
           onClick={() => setActiveTab('dropdowns')}
-          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
             activeTab === 'dropdowns'
-              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
-              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
           }`}
         >
           <Settings size={16} className="text-amber-500" />
@@ -513,10 +526,10 @@ export default function SettingsView({
         </button>
         <button
           onClick={() => setActiveTab('sidebarOrder')}
-          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
             activeTab === 'sidebarOrder'
-              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
-              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
           }`}
         >
           <Menu size={16} className="text-teal-500" />
@@ -524,10 +537,10 @@ export default function SettingsView({
         </button>
         <button
           onClick={() => setActiveTab('moduleResponsibles')}
-          className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
             activeTab === 'moduleResponsibles'
-              ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
-              : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
           }`}
         >
           <UserCog size={16} className="text-indigo-500" />
@@ -536,16 +549,27 @@ export default function SettingsView({
         {userRole === 'admin' && (
           <button
             onClick={() => setActiveTab('adminNotifications')}
-            className={`py-2.5 px-4 md:py-3 md:px-6 text-xs md:text-sm font-bold transition flex items-center justify-center md:justify-start gap-2 rounded-lg md:rounded-none md:border-b-2 flex-shrink-0 ${
+            className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
               activeTab === 'adminNotifications'
-                ? 'bg-sky-50 md:bg-transparent text-sky-600 border-sky-500'
-                : 'bg-slate-50 md:bg-transparent text-slate-500 hover:text-slate-800 md:border-transparent'
+                ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+                : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
             }`}
           >
             <Bell size={16} className="text-rose-500" />
             تنظیمات اعلان‌های مدیر
           </button>
         )}
+        <button
+          onClick={() => setActiveTab('deliveryChecklist')}
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
+            activeTab === 'deliveryChecklist'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <FileCheck size={16} className="text-emerald-500" />
+          چک‌لیست تحویل کالا
+        </button>
       </div>
 
       {activeTab === 'general' ? (
@@ -1430,12 +1454,14 @@ export default function SettingsView({
                         'proformas',
                         'products',
                         'suppliers',
+                        'supplierInquiries',
                         'purchaseOrders',
+                        'packagingDelivery',
+                        'afterSalesServices',
                         'transactions',
                         'rates',
                         'tasks',
                         'referrals',
-                        'reports',
                         'users',
                         'settings'
                       ]
@@ -1457,12 +1483,14 @@ export default function SettingsView({
                   { id: 'proformas', name: 'پیش‌فاکتورها', desc: 'صدور و پیگیری پیشنهادهای مالی فنی برای مشتریان', icon: FileText },
                   { id: 'products', name: 'کالاها و تجهیزات', desc: 'انبارداری، موجودی کالاها و ابزار دقیق شرکت', icon: Package },
                   { id: 'suppliers', name: 'تأمین‌کنندگان', desc: 'مدیریت وندورها و سازندگان داخلی و خارجی کالا', icon: Truck },
+                  { id: 'supplierInquiries', name: 'استعلام از تأمین‌کنندگان', desc: 'مدیریت استعلام‌های قیمتی تامین‌کنندگان کالا، مقایسه پیشنهادات و آفرها', icon: HelpCircle },
                   { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', desc: 'پیگیری مراحل پروفرمای خرید، حمل و ترخیص گمرکی', icon: ShoppingCart },
+                  { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا', desc: 'مدیریت پکینگ‌لیست‌ها و تحویل محموله‌ها به مشتری', icon: Boxes },
+                  { id: 'afterSalesServices', name: 'خدمات پس از فروش', desc: 'رسیدگی به درخواست‌ها و پشتیبانی پس از فروش و گارانتی', icon: Wrench },
                   { id: 'transactions', name: 'دریافت و پرداخت ریالی', desc: 'ثبت و کنترل تراکنش‌های مالی ریالی و صندوق شرکت', icon: ArrowDownLeft },
                   { id: 'rates', name: 'نرخ ارز روزانه', desc: 'ثبت نرخ‌های روزانه ارزهای دلار، یورو و درهم', icon: TrendingUp },
                   { id: 'tasks', name: 'وظایف و پیگیری', desc: 'مدیریت کارها، ددلاین‌ها و پیگیری‌های پرسنل فروش و فنی', icon: CheckSquare },
                   { id: 'referrals', name: 'کارتابل ارجاعات کار', desc: 'صندوق ورودی ارجاع امور فنی و بازرگانی پروژه‌ها بین همکاران', icon: Inbox },
-                  { id: 'reports', name: 'گزارشات و نمودارها', desc: 'تحلیل پیشرفته فروش، عملکرد مالی و وضعیت انبار', icon: BarChart3 },
                   { id: 'users', name: 'مدیریت کاربران', desc: 'تعریف پرسنل، نقش‌ها و تنظیمات دسترسی به هر ماژول', icon: ShieldCheck },
                   { id: 'settings', name: 'تنظیمات سیستم', desc: 'شخصی‌سازی فیلدها، دسته‌بندی‌ها و قالب‌های اسناد رسمی', icon: Settings },
                 ];
@@ -1571,10 +1599,17 @@ export default function SettingsView({
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
+                { id: 'customers', name: 'مشتریان' },
                 { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)' },
+                { id: 'products', name: 'کالاها و تجهیزات' },
                 { id: 'proformas', name: 'پیش‌فاکتورها' },
+                { id: 'suppliers', name: 'تأمین‌کنندگان' },
+                { id: 'supplierInquiries', name: 'استعلام از تأمین‌کنندگان' },
                 { id: 'purchaseOrders', name: 'سفارشات خرید خارجی' },
-                { id: 'transactions', name: 'تراکنش‌های مالی' }
+                { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا' },
+                { id: 'afterSalesServices', name: 'خدمات پس از فروش' },
+                { id: 'transactions', name: 'تراکنش‌های مالی' },
+                { id: 'tasks', name: 'وظایف و پیگیری' }
               ].map(mod => (
                 <div key={mod.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                   <div className="font-bold text-sm text-slate-800">{mod.name}</div>
@@ -1701,6 +1736,87 @@ export default function SettingsView({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        ) : activeTab === 'deliveryChecklist' ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
+              <FileCheck size={18} className="text-emerald-500" />
+              <h3 className="font-bold text-sm">چک‌لیست تحویل کالا (الگو)</h3>
+            </div>
+            
+            <p className="text-slate-500 text-xs leading-relaxed">
+              در این بخش می‌توانید آیتم‌های پیش‌فرضی که همکاران باید هنگام بسته‌بندی و تحویل کالا بررسی و تیک بزنند را تعریف کنید.
+            </p>
+            
+            <div className="space-y-4 max-w-xl">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const form = e.currentTarget;
+                  const formData = new FormData(form);
+                  const text = formData.get('itemText') as string;
+                  if (!text.trim()) return;
+                  
+                  const currentTemplate = settings.deliveryChecklistTemplate || [];
+                  const newItem = text.trim();
+                  
+                  updateSettings({
+                    ...settings,
+                    deliveryChecklistTemplate: [...currentTemplate, newItem]
+                  });
+                  form.reset();
+                }}
+                className="flex gap-2"
+              >
+                <input 
+                  type="text" 
+                  name="itemText"
+                  required
+                  placeholder="آیتم جدید چک‌لیست (مثال: بررسی صحت پلاک مشخصات کالا)"
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                />
+                <button 
+                  type="submit"
+                  className="bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-1 shrink-0"
+                >
+                  <Plus size={14} />
+                  افزودن به الگو
+                </button>
+              </form>
+
+              <div className="border border-slate-150 rounded-xl overflow-hidden bg-slate-50/30">
+                {settings.deliveryChecklistTemplate && settings.deliveryChecklistTemplate.length > 0 ? (
+                  <div className="divide-y divide-slate-150">
+                    {settings.deliveryChecklistTemplate.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-white text-slate-700 hover:bg-slate-50 transition">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono text-slate-400">{index + 1}.</span>
+                          <span className="text-xs font-medium text-slate-700">{item}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = settings.deliveryChecklistTemplate.filter((_, idx) => idx !== index);
+                            updateSettings({
+                              ...settings,
+                              deliveryChecklistTemplate: updated
+                            });
+                          }}
+                          className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition"
+                          title="حذف آیتم"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-xs text-slate-400">
+                    آیتمی در چک‌لیست تعریف نشده است. لطفاً آیتم‌های مورد نیاز خود را به الگو اضافه کنید.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ) : null)}

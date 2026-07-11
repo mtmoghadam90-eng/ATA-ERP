@@ -36,6 +36,8 @@ interface CustomersViewProps {
   batchUpdateCustomers: (updatedList: Customer[]) => void;
   industries: string[];
   settings: ERPSettings;
+  initialSearchQuery?: string | null;
+  onClearInitialSearchQuery?: () => void;
 }
 
 export default function CustomersView({
@@ -45,9 +47,20 @@ export default function CustomersView({
   deleteCustomer,
   batchUpdateCustomers,
   industries,
-  settings
+  settings,
+  initialSearchQuery,
+  onClearInitialSearchQuery
 }: CustomersViewProps) {
   const [search, setSearch] = useState('');
+
+  React.useEffect(() => {
+    if (initialSearchQuery) {
+      setSearch(initialSearchQuery);
+      if (onClearInitialSearchQuery) {
+        onClearInitialSearchQuery();
+      }
+    }
+  }, [initialSearchQuery, onClearInitialSearchQuery]);
   const [selectedIndustry, setSelectedIndustry] = useState('all');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'all' | 'حقوقی' | 'حقیقی'>('all');
   const [showModal, setShowModal] = useState(false);

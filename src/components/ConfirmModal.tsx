@@ -9,6 +9,7 @@ interface ConfirmModalProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
+  children?: React.ReactNode;
 }
 
 export default function ConfirmModal({
@@ -18,7 +19,8 @@ export default function ConfirmModal({
   title,
   message,
   confirmText = 'بله، حذف شود',
-  cancelText = 'انصراف'
+  cancelText = 'انصراف',
+  children
 }: ConfirmModalProps) {
   if (!isOpen) return null;
 
@@ -48,6 +50,8 @@ export default function ConfirmModal({
             <p className="text-sm text-slate-500 leading-relaxed">{message}</p>
           </div>
         </div>
+
+        {children}
 
         <div className="flex justify-end gap-3 mt-6 border-t border-slate-100 pt-4">
           <button
