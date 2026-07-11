@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Clock, ShieldAlert, UserCheck, Eye, EyeOff, Lock } from 'lucide-react';
 
 interface LoginViewProps {
-  onLogin: (username: string, password?: string) => boolean;
+  onLogin: (username: string, password?: string) => boolean | Promise<boolean>;
 }
 
 export default function LoginView({ onLogin }: LoginViewProps) {
@@ -11,7 +11,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!username.trim() || !password) {
@@ -19,7 +19,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
       return;
     }
 
-    const success = onLogin(username.trim(), password);
+    const success = await onLogin(username.trim(), password);
     if (!success) {
       setError('نام کاربری یا رمز ورود اشتباه است. لطفاً مجدداً تلاش کنید.');
     }

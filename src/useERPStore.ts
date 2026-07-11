@@ -37,7 +37,7 @@ import {
 } from './seedData';
 import { toShamsiStr, getTodayShamsi, gregorianToJalali, addDaysToShamsi, addWorkingDaysToShamsi } from './dateUtils';
 import { formatERPNumber } from './numUtils';
-import { get as idbGet, set as idbSet } from 'idb-keyval';
+
 
 export const SEED_PROJECT_CATEGORY_GROUPS: ProjectCategoryGroup[] = [];
 
@@ -121,6 +121,15 @@ export const SEED_USERS: User[] = [
 
 export interface CompletionPrompt { projectId: string; categoryName: string; message: string; }
 
+
+const saveToServer = (key: string, data: any) => {
+  fetch(`/api/data/${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).catch(err => console.error(`Error saving to server for key: ${key}`, err));
+};
+
 export function useERPStore() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -159,7 +168,7 @@ export function useERPStore() {
         }
         return g;
       });
-      import('idb-keyval').then(idb => idb.set('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err)));
+      saveToServer('erp_project_category_groups', updatedGroups);
       return updatedGroups;
     });
   };
@@ -200,218 +209,64 @@ export function useERPStore() {
     } catch (e) {}
   };
 
-  // Initialize store from localStorage
+    // Initialize store from server
   useEffect(() => {
-    try {
-      // Force clear for first-time deploy of blank state to ensure existing users see empty data
-      const hasForcedClear = localStorage.getItem('erp_force_clear_data_v6');
-      if (!hasForcedClear) {
-        localStorage.setItem('erp_customers', JSON.stringify([]));
-        localStorage.setItem('erp_products', JSON.stringify([]));
-        localStorage.setItem('erp_suppliers', JSON.stringify([]));
-        localStorage.setItem('erp_projects', JSON.stringify([]));
-        localStorage.setItem('erp_proformas', JSON.stringify([]));
-        localStorage.setItem('erp_purchase_orders', JSON.stringify([]));
-        localStorage.setItem('erp_transactions', JSON.stringify([]));
-        localStorage.setItem('erp_tasks', JSON.stringify([]));
-        localStorage.setItem('erp_project_category_groups', JSON.stringify([]));
-        idbSet('erp_project_category_groups', []);
-        localStorage.setItem('erp_users', JSON.stringify(SEED_USERS));
-        localStorage.removeItem('erp_current_user');
-        localStorage.removeItem('erp_simulated_role');
-        localStorage.setItem('erp_force_clear_data_v6', 'true');
-      }
-
-      const storedCustomers = localStorage.getItem('erp_customers');
-      const storedProducts = localStorage.getItem('erp_products');
-      const storedSuppliers = localStorage.getItem('erp_suppliers');
-      const storedRates = localStorage.getItem('erp_exchange_rates');
-      const storedProjects = localStorage.getItem('erp_projects');
-      const storedProformas = localStorage.getItem('erp_proformas');
-      const storedPOs = localStorage.getItem('erp_purchase_orders');
-      const storedTransactions = localStorage.getItem('erp_transactions');
-      const storedTasks = localStorage.getItem('erp_tasks');
-      const storedSettings = localStorage.getItem('erp_settings');
-
-      if (storedCustomers) setCustomers(JSON.parse(storedCustomers));
-      else {
-        setCustomers([]);
-        localStorage.setItem('erp_customers', JSON.stringify([]));
-      }
-
-      if (storedProducts) setProducts(JSON.parse(storedProducts));
-      else {
-        setProducts([]);
-        localStorage.setItem('erp_products', JSON.stringify([]));
-      }
-
-      if (storedSuppliers) setSuppliers(JSON.parse(storedSuppliers));
-      else {
-        setSuppliers([]);
-        localStorage.setItem('erp_suppliers', JSON.stringify([]));
-      }
-
-      if (storedRates) setExchangeRates(JSON.parse(storedRates));
-      else {
-        setExchangeRates(SEED_EXCHANGE_RATES);
-        localStorage.setItem('erp_exchange_rates', JSON.stringify(SEED_EXCHANGE_RATES));
-      }
-
-      // Convert loaded or seeded project dates
-      const rawProjects = storedProjects ? JSON.parse(storedProjects) : [];
-      const mappedProjects = rawProjects.map((p: Project) => ({
-        ...p,
-        creationDate: toShamsiStr(p.creationDate),
-        expectedCloseDate: toShamsiStr(p.expectedCloseDate)
-      }));
-      setProjects(mappedProjects);
-      localStorage.setItem('erp_projects', JSON.stringify(mappedProjects));
-
-      // Convert loaded or seeded proforma dates
-      const rawProformas = storedProformas ? JSON.parse(storedProformas) : [];
-      const mappedProformas = rawProformas.map((pf: Proforma) => ({
-        ...pf,
-        issueDate: toShamsiStr(pf.issueDate),
-        expiryDate: toShamsiStr(pf.expiryDate)
-      }));
-      setProformas(mappedProformas);
-      localStorage.setItem('erp_proformas', JSON.stringify(mappedProformas));
-
-      // Convert loaded or seeded purchase order dates
-      const rawPOs = storedPOs ? JSON.parse(storedPOs) : [];
-      const mappedPOs = rawPOs.map((po: PurchaseOrder) => ({
-        ...po,
-        orderDate: toShamsiStr(po.orderDate),
-        expectedDeliveryDate: toShamsiStr(po.expectedDeliveryDate),
-        createdAt: toShamsiStr(po.createdAt)
-      }));
-      setPurchaseOrders(mappedPOs);
-      localStorage.setItem('erp_purchase_orders', JSON.stringify(mappedPOs));
-
-      // Convert loaded or seeded transaction dates
-      const rawTransactions = storedTransactions ? JSON.parse(storedTransactions) : [];
-      const mappedTransactions = rawTransactions.map((t: Transaction) => ({
-        ...t,
-        date: toShamsiStr(t.date)
-      }));
-      setTransactions(mappedTransactions);
-      localStorage.setItem('erp_transactions', JSON.stringify(mappedTransactions));
-
-      // Convert loaded or seeded task dates
-      const rawTasks = storedTasks ? JSON.parse(storedTasks) : [];
-      const mappedTasks = rawTasks.map((tk: Task) => ({
-        ...tk,
-        dueDate: toShamsiStr(tk.dueDate)
-      }));
-      setTasks(mappedTasks);
-      localStorage.setItem('erp_tasks', JSON.stringify(mappedTasks));
-
-      const storedModuleNotifs = localStorage.getItem('erp_module_notifications');
-      if (storedModuleNotifs) setModuleNotifications(JSON.parse(storedModuleNotifs));
-      else {
-        setModuleNotifications([]);
-        localStorage.setItem('erp_module_notifications', JSON.stringify([]));
-      }
-
-      const storedInquiries = localStorage.getItem('erp_supplier_inquiries');
-      if (storedInquiries) setSupplierInquiries(JSON.parse(storedInquiries));
-      else {
-        setSupplierInquiries([]);
-        localStorage.setItem('erp_supplier_inquiries', JSON.stringify([]));
-      }
-
-      
-      const storedAfterSales = localStorage.getItem('erp_after_sales_services');
-      if (storedAfterSales) {
-        setAfterSalesServices(JSON.parse(storedAfterSales));
-      } else {
-        localStorage.setItem('erp_after_sales_services', JSON.stringify([]));
-      }
-
-      const storedDeliveries = localStorage.getItem('erp_packaging_deliveries');
-      if (storedDeliveries) setPackagingDeliveries(JSON.parse(storedDeliveries));
-      else {
-        setPackagingDeliveries([]);
-        localStorage.setItem('erp_packaging_deliveries', JSON.stringify([]));
-      }
-
-
-      if (storedSettings) {
-        const parsed = JSON.parse(storedSettings);
-        const mergedDropdownItems = {
-          ...DEFAULT_SETTINGS.dropdownItems,
-          ...(parsed.dropdownItems || {})
-        };
-        const merged = {
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          dropdownItems: mergedDropdownItems
-        };
-        setSettings(merged);
-      } else {
-        setSettings(DEFAULT_SETTINGS);
-        localStorage.setItem('erp_settings', JSON.stringify(DEFAULT_SETTINGS));
-      }
-
-      idbGet('erp_project_category_groups').then(storedGroups => {
-        if (storedGroups && Array.isArray(storedGroups)) {
-          setProjectCategoryGroups(storedGroups);
-        } else {
-          // fallback to check localStorage
-          const localGroups = localStorage.getItem('erp_project_category_groups');
-          if (localGroups) {
-            const parsed = JSON.parse(localGroups);
-            setProjectCategoryGroups(parsed);
-            idbSet('erp_project_category_groups', parsed);
-            localStorage.removeItem('erp_project_category_groups');
-          } else {
-            setProjectCategoryGroups([]);
-            idbSet('erp_project_category_groups', []);
+    async function loadData() {
+      try {
+        const fetchKey = async (key: string, setter: Function, fallback: any) => {
+          try {
+            const res = await fetch(`/api/data/${key}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data !== null) {
+                setter(data);
+              } else {
+                setter(fallback);
+              }
+            } else {
+              setter(fallback);
+            }
+          } catch (e) {
+            console.error(`Failed to fetch ${key}:`, e);
+            setter(fallback);
           }
+        };
+
+        await Promise.all([
+          fetchKey('erp_customers', setCustomers, []),
+          fetchKey('erp_products', setProducts, []),
+          fetchKey('erp_suppliers', setSuppliers, []),
+          fetchKey('erp_exchange_rates', setExchangeRates, []),
+          fetchKey('erp_projects', setProjects, []),
+          fetchKey('erp_proformas', setProformas, []),
+          fetchKey('erp_purchase_orders', setPurchaseOrders, []),
+          fetchKey('erp_transactions', setTransactions, []),
+          fetchKey('erp_tasks', setTasks, []),
+          fetchKey('erp_settings', setSettings, null),
+          fetchKey('erp_project_category_groups', setProjectCategoryGroups, []),
+          fetchKey('erp_supplier_inquiries', setSupplierInquiries, []),
+          fetchKey('erp_packaging_deliveries', setPackagingDeliveries, []),
+          fetchKey('erp_after_sales_services', setAfterSalesServices, []),
+          fetchKey('erp_users', setUsers, []),
+        ]);
+
+        const storedCurrentUser = localStorage.getItem('erp_current_user');
+        if (storedCurrentUser) {
+          try {
+            const u = JSON.parse(storedCurrentUser);
+            setCurrentUser(u);
+            if (u && u.role) {
+              setUserRole(u.role);
+            }
+          } catch(e) {}
         }
-      }).catch(err => {
-        console.error('Failed to load project category groups from idb:', err);
-        setProjectCategoryGroups([]);
-      });
-
-      const storedUsers = localStorage.getItem('erp_users');
-      if (storedUsers) {
-        setUsers(JSON.parse(storedUsers));
-      } else {
-        setUsers(SEED_USERS);
-        localStorage.setItem('erp_users', JSON.stringify(SEED_USERS));
+        setIsInitialized(true);
+      } catch (err) {
+        console.error("Failed to load initial data", err);
+        setIsInitialized(true);
       }
-
-      const storedCurrentUser = localStorage.getItem('erp_current_user');
-      if (storedCurrentUser) {
-        const u = JSON.parse(storedCurrentUser);
-        setCurrentUser(u);
-        setUserRole(u.role);
-      } else {
-        setCurrentUser(null);
-      }
-
-      setIsInitialized(true);
-    } catch (e) {
-      console.error("Error loading localStorage data in ERP store", e);
-      // Fallback with empty states
-      setCustomers([]);
-      setProducts([]);
-      setSuppliers([]);
-      setExchangeRates(SEED_EXCHANGE_RATES);
-      setUsers(SEED_USERS);
-      setCurrentUser(null);
-      
-      setProjects([]);
-      setProformas([]);
-      setPurchaseOrders([]);
-      setTransactions([]);
-      setTasks([]);
-
-      setSettings(DEFAULT_SETTINGS);
-      setProjectCategoryGroups(SEED_PROJECT_CATEGORY_GROUPS);
-      setIsInitialized(true);
     }
+    loadData();
   }, []);
 
   const fetchRatesFromAPI = async () => {
@@ -432,7 +287,7 @@ export function useERPStore() {
             }
             return r;
           });
-          localStorage.setItem('erp_exchange_rates', JSON.stringify(updated));
+          saveToServer('erp_exchange_rates', updated);
           return updated;
         });
         console.log('Exchange rates updated from tgju.com successfully!');
@@ -454,15 +309,14 @@ export function useERPStore() {
   // Save changes helper
   const saveToStorage = (key: string, data: any, stateSetter: Function) => {
     try {
-      localStorage.setItem(key, JSON.stringify(data));
       stateSetter(data);
+      if (key === 'erp_current_user') {
+        localStorage.setItem(key, JSON.stringify(data));
+      } else {
+        saveToServer(key, data);
+      }
     } catch (error) {
-      console.error(`Error saving to localStorage for key: ${key}`, error);
-      alert(
-        'خطا در ذخیره‌سازی محلی داده‌ها!\n\n' +
-        'احتمالاً حجم داده‌ها (مانند فایل‌های تصویر بارگذاری شده برای لوگو، مهر یا امضا) بیش از حد مجاز است.\n' +
-        'لطفاً از فایل‌های تصویری با حجم کمتر استفاده نمایید یا حجم تصاویر جاری را کاهش دهید.'
-      );
+      console.error(`Error saving storage for key: ${key}`, error);
     }
   };
 
@@ -475,7 +329,7 @@ export function useERPStore() {
     };
     setCustomers(prev => {
       const updated = [newCustomer, ...prev];
-      localStorage.setItem('erp_customers', JSON.stringify(updated));
+      saveToServer('erp_customers', updated);
       return updated;
     });
     return newCustomer;
@@ -484,7 +338,7 @@ export function useERPStore() {
   const updateCustomer = (updatedCust: Customer) => {
     setCustomers(prev => {
       const updated = prev.map(c => c.id === updatedCust.id ? updatedCust : c);
-      localStorage.setItem('erp_customers', JSON.stringify(updated));
+      saveToServer('erp_customers', updated);
       return updated;
     });
   };
@@ -492,7 +346,7 @@ export function useERPStore() {
   const deleteCustomer = (id: string) => {
     setCustomers(prev => {
       const updated = prev.filter(c => c.id !== id);
-      localStorage.setItem('erp_customers', JSON.stringify(updated));
+      saveToServer('erp_customers', updated);
       return updated;
     });
   };
@@ -809,7 +663,7 @@ export function useERPStore() {
         updatedGroups = [newGroup, ...prevGroups];
       }
 
-      idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
+      saveToServer('erp_project_category_groups', updatedGroups);
       return updatedGroups;
     });
   };
@@ -1272,7 +1126,7 @@ export function useERPStore() {
           const updatedGroups = prevGroups.filter(g => 
             !(g.projectId === inq.projectId && normalize(g.categoryName) === normalize(targetCategory))
           );
-          idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
+          saveToServer('erp_project_category_groups', updatedGroups);
           return updatedGroups;
         });
       } else {
@@ -1433,7 +1287,7 @@ export function useERPStore() {
             }
             return g;
           });
-          idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
+          saveToServer('erp_project_category_groups', updatedGroups);
           return updatedGroups;
         });
       } else {
@@ -1498,7 +1352,7 @@ export function useERPStore() {
             }
             return g;
           });
-          idbSet('erp_project_category_groups', updatedGroups).catch(err => console.error('Failed to save to idb:', err));
+          saveToServer('erp_project_category_groups', updatedGroups);
           return updatedGroups;
         });
       } else {
@@ -1558,7 +1412,7 @@ export function useERPStore() {
     // Use setState callback to avoid closure staleness on moduleNotifications
     setModuleNotifications(prev => {
       const updated = [...newNotifs, ...prev];
-      localStorage.setItem('erp_module_notifications', JSON.stringify(updated));
+      saveToServer('erp_module_notifications', updated);
       return updated;
     });
   };
@@ -1566,7 +1420,7 @@ export function useERPStore() {
   const markModuleNotificationAsRead = (id: string) => {
     setModuleNotifications(prev => {
       const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
-      localStorage.setItem('erp_module_notifications', JSON.stringify(updated));
+      saveToServer('erp_module_notifications', updated);
       return updated;
     });
   };
@@ -1575,7 +1429,7 @@ export function useERPStore() {
     if (!currentUser) return;
     setModuleNotifications(prev => {
       const updated = prev.map(n => n.responsibleName === currentUser.fullName ? { ...n, read: true } : n);
-      localStorage.setItem('erp_module_notifications', JSON.stringify(updated));
+      saveToServer('erp_module_notifications', updated);
       return updated;
     });
   };
@@ -1697,7 +1551,7 @@ export function useERPStore() {
           return prev;
         }
         const updated = [newGroup, ...prev];
-        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
+        saveToServer('erp_project_category_groups', updated);
         return updated;
       });
 
@@ -1741,7 +1595,7 @@ export function useERPStore() {
           }
           return g;
         });
-        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
+        saveToServer('erp_project_category_groups', updated);
         return updated;
       });
 
@@ -1769,7 +1623,7 @@ export function useERPStore() {
           }
           return g;
         });
-        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
+        saveToServer('erp_project_category_groups', updated);
         return updated;
       });
     },
@@ -1795,7 +1649,7 @@ export function useERPStore() {
           }
           return g;
         });
-        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
+        saveToServer('erp_project_category_groups', updated);
         return updated;
       });
     },
@@ -1849,7 +1703,7 @@ export function useERPStore() {
           }
           return g;
         });
-        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
+        saveToServer('erp_project_category_groups', updated);
         return updated;
       });
 
@@ -1878,7 +1732,7 @@ export function useERPStore() {
           }
           return g;
         });
-        idbSet('erp_project_category_groups', updated).catch(err => console.error('Failed to save to idb:', err));
+        saveToServer('erp_project_category_groups', updated);
         return updated;
       });
     },
@@ -1910,16 +1764,24 @@ export function useERPStore() {
       const updated = users.filter(u => u.id !== id);
       saveToStorage('erp_users', updated, setUsers);
     },
-    login: (username: string, password?: string): boolean => {
-      const lowerUsername = username.toLowerCase();
-      const foundUser = users.find(u => u.username.toLowerCase() === lowerUsername);
-      if (foundUser) {
-        if (foundUser.password === password) {
-          saveToStorage('erp_current_user', foundUser, setCurrentUser);
-          setUserRole(foundUser.role);
-          localStorage.setItem('erp_simulated_role', foundUser.role);
-          return true;
+    login: async (username: string, password?: string): Promise<boolean> => {
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.user) {
+            saveToStorage('erp_current_user', data.user, setCurrentUser);
+            setUserRole(data.user.role);
+            localStorage.setItem('erp_simulated_role', data.user.role);
+            return true;
+          }
         }
+      } catch (err) {
+         console.error('Login error', err);
       }
       return false;
     },
