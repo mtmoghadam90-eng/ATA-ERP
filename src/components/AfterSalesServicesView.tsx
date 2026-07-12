@@ -399,21 +399,19 @@ export default function AfterSalesServicesView({
                   </select>
                 </div>
 
-                <div className="space-y-2">
+                <div className={`space-y-2 ${(status === 'در حال بررسی' || status === 'در حال تعمیر/خدمات') ? 'pointer-events-none opacity-50' : ''}`}>
                   <ShamsiDatePicker
                     label="تاریخ پایان تعمیرات (تکمیل شده)"
                     value={endDate}
                     onChange={(val) => setEndDate(val)}
-                    disabled={status === 'در حال بررسی' || status === 'در حال تعمیر/خدمات'}
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className={`space-y-2 ${status !== 'تحویل داده شده' ? 'pointer-events-none opacity-50' : ''}`}>
                   <ShamsiDatePicker
                     label="تاریخ تحویل مجدد به مشتری"
                     value={returnDate}
                     onChange={(val) => setReturnDate(val)}
-                    disabled={status !== 'تحویل داده شده'}
                   />
                 </div>
 

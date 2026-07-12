@@ -43,6 +43,7 @@ import {
   ProjectCategoryGroup 
 } from '../types';
 import { getTodayShamsi } from '../dateUtils';
+import { getProformaOutcomeStatus } from '../useERPStore';
 
 interface DashboardViewProps {
   customers: Customer[];
@@ -80,12 +81,35 @@ export default function DashboardView({
   const [taskFilter, setTaskFilter] = useState<'my' | 'all'>('my');
 
   // 1. Calculate stats
-  // Total Won Revenue (Proformas with status 'تأیید شده (برنده)')
-  const wonProformas = proformas.filter(p => p.status === 'تأیید شده (برنده)');
-  const totalRevenue = wonProformas.reduce((sum, p) => sum + p.finalAmount, 0);
+  // Total Won Revenue (Proformas with status 'تأیید شده (برنده)' or 'نیمه برنده')
+  const wonProformas = proformas.filter(p => {
+    const outcome = getProformaOutcomeStatus(p);
+    return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+  });
+  const totalRevenue = wonProformas.reduce((sum, p) => {
+    const outcome = getProformaOutcomeStatus(p);
+    if (outcome === 'تأیید شده (برنده)') {
+      return sum + p.finalAmount;
+    } else if (outcome === 'نیمه برنده') {
+      const wonItemsTotal = p.items?.filter(item => item.status === 'برنده').reduce((s, item) => s + (item.totalPriceRIYAL || 0), 0) || 0;
+      const ratio = p.totalAmount > 0 ? wonItemsTotal / p.totalAmount : 0;
+      return sum + Math.round(p.finalAmount * ratio);
+    } else {
+      // Fallback for custom or old data
+      const wonItemsTotal = p.items?.filter(item => item.status === 'برنده').reduce((s, item) => s + (item.totalPriceRIYAL || 0), 0) || 0;
+      if (wonItemsTotal > 0) {
+        const ratio = p.totalAmount > 0 ? wonItemsTotal / p.totalAmount : 0;
+        return sum + Math.round(p.finalAmount * ratio);
+      }
+      return sum + p.finalAmount;
+    }
+  }, 0);
 
   // Active Proformas (not won, draft, lost or cancelled - e.g., 'ارسال شده', 'پیش‌نویس')
-  const activeProformas = proformas.filter(p => p.status === 'ارسال شده' || p.status === 'پیش‌نویس');
+  const activeProformas = proformas.filter(p => {
+    const outcome = getProformaOutcomeStatus(p);
+    return outcome === 'جاری' || outcome === 'پیش‌نویس';
+  });
   const activeProformasValue = activeProformas.reduce((sum, p) => sum + p.finalAmount, 0);
 
   // Active Purchase Orders (under tracking)

@@ -38,11 +38,13 @@ import {
   UserCog,
   Bell,
   Boxes,
-  Wrench
+  Wrench,
+  History
 } from 'lucide-react';
-import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project } from '../types';
+import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog } from '../types';
+import { decompressLZW } from '../utils/compress';
 import ConfirmModal from './ConfirmModal';
-import { compressAndResizeImage } from '../imageUtils';
+import { compressAndResizeImage, uploadFile } from '../imageUtils';
 
 interface SettingsViewProps {
   settings: ERPSettings;
@@ -53,6 +55,7 @@ interface SettingsViewProps {
   users?: User[];
   currentUser?: User | null;
   projects?: Project[];
+  auditLogs?: AuditLog[];
 }
 
 export default function SettingsView({
@@ -64,6 +67,7 @@ export default function SettingsView({
   users = [],
   currentUser = null,
   projects = [],
+  auditLogs = [],
 }: SettingsViewProps) {
   const template = settings?.proformaTemplates?.[0] || {
     name: 'قالب پیش‌فرض رسمی',
@@ -89,7 +93,13 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog'>('general');
+
+  // Audit log filters
+  const [logSearch, setLogSearch] = useState('');
+  const [logModuleFilter, setLogModuleFilter] = useState('all');
+  const [logActionFilter, setLogActionFilter] = useState('all');
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   // Loss reasons state
   const [newLossReason, setNewLossReason] = useState('');
@@ -108,58 +118,61 @@ export default function SettingsView({
   const [deleteTargetName, setDeleteTargetName] = useState<string>('');
   const [deleteTargetExtra, setDeleteTargetExtra] = useState<any>(null);
 
-  const dropdownLabels: Record<keyof ERPSettings['dropdownItems'] | 'lossReasons', string> = {
-    industries: 'صنایع فعالیت مشتریان',
-    customerTypes: 'نوع شخصیت مشتریان (حقیقی/حقوقی)',
-    customerStatuses: 'وضعیت‌های پرونده مشتریان',
-    categories: 'دسته‌بندی‌های کالا و ابزار دقیق',
-    units: 'واحدهای سنجش و شمارش کالا',
-    currencies: 'ارزهای مبادلاتی تأمین‌کنندگان',
-    paymentTerms: 'شرایط پرداخت و تسویه ارزی',
-    paymentTypes: 'روش‌های دریافت و پرداخت ریالی',
-    projectStatuses: 'وضعیت‌های پیشرفت فرصت/پروژه',
-    salesExperts: 'کارشناسان فروش مسئول',
-    marketingChannels: 'کانال‌های بازاریابی و جذب لید',
-    leadQualities: 'سطوح کیفیت سرنخ‌ها (لیدها)',
-    communicationMethods: 'روش‌های اصلی ارتباط با مشتری',
-    taskPriorities: 'اولویت‌های وظایف و پیگیری‌ها',
-    taskStatuses: 'وضعیت‌های وظایف و پیگیری‌ها',
-    proformaStatuses: 'وضعیت‌های پیش‌فاکتورها',
-    purchaseOrderStatuses: 'وضعیت‌های سفارشات خرید خارجی',
-    positions: 'سمت‌های افراد حقیقی',
-    receiptTypes: 'انواع دریافت و پرداخت (بابت)',
-    supplierInquiryActionTypes: 'انواع اقدام ثبت شده برای استعلام‌های تامین‌کننده',
-    shippingMethods: 'نحوه ارسال کالا (پکینگ لیست)',
+  const allowedDropdownKeys: (keyof ERPSettings['dropdownItems'] | 'lossReasons')[] = [
+    'industries',
+    'categories',
+    'units',
+    'paymentTerms',
+    'salesExperts',
+    'marketingChannels',
+    'leadQualities',
+    'communicationMethods',
+    'taskPriorities',
+    'positions',
+    'receiptTypes',
+    'supplierInquiryActionTypes',
+    'shippingMethods',
+    'packageTypes',
+    'returnReasons',
+    'lossReasons'
+  ];
+
+  const dropdownLabels: Partial<Record<keyof ERPSettings['dropdownItems'] | 'lossReasons', string>> = {
+    industries: 'صنایع فعالیت مشتریان (مشتریان)',
+    categories: 'دسته‌بندی‌های کالا و ابزار دقیق (کالا)',
+    units: 'واحدهای سنجش و شمارش کالا (کالا)',
+    paymentTerms: 'شرایط پرداخت و تسویه ارزی (پیش‌فاکتور/خرید)',
+    salesExperts: 'کارشناسان فروش مسئول (مشتریان/پروژه‌ها)',
+    marketingChannels: 'کانال‌های بازاریابی و جذب لید (مشتریان)',
+    leadQualities: 'سطوح کیفیت سرنخ‌ها (مشتریان/پروژه‌ها)',
+    communicationMethods: 'روش‌های اصلی ارتباط با مشتری (وظایف)',
+    taskPriorities: 'اولویت‌های وظایف و پیگیری‌ها (وظایف)',
+    positions: 'سمت‌های افراد حقیقی (کاربران)',
+    receiptTypes: 'انواع دریافت و پرداخت (تراکنش‌ها)',
+    supplierInquiryActionTypes: 'انواع اقدام ثبت شده (استعلام‌ها)',
+    shippingMethods: 'نحوه ارسال کالا (پکینگ لیست/خرید)',
     packageTypes: 'نوع بسته‌بندی (پکینگ لیست)',
     returnReasons: 'دلایل برگشت کالا (خدمات پس از فروش)',
-    lossReasons: 'دلایل باخت پروژه/اقلام پیش‌فاکتور',
+    lossReasons: 'دلایل باخت پروژه/اقلام (پروژه‌ها/پیش‌فاکتور)'
   };
 
-  const dropdownDescriptions: Record<keyof ERPSettings['dropdownItems'] | 'lossReasons', string> = {
+  const dropdownDescriptions: Partial<Record<keyof ERPSettings['dropdownItems'] | 'lossReasons', string>> = {
     industries: 'لیست صنایع اصلی که مشتریان شما در آن‌ها فعالیت می‌کنند (مثال: نفت و گاز، پتروشیمی، نیروگاهی).',
-    customerTypes: 'انواع هویت‌های ثبتی مشتریان در سیستم.',
-    customerStatuses: 'وضعیت‌های اصلی همکاری با مشتریان در پرونده‌ها.',
     categories: 'گروه‌های کالایی و ابزار دقیق برای دسته‌بندی کالاها و پیش‌فاکتورها.',
     units: 'واحدهای شمارش فیزیکی اقلام و تجهیزات.',
-    currencies: 'ارزهای پشتیبانی‌شده در سفارشات خرید ارزی خارجی.',
     paymentTerms: 'شرایط پیش‌فرض برای تسویه حساب با تأمین‌کنندگان خارجی.',
-    paymentTypes: 'شیوه‌های مجاز برای ثبت دریافت‌ها و پرداخت‌ها در صندوق ریالی.',
-    projectStatuses: 'مراحل اصلی قیف فروش و وضعیت پروژه‌ها از ابتدا تا موفقیت یا شکست.',
     salesExperts: 'لیست اسامی کارشناسان فروش شرکت جهت انتساب به پروژه‌ها.',
     marketingChannels: 'راه‌های مختلف ورود سرنخ و فرصت‌های فروش به سیستم برای تحلیل بازاریابی.',
     leadQualities: 'درجه‌بندی اهمیت و گرمای سرنخ‌های ورودی.',
     communicationMethods: 'روش‌های اصلی تعامل و ارتباط با کارفرما.',
     taskPriorities: 'درجات اهمیت پیگیری‌ها و اقدامات همکاران.',
-    taskStatuses: 'مراحل انجام و پیگیری وظایف محوله در سیستم.',
-    proformaStatuses: 'وضعیت‌های چرخه حیات پیش‌فاکتورهای صادر شده.',
-    purchaseOrderStatuses: 'مراحل پیگیری سفارشات خرید خارجی.',
     positions: 'لیست سمت‌های پیش‌فرض و انتخابی برای مخاطبین و افراد حقیقی در بخش مشتریان.',
-    receiptTypes: 'دسته‌بندی‌ها و بابت‌های دریافت و پرداخت در دفتر صندوق (مانند پیش‌پرداخت، میاندوره، تسویه و غیره).',
+    receiptTypes: 'دسته‌بندی‌ها و بابت‌های دریافت و پرداخت در دفتر صندوق.',
     supplierInquiryActionTypes: 'لیست انواع اقدام قابل انتخاب هنگام ثبت اقدامات جدید برای استعلام‌های قیمت از تامین‌کنندگان.',
     shippingMethods: 'لیست روش‌ها و شرکت‌های حمل و نقل جهت انتخاب در زمان صدور پکینگ لیست و تحویل کالا.',
-    packageTypes: 'لیست انواع پیش‌فرض بسته‌بندی کالاها در پکینگ لیست (مانند کارتن، پالت، جعبه چوبی و غیره).',
+    packageTypes: 'لیست انواع پیش‌فرض بسته‌بندی کالاها در پکینگ لیست.',
     returnReasons: 'لیست دلایل و مشکلات خرابی یا برگشت کالا در بخش خدمات پس از فروش.',
-    lossReasons: 'دلایل باخت تعریف شده که کاربر می‌تواند هنگام مشخص کردن وضعیت بازنده یا لغو پروژه/پیش‌فاکتور انتخاب کند.',
+    lossReasons: 'دلایل باخت تعریف شده که کاربر می‌تواند هنگام مشخص کردن وضعیت بازنده یا لغو پروژه/پیش‌فاکتور انتخاب کند.'
   };
 
   const handleAddDropdownItem = (e: React.FormEvent) => {
@@ -579,6 +592,17 @@ export default function SettingsView({
           <FileCheck size={16} className="text-emerald-500" />
           چک‌لیست تحویل کالا
         </button>
+        <button
+          onClick={() => setActiveTab('auditLog')}
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
+            activeTab === 'auditLog'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <History size={16} className="text-violet-500" />
+          سابقه اقدامات (Audit Log)
+        </button>
       </div>
 
       {activeTab === 'general' ? (
@@ -621,15 +645,16 @@ export default function SettingsView({
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              compressAndResizeImage(file, 400, 400, 0.7)
-                                .then(base64 => setLogoUrl(base64))
-                                .catch(err => {
-                                  console.error(err);
-                                  alert('خطا در پردازش فایل تصویر لوگو');
-                                });
+                              try {
+                                const url = await uploadFile(file);
+                                setLogoUrl(url);
+                              } catch (err: any) {
+                                console.error(err);
+                                alert(err.message || 'خطا در بارگذاری تصویر لوگو');
+                              }
                             }
                           }}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
@@ -674,15 +699,16 @@ export default function SettingsView({
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              compressAndResizeImage(file, 400, 400, 0.7)
-                                .then(base64 => setCompanySealUrl(base64))
-                                .catch(err => {
-                                  console.error(err);
-                                  alert('خطا در پردازش فایل تصویر مهر');
-                                });
+                              try {
+                                const url = await uploadFile(file);
+                                setCompanySealUrl(url);
+                              } catch (err: any) {
+                                console.error(err);
+                                alert(err.message || 'خطا در بارگذاری تصویر مهر');
+                              }
                             }
                           }}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
@@ -1162,7 +1188,7 @@ export default function SettingsView({
               <p className="text-slate-400 text-[11px]">لیستی که مایل به مدیریت آیتم‌های آن هستید را انتخاب کنید:</p>
               
               <div className="space-y-1 pt-1 max-h-[60vh] overflow-y-auto">
-                {(Object.keys(dropdownLabels) as Array<keyof ERPSettings['dropdownItems'] | 'lossReasons'>).map((key) => {
+                {allowedDropdownKeys.map((key) => {
                   const count = key === 'lossReasons' 
                     ? (settings.lossReasons || []).length 
                     : (settings.dropdownItems[key as keyof ERPSettings['dropdownItems']] || []).length;
@@ -1828,6 +1854,318 @@ export default function SettingsView({
               </div>
             </div>
           </div>
+        ) : activeTab === 'auditLog' ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-150">
+              <div className="flex items-center gap-2 text-slate-800">
+                <History size={18} className="text-violet-500" />
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">دفتر ثبت سوابق و لاگ تغییرات سیستم (System Audit Log)</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">ثبت و بایگانی تمام اقدامات کاربران به همراه تغییرات فیلدها با فشرده‌سازی فشرده LZW</p>
+                </div>
+              </div>
+              <div className="text-[10px] bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded font-bold text-slate-600">
+                مجموع لاگ‌های ثبت شده: {auditLogs.length.toLocaleString('fa-IR')} مورد
+              </div>
+            </div>
+
+            {/* Filter controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500">جستجو در توضیحات</label>
+                <input
+                  type="text"
+                  placeholder="جستجوی کلمه کلیدی..."
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500">فیلتر بخش/ماژول</label>
+                <select
+                  value={logModuleFilter}
+                  onChange={(e) => setLogModuleFilter(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none bg-white font-medium"
+                >
+                  <option value="all">همه بخش‌ها</option>
+                  <option value="مشتریان">مشتریان</option>
+                  <option value="پروژه‌ها">پروژه‌ها</option>
+                  <option value="کالاها و تجهیزات">کالاها و تجهیزات</option>
+                  <option value="تأمین‌کنندگان">تأمین‌کنندگان</option>
+                  <option value="پیش‌فاکتورها">پیش‌فاکتورها</option>
+                  <option value="فعالیت پروژه‌ها">فعالیت پروژه‌ها</option>
+                  <option value="وظایف/پیگیری‌ها">وظایف/پیگیری‌ها</option>
+                  <option value="بسته‌بندی و ارسال">بسته‌بندی و ارسال</option>
+                  <option value="خدمات پس از فروش">خدمات پس از فروش</option>
+                  <option value="ارز و نرخ برابری">ارز و نرخ برابری</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500">فیلتر نوع تغییر</label>
+                <select
+                  value={logActionFilter}
+                  onChange={(e) => setLogActionFilter(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none bg-white font-medium"
+                >
+                  <option value="all">همه تغییرات</option>
+                  <option value="CREATE">ایجاد جدید (CREATE)</option>
+                  <option value="UPDATE">ویرایش و تغییرات (UPDATE)</option>
+                  <option value="DELETE">حذف اطلاعات (DELETE)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* List of Logs */}
+            <div className="space-y-3">
+              {(() => {
+                const filtered = auditLogs.filter(log => {
+                  const matchSearch = !logSearch || 
+                    (log.description || '').toLowerCase().includes(logSearch.toLowerCase()) || 
+                    (log.userFullName || '').toLowerCase().includes(logSearch.toLowerCase()) || 
+                    (log.entityId || '').toLowerCase().includes(logSearch.toLowerCase());
+                  const matchModule = logModuleFilter === 'all' || log.module === logModuleFilter;
+                  const matchAction = logActionFilter === 'all' || log.action === logActionFilter;
+                  return matchSearch && matchModule && matchAction;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-12 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+                      هیچ لاگ یا سابقه‌ای یافت نشد.
+                    </div>
+                  );
+                }
+
+                // Internal human-readable field comparison helper
+                const renderObjectDiff = (compressedBefore?: string, compressedAfter?: string, action?: string) => {
+                  let beforeObj: any = null;
+                  let afterObj: any = null;
+
+                  if (compressedBefore) {
+                    try {
+                      const raw = decompressLZW(compressedBefore);
+                      beforeObj = raw ? JSON.parse(raw) : null;
+                    } catch (e) {
+                      console.error("Failed to parse decompressed beforeState:", e);
+                    }
+                  }
+
+                  if (compressedAfter) {
+                    try {
+                      const raw = decompressLZW(compressedAfter);
+                      afterObj = raw ? JSON.parse(raw) : null;
+                    } catch (e) {
+                      console.error("Failed to parse decompressed afterState:", e);
+                    }
+                  }
+
+                  if (!beforeObj && !afterObj) {
+                    return (
+                      <span className="text-slate-400 text-[10px]">اطلاعات جزئی بیشتری برای این عملیات موجود نیست.</span>
+                    );
+                  }
+
+                  if (action === 'DELETE' && beforeObj) {
+                    return (
+                      <div className="bg-rose-50/40 border border-rose-100 rounded-lg p-3 text-xs space-y-2 text-right">
+                        <span className="font-bold text-rose-800 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                          مشخصات رکورد حذف شده:
+                        </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] bg-white p-2.5 rounded border border-rose-100/50 text-slate-600 font-medium leading-relaxed max-h-48 overflow-y-auto">
+                          {Object.entries(beforeObj)
+                            .filter(([_, v]) => v !== null && v !== undefined && typeof v !== 'object')
+                            .map(([k, v]) => {
+                              const labelMap: Record<string, string> = {
+                                name: 'نام', title: 'عنوان', code: 'کد سند', description: 'توضیحات',
+                                customerName: 'مشتری', totalAmount: 'مبلغ کل', phone: 'تلفن'
+                              };
+                              return (
+                                <div key={k} className="flex justify-between border-b border-slate-100 pb-1">
+                                  <span className="text-slate-400">{labelMap[k] || k}:</span>
+                                  <span className="text-slate-700 font-mono" style={{ unicodeBidi: 'plaintext' }}>{String(v)}</span>
+                                </div>
+                              );
+                            })
+                          }
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (action === 'CREATE' && afterObj) {
+                    return (
+                      <div className="bg-emerald-50/40 border border-emerald-100 rounded-lg p-3 text-xs space-y-2 text-right">
+                        <span className="font-bold text-emerald-800 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                          مشخصات رکورد ثبت شده:
+                        </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] bg-white p-2.5 rounded border border-emerald-100/50 text-slate-600 font-medium leading-relaxed max-h-48 overflow-y-auto">
+                          {Object.entries(afterObj)
+                            .filter(([_, v]) => v !== null && v !== undefined && typeof v !== 'object')
+                            .map(([k, v]) => {
+                              const labelMap: Record<string, string> = {
+                                name: 'نام', title: 'عنوان', code: 'کد سند', description: 'توضیحات',
+                                customerName: 'مشتری', totalAmount: 'مبلغ کل', phone: 'تلفن'
+                              };
+                              return (
+                                <div key={k} className="flex justify-between border-b border-slate-100 pb-1">
+                                  <span className="text-slate-400">{labelMap[k] || k}:</span>
+                                  <span className="text-slate-700 font-mono" style={{ unicodeBidi: 'plaintext' }}>{String(v)}</span>
+                                </div>
+                              );
+                            })
+                          }
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (action === 'UPDATE' && (beforeObj || afterObj)) {
+                    const diffs: { field: string; from: string; to: string }[] = [];
+                    const fieldMap: Record<string, string> = {
+                      name: 'نام',
+                      title: 'عنوان',
+                      text: 'متن',
+                      status: 'وضعیت',
+                      description: 'توضیحات',
+                      phone: 'تلفن',
+                      email: 'ایمیل',
+                      address: 'آدرس',
+                      industry: 'صنعت',
+                      financialContact: 'رابط مالی',
+                      technicalContact: 'رابط فنی',
+                      salesExpert: 'کارشناس فروش',
+                      price: 'قیمت',
+                      quantity: 'تعداد',
+                      stockLevel: 'موجودی انبار',
+                      buyingPrice: 'قیمت خرید',
+                      sellingPrice: 'قیمت فروش',
+                      currency: 'واحد پولی',
+                      totalAmount: 'مبلغ کل',
+                      assignedTo: 'ارجاع به / کارشناس مسئول',
+                      actionRequired: 'اقدام مورد نیاز',
+                      assignedBy: 'ارجاع‌دهنده',
+                      companyName: 'نام شرکت',
+                      economicCode: 'کد اقتصادی',
+                      nationalCode: 'شناسه ملی',
+                      registrationNumber: 'شماره ثبت'
+                    };
+
+                    const bKeys = beforeObj ? Object.keys(beforeObj) : [];
+                    const aKeys = afterObj ? Object.keys(afterObj) : [];
+                    const allKeys = Array.from(new Set([...bKeys, ...aKeys]));
+
+                    for (const key of allKeys) {
+                      if (['id', 'createdAt', 'updatedAt', 'creationDate', 'lastActive', 'password'].includes(key)) continue;
+                      const valBefore = beforeObj?.[key];
+                      const valAfter = afterObj?.[key];
+                      
+                      if (typeof valBefore === 'object' || typeof valAfter === 'object') continue;
+
+                      if (valBefore !== valAfter) {
+                        diffs.push({
+                          field: fieldMap[key] || key,
+                          from: valBefore !== undefined && valBefore !== null && valBefore !== '' ? String(valBefore) : '—',
+                          to: valAfter !== undefined && valAfter !== null && valAfter !== '' ? String(valAfter) : '—'
+                        });
+                      }
+                    }
+
+                    if (diffs.length === 0) {
+                      return (
+                        <span className="text-slate-400 text-[10px]">تغییراتی در فیلدهای اصلی شناسایی نشد یا تغییرات مربوط به جداول فرعی است.</span>
+                      );
+                    }
+
+                    return (
+                      <div className="bg-amber-50/30 border border-amber-100 rounded-lg p-3 text-xs space-y-2 text-right">
+                        <span className="font-bold text-amber-800 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping"></span>
+                          فیلدهای تغییر یافته:
+                        </span>
+                        <div className="space-y-2">
+                          {diffs.map((d, index) => (
+                            <div key={index} className="flex flex-wrap items-center gap-1.5 bg-white p-2 rounded-lg border border-slate-100 font-medium">
+                              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">{d.field}</span>
+                              <span className="text-slate-400">از</span>
+                              <span className="text-rose-600 line-through bg-rose-50/50 px-1 rounded font-mono">{d.from}</span>
+                              <span className="text-slate-400">← به</span>
+                              <span className="text-emerald-700 bg-emerald-50 px-1 rounded font-bold font-mono">{d.to}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return null;
+                };
+
+                return (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-150">
+                    {filtered.map((log) => {
+                      const isExpanded = expandedLogId === log.id;
+                      return (
+                        <div key={log.id} className="bg-white hover:bg-slate-50/50 transition duration-150">
+                          {/* Log Main Bar */}
+                          <div
+                            onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                            className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 cursor-pointer select-none"
+                          >
+                            <div className="flex items-center gap-3">
+                              {/* Action Badge */}
+                              <span className={`px-2 py-1 rounded text-[9px] font-bold tracking-wider font-mono shrink-0 ${
+                                log.action === 'CREATE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                                log.action === 'UPDATE' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                'bg-rose-100 text-rose-800 border border-rose-200'
+                              }`}>
+                                {log.action}
+                              </span>
+
+                              {/* Module Badge */}
+                              <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold shrink-0">
+                                {log.module}
+                              </span>
+
+                              {/* Action Description */}
+                              <span className="text-slate-700 font-semibold text-xs leading-relaxed">
+                                {log.description}
+                              </span>
+                            </div>
+
+                            {/* Metadata */}
+                            <div className="flex items-center gap-3 text-[10px] text-slate-400 mr-auto shrink-0 font-medium">
+                              {/* User Info */}
+                              <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold">
+                                <UserCog size={10} className="text-slate-500" />
+                                {log.userFullName}
+                              </span>
+
+                              {/* Date Time */}
+                              <span className="font-mono bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
+                                {log.timestamp}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Expanded Details Diff */}
+                          {isExpanded && (
+                            <div className="px-4 pb-4 pt-1 bg-slate-50/30 border-t border-slate-150 animate-fade-in space-y-3">
+                              {renderObjectDiff(log.beforeState, log.afterState, log.action)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
         ) : null)}
 
       {/* Confirm Delete Modal */}
@@ -1848,7 +2186,7 @@ export default function SettingsView({
           deleteType === 'clearData' ? 'هشدار: پاکسازی کامل داده‌ها' : 'تایید حذف'
         }
         message={
-          deleteType === 'dropdownItem' ? `آیا از حذف گزینه "${deleteTargetName}" از لیست کشویی "${dropdownLabels[selectedDropdownKey]}" اطمینان دارید؟` :
+          deleteType === 'dropdownItem' ? `آیا از حذف گزینه "${deleteTargetName}" از لیست کشویی "${dropdownLabels[selectedDropdownKey] || ''}" اطمینان دارید؟` :
           deleteType === 'activityCategory' ? `آیا از حذف دسته‌بندی فعالیت "${deleteTargetName}" اطمینان دارید؟` :
           deleteType === 'lossReason' ? `آیا از حذف علت باخت "${deleteTargetName}" اطمینان دارید؟` :
           deleteType === 'customField' ? `آیا از حذف فیلد سفارشی "${deleteTargetName}" اطمینان دارید؟ تمامی مقادیر ذخیره شده برای این فیلد در رکوردهای موجود حذف خواهند شد.` : 

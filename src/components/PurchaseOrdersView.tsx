@@ -13,6 +13,8 @@ import {
   DollarSign, 
   Calculator,
   Calendar,
+  Clock,
+  Package,
   X,
   PlusCircle,
   MinusCircle,
@@ -22,6 +24,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder, Supplier, Project, Product, PurchaseOrderItem, ExchangeRate, ERPSettings, Proforma, Customer } from '../types';
 import { getTodayShamsi, addDaysToShamsi } from '../dateUtils';
+import { getProformaOutcomeStatus } from '../useERPStore';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -117,11 +120,20 @@ export default function PurchaseOrdersView({
 
   const [notes, setNotes] = useState('');
 
-  const determineStatusFromDates = (pay: string, ship: string, clear: string, rec: string): PurchaseOrder['status'] => {
+  const determineStatusFromDates = (
+    ord: string,
+    pay: string,
+    ready: string,
+    ship: string,
+    clear: string,
+    rec: string
+  ): PurchaseOrder['status'] => {
     if (rec) return 'تحویل شده (رسید انبار)';
-    if (clear) return 'ترخیص گمرک';
-    if (ship) return 'در حال حمل';
-    if (pay) return 'سفارش داده شده';
+    if (clear) return 'در حال حمل به انبار';
+    if (ship) return 'ترخیص گمرک';
+    if (ready) return 'حمل و ترانزیت';
+    if (pay) return 'در حال آماده‌سازی سازنده';
+    if (ord) return 'پرداخت و سفارش به سازنده';
     return 'پیش‌نویس';
   };
 
@@ -159,11 +171,11 @@ export default function PurchaseOrdersView({
   // Open create
   const handleOpenCreate = () => {
     setEditingPO(null);
-    setStatus('پیش‌نویس');
     setSupplierId(suppliers[0]?.id || '');
     setProjectId('');
     setProformaId('');
     setOrderDate(getTodayShamsi());
+    setStatus('پرداخت و سفارش به سازنده');
     setExpectedDeliveryDate(addDaysToShamsi(getTodayShamsi(), 45));
     handleCurrencyChange('دلار');
     setItems([{ id: `poi-${Date.now()}-0`, productId: products[0]?.id || '', productName: products[0]?.displayName || '', productCode: products[0]?.code || '', brand: products[0]?.brand || '', quantity: 1, unitPriceForeignCurrency: 100, totalPriceForeignCurrency: 100 }]);
@@ -370,16 +382,56 @@ export default function PurchaseOrdersView({
     if (!po) return;
 
     const updatedPO = { ...po, status: newStatusSelected };
-    if (statusDateInput) {
-      if (newStatusSelected === 'سفارش داده شده') {
-        updatedPO.paymentDate = statusDateInput;
-      } else if (newStatusSelected === 'در حال حمل') {
-        updatedPO.shipmentDate = statusDateInput;
-      } else if (newStatusSelected === 'ترخیص گمرک') {
-        updatedPO.clearanceDate = statusDateInput;
-      } else if (newStatusSelected === 'تحویل شده (رسید انبار)') {
-        updatedPO.receivedDate = statusDateInput;
-      }
+    const eventDate = statusDateInput || getTodayShamsi();
+
+    if (newStatusSelected === 'پیش‌نویس') {
+      updatedPO.paymentDate = undefined;
+      updatedPO.goodsReadyDate = undefined;
+      updatedPO.shipmentDate = undefined;
+      updatedPO.clearanceDate = undefined;
+      updatedPO.receivedDate = undefined;
+    } else if (newStatusSelected === 'پرداخت و سفارش به سازنده') {
+      updatedPO.orderDate = eventDate;
+      updatedPO.paymentDate = undefined;
+      updatedPO.goodsReadyDate = undefined;
+      updatedPO.shipmentDate = undefined;
+      updatedPO.clearanceDate = undefined;
+      updatedPO.receivedDate = undefined;
+    } else if (newStatusSelected === 'در حال آماده‌سازی سازنده') {
+      if (!updatedPO.orderDate) updatedPO.orderDate = eventDate;
+      updatedPO.paymentDate = eventDate;
+      updatedPO.goodsReadyDate = undefined;
+      updatedPO.shipmentDate = undefined;
+      updatedPO.clearanceDate = undefined;
+      updatedPO.receivedDate = undefined;
+    } else if (newStatusSelected === 'حمل و ترانزیت') {
+      if (!updatedPO.orderDate) updatedPO.orderDate = eventDate;
+      if (!updatedPO.paymentDate) updatedPO.paymentDate = eventDate;
+      updatedPO.goodsReadyDate = eventDate;
+      updatedPO.shipmentDate = undefined;
+      updatedPO.clearanceDate = undefined;
+      updatedPO.receivedDate = undefined;
+    } else if (newStatusSelected === 'ترخیص گمرک') {
+      if (!updatedPO.orderDate) updatedPO.orderDate = eventDate;
+      if (!updatedPO.paymentDate) updatedPO.paymentDate = eventDate;
+      if (!updatedPO.goodsReadyDate) updatedPO.goodsReadyDate = eventDate;
+      updatedPO.shipmentDate = eventDate;
+      updatedPO.clearanceDate = undefined;
+      updatedPO.receivedDate = undefined;
+    } else if (newStatusSelected === 'در حال حمل به انبار') {
+      if (!updatedPO.orderDate) updatedPO.orderDate = eventDate;
+      if (!updatedPO.paymentDate) updatedPO.paymentDate = eventDate;
+      if (!updatedPO.goodsReadyDate) updatedPO.goodsReadyDate = eventDate;
+      if (!updatedPO.shipmentDate) updatedPO.shipmentDate = eventDate;
+      updatedPO.clearanceDate = eventDate;
+      updatedPO.receivedDate = undefined;
+    } else if (newStatusSelected === 'تحویل شده (رسید انبار)') {
+      if (!updatedPO.orderDate) updatedPO.orderDate = eventDate;
+      if (!updatedPO.paymentDate) updatedPO.paymentDate = eventDate;
+      if (!updatedPO.goodsReadyDate) updatedPO.goodsReadyDate = eventDate;
+      if (!updatedPO.shipmentDate) updatedPO.shipmentDate = eventDate;
+      if (!updatedPO.clearanceDate) updatedPO.clearanceDate = eventDate;
+      updatedPO.receivedDate = eventDate;
     }
 
     updatePurchaseOrder(updatedPO);
@@ -407,9 +459,11 @@ export default function PurchaseOrdersView({
   const getStatusColor = (st: PurchaseOrder['status']) => {
     switch (st) {
       case 'پیش‌نویس': return 'bg-slate-100 text-slate-700 border-slate-200';
-      case 'سفارش داده شده': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'در حال حمل': return 'bg-sky-50 text-sky-700 border-sky-200 animate-pulse';
+      case 'پرداخت و سفارش به سازنده': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'در حال آماده‌سازی سازنده': return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'حمل و ترانزیت': return 'bg-sky-50 text-sky-700 border-sky-200 animate-pulse';
       case 'ترخیص گمرک': return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'در حال حمل به انبار': return 'bg-indigo-50 text-indigo-700 border-indigo-200 animate-pulse';
       case 'تحویل شده (رسید انبار)': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     }
   };
@@ -417,9 +471,11 @@ export default function PurchaseOrdersView({
   const getStatusIcon = (st: PurchaseOrder['status']) => {
     switch (st) {
       case 'پیش‌نویس': return <Calendar size={12} />;
-      case 'سفارش داده شده': return <ShoppingCart size={12} />;
-      case 'در حال حمل': return <Truck size={12} />;
+      case 'پرداخت و سفارش به سازنده': return <ShoppingCart size={12} />;
+      case 'در حال آماده‌سازی سازنده': return <Clock size={12} />;
+      case 'حمل و ترانزیت': return <Truck size={12} />;
       case 'ترخیص گمرک': return <Anchor size={12} />;
+      case 'در حال حمل به انبار': return <Package size={12} />;
       case 'تحویل شده (رسید انبار)': return <CheckCircle2 size={12} />;
     }
   };
@@ -464,10 +520,12 @@ export default function PurchaseOrdersView({
           >
             <option value="all">همه وضعیت‌های سفارش</option>
             <option value="پیش‌نویس">پیش‌نویس</option>
-            <option value="سفارش داده شده">سفارش داده شده به سازنده</option>
-            <option value="در حال حمل">در حال حمل ترانزیت</option>
-            <option value="ترخیص گمرک">در حال ترخیص از گمرکات</option>
-            <option value="تحویل شده (رسید انبار)">تحویل شده نهایی</option>
+            <option value="پرداخت و سفارش به سازنده">پرداخت و سفارش به سازنده</option>
+            <option value="در حال آماده‌سازی سازنده">در حال آماده‌سازی سازنده</option>
+            <option value="حمل و ترانزیت">حمل و ترانزیت</option>
+            <option value="ترخیص گمرک">ترخیص گمرک</option>
+            <option value="در حال حمل به انبار">در حال حمل به انبار</option>
+            <option value="تحویل شده (رسید انبار)">تحویل شده نهایی (رسید انبار)</option>
           </select>
         </div>
       </div>
@@ -773,10 +831,12 @@ export default function PurchaseOrdersView({
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                 >
                   <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
-                  <option value="سفارش داده شده">سفارش داده شده به سازنده (Ordered)</option>
-                  <option value="در حال حمل">در حال حمل و ترانزیت (In Transit)</option>
-                  <option value="ترخیص گمرک">در حال ترخیص از گمرکات (Customs)</option>
-                  <option value="تحویل شده (رسید انبار)">تحویل شده نهایی ★</option>
+                  <option value="پرداخت و سفارش به سازنده">پرداخت و سفارش به سازنده (Payment & Order)</option>
+                  <option value="در حال آماده‌سازی سازنده">در حال آماده‌سازی سازنده (Manufacturing)</option>
+                  <option value="حمل و ترانزیت">حمل و ترانزیت (Shipping & Transit)</option>
+                  <option value="ترخیص گمرک">ترخیص گمرک (Customs Clearance)</option>
+                  <option value="در حال حمل به انبار">در حال حمل به انبار (In Transit to Warehouse)</option>
+                  <option value="تحویل شده (رسید انبار)">تحویل شده نهایی (رسید انبار) ★</option>
                 </select>
               </div>
 
@@ -838,7 +898,10 @@ export default function PurchaseOrdersView({
                         setProjectId(projId);
                         if (projId) {
                           const relatedProformas = proformas.filter(pf => pf.projectId === projId);
-                          const approvedPf = relatedProformas.find(pf => pf.status === 'تأیید شده (برنده)');
+                          const approvedPf = relatedProformas.find(pf => {
+                            const outcome = getProformaOutcomeStatus(pf);
+                            return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+                          });
                           const targetPf = approvedPf || relatedProformas[0];
                           if (targetPf) {
                             setProformaId(targetPf.id);
@@ -1008,7 +1071,10 @@ export default function PurchaseOrdersView({
                     label="تاریخ ثبت سفارش"
                     required
                     value={orderDate}
-                    onChange={(val) => setOrderDate(val)}
+                    onChange={(val) => {
+                      setOrderDate(val);
+                      setStatus(determineStatusFromDates(val, paymentDate, goodsReadyDate, shipmentDate, clearanceDate, receivedDate));
+                    }}
                   />
                 </div>
 
@@ -1027,13 +1093,68 @@ export default function PurchaseOrdersView({
                   <label className="text-xs font-semibold text-slate-500 font-bold text-sky-700">وضعیت سفارش خرید</label>
                   <select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as PurchaseOrder['status'])}
+                    onChange={(e) => {
+                      const newSt = e.target.value as PurchaseOrder['status'];
+                      setStatus(newSt);
+                      const today = getTodayShamsi();
+                      if (newSt === 'پیش‌نویس') {
+                        setPaymentDate('');
+                        setGoodsReadyDate('');
+                        setShipmentDate('');
+                        setClearanceDate('');
+                        setReceivedDate('');
+                      } else if (newSt === 'پرداخت و سفارش به سازنده') {
+                        if (!orderDate) setOrderDate(today);
+                        setPaymentDate('');
+                        setGoodsReadyDate('');
+                        setShipmentDate('');
+                        setClearanceDate('');
+                        setReceivedDate('');
+                      } else if (newSt === 'در حال آماده‌سازی سازنده') {
+                        if (!orderDate) setOrderDate(today);
+                        if (!paymentDate) setPaymentDate(today);
+                        setGoodsReadyDate('');
+                        setShipmentDate('');
+                        setClearanceDate('');
+                        setReceivedDate('');
+                      } else if (newSt === 'حمل و ترانزیت') {
+                        if (!orderDate) setOrderDate(today);
+                        if (!paymentDate) setPaymentDate(today);
+                        if (!goodsReadyDate) setGoodsReadyDate(today);
+                        setShipmentDate('');
+                        setClearanceDate('');
+                        setReceivedDate('');
+                      } else if (newSt === 'ترخیص گمرک') {
+                        if (!orderDate) setOrderDate(today);
+                        if (!paymentDate) setPaymentDate(today);
+                        if (!goodsReadyDate) setGoodsReadyDate(today);
+                        if (!shipmentDate) setShipmentDate(today);
+                        setClearanceDate('');
+                        setReceivedDate('');
+                      } else if (newSt === 'در حال حمل به انبار') {
+                        if (!orderDate) setOrderDate(today);
+                        if (!paymentDate) setPaymentDate(today);
+                        if (!goodsReadyDate) setGoodsReadyDate(today);
+                        if (!shipmentDate) setShipmentDate(today);
+                        if (!clearanceDate) setClearanceDate(today);
+                        setReceivedDate('');
+                      } else if (newSt === 'تحویل شده (رسید انبار)') {
+                        if (!orderDate) setOrderDate(today);
+                        if (!paymentDate) setPaymentDate(today);
+                        if (!goodsReadyDate) setGoodsReadyDate(today);
+                        if (!shipmentDate) setShipmentDate(today);
+                        if (!clearanceDate) setClearanceDate(today);
+                        if (!receivedDate) setReceivedDate(today);
+                      }
+                    }}
                     className="w-full border border-sky-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-semibold text-sky-800"
                   >
                     <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
-                    <option value="سفارش داده شده">سفارش داده شده به سازنده (Ordered)</option>
-                    <option value="در حال حمل">در حال حمل و ترانزیت (In Transit)</option>
-                    <option value="ترخیص گمرک">در حال ترخیص از گمرکات (Customs)</option>
+                    <option value="پرداخت و سفارش به سازنده">پرداخت و سفارش به سازنده (Payment & Order)</option>
+                    <option value="در حال آماده‌سازی سازنده">در حال آماده‌سازی سازنده (Manufacturing)</option>
+                    <option value="حمل و ترانزیت">حمل و ترانزیت (Shipping & Transit)</option>
+                    <option value="ترخیص گمرک">ترخیص گمرک (Customs Clearance)</option>
+                    <option value="در حال حمل به انبار">در حال حمل به انبار (In Transit to Warehouse)</option>
                     <option value="تحویل شده (رسید انبار)">تحویل شده نهایی (رسید انبار) ★</option>
                   </select>
                 </div>
@@ -1256,14 +1377,17 @@ export default function PurchaseOrdersView({
                     value={paymentDate}
                     onChange={(val) => {
                       setPaymentDate(val);
-                      setStatus(determineStatusFromDates(val, shipmentDate, clearanceDate, receivedDate));
+                      setStatus(determineStatusFromDates(orderDate, val, goodsReadyDate, shipmentDate, clearanceDate, receivedDate));
                     }}
                   />
 
                   <ShamsiDatePicker
                     label="تاریخ آماده‌سازی کالا"
                     value={goodsReadyDate}
-                    onChange={(val) => setGoodsReadyDate(val)}
+                    onChange={(val) => {
+                      setGoodsReadyDate(val);
+                      setStatus(determineStatusFromDates(orderDate, paymentDate, val, shipmentDate, clearanceDate, receivedDate));
+                    }}
                   />
 
                   <ShamsiDatePicker
@@ -1271,7 +1395,7 @@ export default function PurchaseOrdersView({
                     value={shipmentDate}
                     onChange={(val) => {
                       setShipmentDate(val);
-                      setStatus(determineStatusFromDates(paymentDate, val, clearanceDate, receivedDate));
+                      setStatus(determineStatusFromDates(orderDate, paymentDate, goodsReadyDate, val, clearanceDate, receivedDate));
                     }}
                   />
 
@@ -1280,7 +1404,7 @@ export default function PurchaseOrdersView({
                     value={clearanceDate}
                     onChange={(val) => {
                       setClearanceDate(val);
-                      setStatus(determineStatusFromDates(paymentDate, shipmentDate, val, receivedDate));
+                      setStatus(determineStatusFromDates(orderDate, paymentDate, goodsReadyDate, shipmentDate, val, receivedDate));
                     }}
                   />
 
@@ -1289,7 +1413,7 @@ export default function PurchaseOrdersView({
                     value={receivedDate}
                     onChange={(val) => {
                       setReceivedDate(val);
-                      setStatus(determineStatusFromDates(paymentDate, shipmentDate, clearanceDate, val));
+                      setStatus(determineStatusFromDates(orderDate, paymentDate, goodsReadyDate, shipmentDate, clearanceDate, val));
                     }}
                   />
 

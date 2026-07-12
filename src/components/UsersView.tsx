@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, ERPSettings } from '../types';
 import ConfirmModal from './ConfirmModal';
-import { compressAndResizeImage } from '../imageUtils';
+import { compressAndResizeImage, uploadFile } from '../imageUtils';
 import { 
   UserPlus, 
   ShieldCheck, 
@@ -501,15 +501,16 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            compressAndResizeImage(file, 400, 400, 0.7)
-                              .then(base64 => setSignatureImage(base64))
-                              .catch(err => {
-                                console.error(err);
-                                alert('خطا در پردازش فایل تصویر امضا');
-                              });
+                            try {
+                              const url = await uploadFile(file);
+                              setSignatureImage(url);
+                            } catch (err: any) {
+                              console.error(err);
+                              alert(err.message || 'خطا در بارگذاری تصویر امضا');
+                            }
                           }
                         }}
                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
@@ -696,15 +697,16 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            compressAndResizeImage(file, 400, 400, 0.7)
-                              .then(base64 => setSignatureImage(base64))
-                              .catch(err => {
-                                console.error(err);
-                                alert('خطا در پردازش فایل تصویر امضا');
-                              });
+                            try {
+                              const url = await uploadFile(file);
+                              setSignatureImage(url);
+                            } catch (err: any) {
+                              console.error(err);
+                              alert(err.message || 'خطا در بارگذاری تصویر امضا');
+                            }
                           }
                         }}
                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"

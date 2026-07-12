@@ -26,6 +26,7 @@ import {
 import { Proforma, Customer, Project, Product, ProformaItem, ERPSettings, ExchangeRate, User } from '../types';
 import { getTodayShamsi, addDaysToShamsi } from '../dateUtils';
 import ShamsiDatePicker from './ShamsiDatePicker';
+import { getProformaOutcomeStatus } from '../useERPStore';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
 interface ProformasViewProps {
@@ -41,6 +42,7 @@ interface ProformasViewProps {
   batchUpdateProjectProformasStatus: (projectId: string, status: Proforma['status'], lossReason?: string) => void;
   deleteProforma: (id: string) => void;
   addCustomer?: (customer: Omit<Customer, 'id' | 'createdAt'>) => Customer | any;
+  updateCustomer?: (customer: Customer) => void;
   addProject?: (project: Omit<Project, 'id' | 'code' | 'creationDate'> & { customValues?: Record<string, any> }) => Project | any;
   addProduct?: (product: Omit<Product, 'id' | 'stockLevel'> & { stockLevel?: number }) => Product;
   users?: User[];
@@ -59,6 +61,7 @@ export default function ProformasView({
   batchUpdateProjectProformasStatus,
   deleteProforma,
   addCustomer,
+  updateCustomer,
   addProject,
   addProduct,
   users = [],
@@ -68,6 +71,7 @@ export default function ProformasView({
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [quickAddType, setQuickAddType] = useState<'customer' | 'project' | 'supplier' | 'product' | null>(null);
   const [quickAddProductIndex, setQuickAddProductIndex] = useState<number | null>(null);
+  const [isQuickAddingContact, setIsQuickAddingContact] = useState(false);
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProforma, setEditingProforma] = useState<Proforma | null>(null);
@@ -469,6 +473,7 @@ export default function ProformasView({
       case 'پیش‌نویس': return 'bg-slate-100 text-slate-700 border-slate-200';
       case 'ارسال شده': return 'bg-sky-50 text-sky-700 border-sky-200';
       case 'تأیید شده (برنده)': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'نیمه برنده': return 'bg-teal-50 text-teal-700 border-teal-200';
       case 'لغو شده': return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'باخته': return 'bg-red-50 text-red-700 border-red-200';
     }
@@ -554,7 +559,7 @@ export default function ProformasView({
             <div style="font-weight: bold; color: #1e293b;">${item.productName}</div>
           </div>
         </td>
-        <td style="padding: 12px; font-size: 11px; color: #475569; white-space: pre-line; line-height: 1.4; text-align: right;">
+        <td style="padding: 12px; font-size: 11px; color: #475569; white-space: pre-line; line-height: 1.4; text-align: left; direction: ltr;">
           ${item.techSpecs || '-'}
         </td>
         <td style="padding: 12px; text-align: center; font-family: monospace;">${item.quantity}</td>
@@ -883,7 +888,7 @@ export default function ProformasView({
                     <tr>
                         <th style="width: 50px; text-align: center;">ردیف</th>
                         <th>نوع کالا</th>
-                        <th>توضیحات فنی</th>
+                        <th style="text-align: left;">توضیحات فنی</th>
                         <th style="text-align: center; width: 70px;">تعداد</th>
                         <th style="text-align: center; width: 70px;">واحد</th>
                         <th style="text-align: left;">بهای واحد (${targetCurrency})</th>
@@ -1120,7 +1125,7 @@ export default function ProformasView({
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                       <th className="p-3 text-center w-12">ردیف</th>
                       <th className="p-3">نوع کالا</th>
-                      <th className="p-3">توضیحات فنی</th>
+                      <th className="p-3 text-left">توضیحات فنی</th>
                       <th className="p-3 text-center">تعداد</th>
                       <th className="p-3 text-center">واحد</th>
                       <th className="p-3 text-left">بهای واحد ({selectedProforma.currency || 'ریال'})</th>
@@ -1149,7 +1154,7 @@ export default function ProformasView({
                               <div className="font-bold text-slate-800">{item.productName}</div>
                             </div>
                           </td>
-                          <td className="p-3 text-slate-600 whitespace-pre-line leading-relaxed text-right text-[11px]">
+                          <td className="p-3 text-slate-600 whitespace-pre-line leading-relaxed text-left [direction:ltr] text-[11px]">
                             {item.techSpecs || '-'}
                           </td>
                           <td className="p-3 text-center font-mono">{item.quantity}</td>
@@ -1468,16 +1473,12 @@ export default function ProformasView({
                           {/* Computed Status Badge */}
                           <td className="p-4 text-center">
                             {(() => {
-                               if (pf.status === 'لغو شده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-200 text-slate-700 border-slate-300 shadow-sm">لغو شده</span>;
-                               const items = pf.items || [];
-                               if (items.length === 0) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-100 text-slate-600 border-slate-200">بررسی نشده</span>;
-                               const wonCount = items.filter(i => i.status === 'برنده').length;
-                               const lostCount = items.filter(i => i.status === 'بازنده').length;
-                               
-                               if (wonCount === items.length) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-500/10">برنده</span>;
-                               if (lostCount === items.length) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-red-50 text-red-700 border-red-200 shadow-sm shadow-red-500/10">بازنده</span>;
-                               if (wonCount > 0) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-500/10">نیمه برنده</span>;
-                               if (lostCount > 0) return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-orange-50 text-orange-700 border-orange-200">نیمه بازنده</span>;
+                               const outcome = getProformaOutcomeStatus(pf);
+                               if (outcome === 'لغو شده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-200 text-slate-700 border-slate-300 shadow-sm">لغو شده</span>;
+                               if (outcome === 'تأیید شده (برنده)') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-500/10">برنده</span>;
+                               if (outcome === 'باخته') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-red-50 text-red-700 border-red-200 shadow-sm shadow-red-500/10">بازنده</span>;
+                               if (outcome === 'نیمه برنده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-teal-50 text-teal-700 border-teal-200 shadow-sm shadow-teal-500/10">نیمه برنده</span>;
+                               if (outcome === 'پیش‌نویس') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-100 text-slate-600 border-slate-200">پیش‌نویس</span>;
                                return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-sky-50 text-sky-700 border-sky-200">جاری</span>;
                             })()}
                           </td>
@@ -1566,34 +1567,26 @@ export default function ProformasView({
               </button>
             </div>
             <form onSubmit={handleSaveStatusChange} className="p-6 space-y-4">
+              <div className="bg-sky-50 border border-sky-100 rounded-xl p-3 text-[11px] text-sky-700 space-y-1 leading-relaxed">
+                <span className="font-bold block text-sky-800">💡 راهنمای تعیین وضعیت:</span>
+                <p>
+                  تغییر وضعیت کلی در این بخش صرفاً جهت مشخص کردن وضعیت ارسال پیش‌فاکتور (پیش‌نویس یا ارسال شده) می‌باشد.
+                </p>
+                <p>
+                  برای تعیین وضعیت نهایی پیش‌فاکتور (جاری، برنده، یا بازنده)، لطفاً از دکمه <span className="font-semibold text-sky-900">«ردیف‌ها»</span> در جدول اقلام استفاده نمایید. با تغییر وضعیت ردیف‌ها، وضعیت پیش‌فاکتور و پروژه مادر به صورت کاملاً خودکار و یکپارچه به یکی از حالت‌های برنده، نیمه‌برنده یا باخته محاسبه و به‌روزرسانی خواهد شد.
+                </p>
+              </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500">وضعیت جدید را انتخاب کنید</label>
+                <label className="text-xs font-semibold text-slate-500">وضعیت ارسال پیش‌فاکتور</label>
                 <select
-                  value={newStatusSelected}
+                  value={newStatusSelected === 'تأیید شده (برنده)' || newStatusSelected === 'نیمه برنده' || newStatusSelected === 'باخته' ? 'ارسال شده' : newStatusSelected}
                   onChange={(e) => setNewStatusSelected(e.target.value as Proforma['status'])}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                 >
                   <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
                   <option value="ارسال شده">ارسال شده به کارفرما (Sent)</option>
-                  <option value="لغو شده">لغو شده (Cancelled)</option>
                 </select>
               </div>
-              {newStatusSelected === 'باخته' && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">دلیل عدم موافقت و باخت پیشنهاد</label>
-                  <select
-                    value={lossReason}
-                    onChange={(e) => setLossReason(e.target.value)}
-                    required
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                  >
-                    <option value="">-- انتخاب علت --</option>
-                    {settings.lossReasons.map((reason, i) => (
-                      <option key={i} value={reason}>{reason}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -1895,6 +1888,19 @@ export default function ProformasView({
                               </option>
                             ))}
                           </select>
+                          {addCustomer && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsQuickAddingContact(true);
+                                setQuickAddType('customer');
+                              }}
+                              className="px-2.5 py-2 text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 hover:border-violet-300 transition shrink-0 flex items-center justify-center font-bold"
+                              title="تعریف سریع مخاطب حقیقی جدید"
+                            >
+                              <Plus size={18} />
+                            </button>
+                          )}
                         </div>
                       </div>
                       {/* Prefix after Contact field */}
@@ -2067,7 +2073,7 @@ export default function ProformasView({
                           value={item.techSpecs || ''}
                           onChange={(e) => handleItemFieldChange(idx, 'techSpecs', e.target.value)}
                           placeholder="مثال: سایز: ۲ اینچ، کلاس فشاری: PN16، متریال بدنه: WCB، خروجی: 4-20mA..."
-                          className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none text-right bg-white leading-relaxed"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none text-left [direction:ltr] bg-white leading-relaxed"
                         />
                       </div>
                       {/* Product Image Selection */}
@@ -2639,7 +2645,10 @@ export default function ProformasView({
       {quickAddType && (
         <QuickAddModal
           isOpen={!!quickAddType}
-          onClose={() => setQuickAddType(null)}
+          onClose={() => {
+            setQuickAddType(null);
+            setIsQuickAddingContact(false);
+          }}
           type={quickAddType}
           settings={settings}
           customers={customers}
@@ -2647,10 +2656,31 @@ export default function ProformasView({
           addProject={addProject}
           addProduct={addProduct}
           products={products}
+          initialCustType={isQuickAddingContact ? 'حقیقی' : undefined}
+          initialLinkedCustomerIds={isQuickAddingContact && customerId ? [customerId] : undefined}
           onSuccess={(newEntity) => {
             if (newEntity && newEntity.id) {
               if (quickAddType === 'customer') {
-                setCustomerId(newEntity.id);
+                if (isQuickAddingContact) {
+                  setContactCustomerId(newEntity.id);
+                  if (newEntity.gender === 'مرد') {
+                    setContactPrefix('جناب آقای مهندس');
+                  } else if (newEntity.gender === 'زن') {
+                    setContactPrefix('سرکار خانم مهندس');
+                  } else {
+                    setContactPrefix('');
+                  }
+                  const selectedCustObj = customers.find(c => c.id === customerId);
+                  if (updateCustomer && selectedCustObj) {
+                    const updatedLinks = Array.from(new Set([...(selectedCustObj.linkedCustomerIds || []), newEntity.id]));
+                    updateCustomer({
+                      ...selectedCustObj,
+                      linkedCustomerIds: updatedLinks
+                    });
+                  }
+                } else {
+                  setCustomerId(newEntity.id);
+                }
               } else if (quickAddType === 'project') {
                 setProjectId(newEntity.id);
                 if (newEntity.customerId) {

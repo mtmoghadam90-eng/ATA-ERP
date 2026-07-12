@@ -27,7 +27,9 @@ import {
   ERPSettings 
 } from '../types';
 import { getTodayShamsi } from '../dateUtils';
+import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
 import ConfirmModal from './ConfirmModal';
+import { uploadFile } from '../imageUtils';
 
 interface PackagingDeliveryViewProps {
   projects: Project[];
@@ -86,9 +88,11 @@ export default function PackagingDeliveryView({
   const [deleteActivitiesWithDelivery, setDeleteActivitiesWithDelivery] = useState(false);
 
   // Filter won/approved proformas for the selected project
-  const availableProformas = proformas.filter(
-    p => p.projectId === selectedProjectId && p.status === 'تأیید شده (برنده)'
-  );
+  const availableProformas = proformas.filter(p => {
+    if (p.projectId !== selectedProjectId) return false;
+    const outcome = getProformaOutcomeStatus(p);
+    return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+  });
 
   // When project changes, reset proforma and auto-fill checklist
   const handleProjectChange = (projectId: string) => {
@@ -116,7 +120,8 @@ export default function PackagingDeliveryView({
 
     const prof = proformas.find(p => p.id === proformaId);
     if (prof) {
-      const defaultPackingItems: PackingItem[] = prof.items.map((item, idx) => ({
+      const wonItems = getWonItemsOfProforma(prof);
+      const defaultPackingItems: PackingItem[] = wonItems.map((item, idx) => ({
         id: `pack-item-auto-${idx}-${Date.now()}`,
         itemOrDocName: `${item.productName} (${item.brand})`,
         productId: item.productId,
@@ -129,19 +134,19 @@ export default function PackagingDeliveryView({
     }
   };
 
-  // Upload Photo handler (Convert to Base64)
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload Photo handler (Upload to Server)
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files) as File[];
-      filesArray.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (reader.result) {
-            setPhotos(prev => [...prev, reader.result as string]);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+      for (const file of filesArray) {
+        try {
+          const url = await uploadFile(file);
+          setPhotos(prev => [...prev, url]);
+        } catch (err: any) {
+          console.error(err);
+          alert(err.message || 'خطا در بارگذاری تصویر بسته‌بندی');
+        }
+      }
     }
   };
 
@@ -149,19 +154,19 @@ export default function PackagingDeliveryView({
     e.preventDefault();
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files) {
       const filesArray = Array.from(e.dataTransfer.files) as File[];
-      filesArray.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (reader.result) {
-            setPhotos(prev => [...prev, reader.result as string]);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+      for (const file of filesArray) {
+        try {
+          const url = await uploadFile(file);
+          setPhotos(prev => [...prev, url]);
+        } catch (err: any) {
+          console.error(err);
+          alert(err.message || 'خطا در بارگذاری تصویر بسته‌بندی');
+        }
+      }
     }
   };
 
@@ -1342,7 +1347,7 @@ export default function PackagingDeliveryView({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-150">
-                        {items.map((item, idx) => (
+                        {(items as any[]).map((item, idx) => (
                           <tr key={item.id} className="hover:bg-slate-50/50">
                             <td className="p-3 text-slate-400 font-mono font-semibold">{idx + 1}</td>
                             <td className="p-3 font-bold text-slate-800">{item.itemOrDocName}</td>

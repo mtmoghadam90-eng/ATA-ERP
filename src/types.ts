@@ -102,9 +102,10 @@ export interface Proforma {
   issueDate: string;
   expiryDate: string;
   deliveryDate?: string; // تاریخ تحویل پیش‌فاکتور تایید شده
-  status: 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته';
+  status: 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده';
+  isCancelled?: boolean;
   lossReason?: string; // e.g. "قیمت بالا", "زمان تحویل طولانی"
-  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال';
+  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';
   items: ProformaItem[];
   totalAmount: number; // Sum of items
   discountPercent: number;
@@ -141,7 +142,7 @@ export interface PurchaseOrder {
   proformaNumber?: string; // شماره پیش‌فاکتور مرتبط
   orderDate: string;
   expectedDeliveryDate: string;
-  currency: 'دلار' | 'یورو' | 'درهم' | 'ریال';
+  currency: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';
   exchangeRate: number; // Rate to IRR at order time
   items: PurchaseOrderItem[];
   totalForeignAmount: number; // Sum of foreign currency items
@@ -157,7 +158,7 @@ export interface PurchaseOrder {
   shipmentDate?: string; // تاریخ حمل کالا
   clearanceDate?: string; // تاریخ ترخیص کالا
   receivedDate?: string; // تاریخ دریافت کالا در انبار
-  status: 'پیش‌نویس' | 'سفارش داده شده' | 'در حال حمل' | 'ترخیص گمرک' | 'تحویل شده (رسید انبار)';
+  status: 'پیش‌نویس' | 'پرداخت و سفارش به سازنده' | 'در حال آماده‌سازی سازنده' | 'حمل و ترانزیت' | 'ترخیص گمرک' | 'در حال حمل به انبار' | 'تحویل شده (رسید انبار)';
   createdAt: string;
   notes?: string;
   customValues?: Record<string, any>;
@@ -246,7 +247,7 @@ export interface Task {
 
 export interface ExchangeRate {
   id: string;
-  currency: 'USD' | 'EUR' | 'AED';
+  currency: 'USD' | 'EUR' | 'AED' | 'CNY';
   name: string;
   rateToRIYAL: number;
   lastUpdated: string;
@@ -416,10 +417,18 @@ export interface InquiryStep {
   sentTo?: string;
 }
 
+export interface SupplierInquiryItem {
+  id: string;
+  requestItemId: string; // The ID of the item needed from the project
+  productName: string;
+  quantity: number;
+}
+
 export interface SupplierInquiry {
   id: string;
   projectId: string;
   projectName: string;
+  items?: SupplierInquiryItem[]; // New field for multiple items
   proformaId?: string;
   proformaNumber?: string;
   proformaItemId?: string; // ID of the ProformaItem
@@ -430,7 +439,7 @@ export interface SupplierInquiry {
   status: 'پیش‌نویس' | 'ارسال شده' | 'در انتظار پاسخ' | 'پاسخ داده شده' | 'لغو شده' | 'برنده' | 'بازنده';
   priceRIYAL?: number;
   priceForeign?: number;
-  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال';
+  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';
   deliveryTime?: string;
   technicalProposalFile?: string;
   financialProposalFile?: string;
@@ -494,3 +503,17 @@ export interface AfterSalesService {
   createdAt: string;
   createdBy: string;
 }
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userFullName: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT';
+  module: string;
+  entityId: string;
+  description: string;
+  beforeState?: string; // LZW compressed
+  afterState?: string;  // LZW compressed
+}
+

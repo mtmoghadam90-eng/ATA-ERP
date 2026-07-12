@@ -98,20 +98,23 @@ export default function App() {
         setTriggeredReminders(prev => [...prev, matchingTask.id]);
         setActiveReminderTask(matchingTask);
         
-        // Play clean notification sound using Web Audio API
+        // Play clean notification sound using Web Audio API safely
         try {
-          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-          gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-          osc.start();
-          osc.stop(audioCtx.currentTime + 0.35);
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass && typeof AudioContextClass === 'function' && AudioContextClass.prototype) {
+            const audioCtx = new (AudioContextClass as any)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.35);
+          }
         } catch (e) {
-          console.log("Audio notify blocked or failed");
+          console.log("Audio notify blocked or failed:", e);
         }
       }
     }, 10000);
@@ -221,6 +224,7 @@ export default function App() {
             batchUpdateProjectProformasStatus={store.batchUpdateProjectProformasStatus}
             deleteProforma={store.deleteProforma}
             addCustomer={store.addCustomer}
+            updateCustomer={store.updateCustomer}
             addProject={store.addProject}
             addProduct={store.addProduct}
             users={store.users}
@@ -274,6 +278,8 @@ export default function App() {
             addProjectActivity={store.addProjectActivity}
             completeProjectCategoryGroup={store.completeProjectCategoryGroup}
             resumeProjectCategoryGroup={store.resumeProjectCategoryGroup}
+            updateProjectActivity={store.updateProjectActivity}
+            deleteProjectActivity={store.deleteProjectActivity}
             currentUser={store.currentUser}
             addCustomer={store.addCustomer}
             addProduct={store.addProduct}
@@ -362,6 +368,7 @@ export default function App() {
             selectSupplierInquiryWinner={store.selectSupplierInquiryWinner}
             settings={store.settings}
             currentUser={store.currentUser}
+            exchangeRates={store.exchangeRates}
           />
         );
       case 'packagingDelivery':
@@ -403,6 +410,7 @@ export default function App() {
             users={store.users}
             currentUser={store.currentUser}
             projects={store.projects}
+            auditLogs={store.auditLogs}
           />
         );
       case 'users':

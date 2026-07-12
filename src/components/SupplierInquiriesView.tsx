@@ -35,7 +35,8 @@ import {
   InquiryStep,
   PurchaseOrder,
   PurchaseOrderItem,
-  ERPSettings
+  ERPSettings,
+  ExchangeRate
 } from '../types';
 import { getTodayShamsi } from '../dateUtils';
 
@@ -51,6 +52,7 @@ interface SupplierInquiriesViewProps {
   selectSupplierInquiryWinner: (inquiryId: string, isWinner: boolean) => void;
   settings: ERPSettings;
   currentUser: any;
+  exchangeRates: ExchangeRate[];
   addPurchaseOrder?: (po: any) => any; // optional if not supplied or can mock-run
 }
 
@@ -66,6 +68,7 @@ export default function SupplierInquiriesView({
   selectSupplierInquiryWinner,
   settings,
   currentUser,
+  exchangeRates,
   addPurchaseOrder
 }: SupplierInquiriesViewProps) {
   const [activeTab, setActiveTab] = useState<'list' | 'compare' | 'new'>('list');
@@ -78,14 +81,32 @@ export default function SupplierInquiriesView({
 
   // Form States (New Inquiry)
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-  const [selectedProformaId, setSelectedProformaId] = useState<string>('');
-  const [selectedProformaItemId, setSelectedProformaItemId] = useState<string>('');
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [inquiryItems, setInquiryItems] = useState<{id: string, productId: string, productName: string, quantity: number}[]>([]);
   const [inquiryDate, setInquiryDate] = useState<string>(getTodayShamsi());
   const [initialNotes, setInitialNotes] = useState<string>('');
   const [priceRIYAL, setPriceRIYAL] = useState<number>(0);
   const [priceForeign, setPriceForeign] = useState<number>(0);
-  const [currency, setCurrency] = useState<'دلار' | 'یورو' | 'درهم' | 'ریال'>('یورو');
+  const [currency, setCurrency] = useState<'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان'>('یورو');
+  
+  // Auto-calculate Rial price
+  React.useEffect(() => {
+    if (currency === 'ریال') {
+        setPriceRIYAL(priceForeign);
+    } else {
+        const mapping: Record<string, 'USD' | 'EUR' | 'AED' | 'CNY'> = {
+            'دلار': 'USD',
+            'یورو': 'EUR',
+            'درهم': 'AED',
+            'یوان': 'CNY'
+        };
+        const rateObj = exchangeRates.find(r => r.currency === mapping[currency]);
+        if (rateObj) {
+            setPriceRIYAL(Math.round(priceForeign * rateObj.rateToRIYAL));
+        }
+    }
+  }, [currency, priceForeign, exchangeRates]);
+
   const [deliveryTime, setDeliveryTime] = useState<string>('');
   
   // Simulated File Uploads
@@ -156,7 +177,26 @@ export default function SupplierInquiriesView({
   const [activeInquiryForAnswer, setActiveInquiryForAnswer] = useState<SupplierInquiry | null>(null);
   const [answerPriceRIYAL, setAnswerPriceRIYAL] = useState<number>(0);
   const [answerPriceForeign, setAnswerPriceForeign] = useState<number>(0);
-  const [answerCurrency, setAnswerCurrency] = useState<'دلار' | 'یورو' | 'درهم' | 'ریال'>('یورو');
+  const [answerCurrency, setAnswerCurrency] = useState<'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان'>('یورو');
+  
+  // Auto-calculate Rial price for answer
+  React.useEffect(() => {
+    if (answerCurrency === 'ریال') {
+        setAnswerPriceRIYAL(answerPriceForeign);
+    } else {
+        const mapping: Record<string, 'USD' | 'EUR' | 'AED' | 'CNY'> = {
+            'دلار': 'USD',
+            'یورو': 'EUR',
+            'درهم': 'AED',
+            'یوان': 'CNY'
+        };
+        const rateObj = exchangeRates.find(r => r.currency === mapping[answerCurrency]);
+        if (rateObj) {
+            setAnswerPriceRIYAL(Math.round(answerPriceForeign * rateObj.rateToRIYAL));
+        }
+    }
+  }, [answerCurrency, answerPriceForeign, exchangeRates]);
+
   const [answerDeliveryTime, setAnswerDeliveryTime] = useState<string>('');
   const [answerTechFile, setAnswerTechFile] = useState<string>('');
   const [answerFinFile, setAnswerFinFile] = useState<string>('');
@@ -285,11 +325,6 @@ export default function SupplierInquiriesView({
     setExpandedInquiries(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Filter proformas based on selected project
-  const availableProformas = proformas.filter(p => p.projectId === selectedProjectId);
-  // Filter items based on selected proforma
-  const selectedProforma = proformas.find(p => p.id === selectedProformaId);
-  const availableItems = selectedProforma ? selectedProforma.items : [];
 
   // Filter proformas based on selected project in edit form
   const editAvailableProformas = proformas.filter(p => p.projectId === editProjectId);
@@ -300,8 +335,6 @@ export default function SupplierInquiriesView({
   // Reset form helper
   const resetForm = () => {
     setSelectedProjectId('');
-    setSelectedProformaId('');
-    setSelectedProformaItemId('');
     setSelectedSupplierId('');
     setInquiryDate(getTodayShamsi());
     setInitialNotes('');
@@ -329,21 +362,16 @@ export default function SupplierInquiriesView({
 
     const proj = projects.find(p => p.id === selectedProjectId);
     const supp = suppliers.find(s => s.id === selectedSupplierId);
-    const prof = proformas.find(p => p.id === selectedProformaId);
-    
-    let itemName = '';
-    if (selectedProformaItemId && prof) {
-      const it = prof.items.find(i => i.id === selectedProformaItemId);
-      itemName = it ? `${it.productName} (${it.brand})` : '';
-    }
 
     addSupplierInquiry({
       projectId: selectedProjectId,
       projectName: proj?.name || '',
-      proformaId: selectedProformaId || undefined,
-      proformaNumber: prof?.proformaNumber || undefined,
-      proformaItemId: selectedProformaItemId || undefined,
-      proformaItemName: itemName || undefined,
+      items: inquiryItems.map(item => ({
+        id: `inqitem-${Date.now()}-${item.productId}`,
+        requestItemId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity
+      })),
       supplierId: selectedSupplierId,
       supplierName: supp?.name || '',
       inquiryDate: inquiryDate,
@@ -373,22 +401,11 @@ export default function SupplierInquiriesView({
 
     const proj = projects.find(p => p.id === editProjectId);
     const supp = suppliers.find(s => s.id === editSupplierId);
-    const prof = proformas.find(p => p.id === editProformaId);
-    
-    let itemName = '';
-    if (editProformaItemId && prof) {
-      const it = prof.items.find(i => i.id === editProformaItemId);
-      itemName = it ? `${it.productName} (${it.brand})` : '';
-    }
 
     const updated: SupplierInquiry = {
       ...editingInquiry,
       projectId: editProjectId,
       projectName: proj?.name || '',
-      proformaId: editProformaId || undefined,
-      proformaNumber: prof?.proformaNumber || undefined,
-      proformaItemId: editProformaItemId || undefined,
-      proformaItemName: itemName || undefined,
       supplierId: editSupplierId,
       supplierName: supp?.name || '',
       inquiryDate: editInquiryDate,
@@ -1229,8 +1246,6 @@ export default function SupplierInquiriesView({
                 value={selectedProjectId}
                 onChange={e => {
                   setSelectedProjectId(e.target.value);
-                  setSelectedProformaId('');
-                  setSelectedProformaItemId('');
                 }}
                 required
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
@@ -1242,40 +1257,7 @@ export default function SupplierInquiriesView({
               </select>
             </div>
 
-            {/* Proforma Select */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">پیش‌فاکتور کارفرما</label>
-              <select
-                value={selectedProformaId}
-                disabled={!selectedProjectId}
-                onChange={e => {
-                  setSelectedProformaId(e.target.value);
-                  setSelectedProformaItemId('');
-                }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none disabled:opacity-50"
-              >
-                <option value="">-- همه یا بدون پیش‌فاکتور --</option>
-                {availableProformas.map(p => (
-                  <option key={p.id} value={p.id}>پیش‌فاکتور {p.proformaNumber}</option>
-                ))}
-              </select>
-            </div>
 
-            {/* Proforma Item Select */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">ردیف تجهیز / کالا</label>
-              <select
-                value={selectedProformaItemId}
-                disabled={!selectedProformaId}
-                onChange={e => setSelectedProformaItemId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none disabled:opacity-50"
-              >
-                <option value="">-- انتخاب ردیف کالا --</option>
-                {availableItems.map(it => (
-                  <option key={it.id} value={it.id}>{it.productName} ({it.brand}) - {it.quantity} عدد</option>
-                ))}
-              </select>
-            </div>
 
             {/* Supplier Select */}
             <div>
@@ -1331,6 +1313,7 @@ export default function SupplierInquiriesView({
                   <option value="دلار">دلار</option>
                   <option value="درهم">درهم</option>
                   <option value="ریال">ریال</option>
+                  <option value="یوان">یوان</option>
                 </select>
               </div>
 
@@ -1675,6 +1658,7 @@ export default function SupplierInquiriesView({
                   <option value="دلار">دلار</option>
                   <option value="درهم">درهم</option>
                   <option value="ریال">ریال</option>
+                  <option value="یوان">یوان</option>
                 </select>
               </div>
 
@@ -2146,8 +2130,6 @@ export default function SupplierInquiriesView({
                     value={editProjectId}
                     onChange={e => {
                       setEditProjectId(e.target.value);
-                      setEditProformaId('');
-                      setEditProformaItemId('');
                     }}
                     required
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
@@ -2155,41 +2137,6 @@ export default function SupplierInquiriesView({
                     <option value="">-- انتخاب پروژه --</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Proforma Select */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">پیش‌فاکتور کارفرما</label>
-                  <select
-                    value={editProformaId}
-                    disabled={!editProjectId}
-                    onChange={e => {
-                      setEditProformaId(e.target.value);
-                      setEditProformaItemId('');
-                    }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none disabled:opacity-50"
-                  >
-                    <option value="">-- همه یا بدون پیش‌فاکتور --</option>
-                    {editAvailableProformas.map(p => (
-                      <option key={p.id} value={p.id}>پیش‌فاکتور {p.proformaNumber}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Proforma Item Select */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">ردیف تجهیز / کالا</label>
-                  <select
-                    value={editProformaItemId}
-                    disabled={!editProformaId}
-                    onChange={e => setEditProformaItemId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none disabled:opacity-50"
-                  >
-                    <option value="">-- انتخاب ردیف کالا --</option>
-                    {editAvailableItems.map(it => (
-                      <option key={it.id} value={it.id}>{it.productName} ({it.brand}) - {it.quantity} عدد</option>
                     ))}
                   </select>
                 </div>

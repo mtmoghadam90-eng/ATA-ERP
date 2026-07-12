@@ -37,20 +37,23 @@ export default function CustomFieldsForm({
     onChange(updated);
   };
 
-  const handleFileUpload = (fieldId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (fieldId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
+    try {
+      const { uploadFile } = await import('../imageUtils');
+      const url = await uploadFile(file);
       handleValueChange(fieldId, {
         name: file.name,
         size: file.size,
         type: file.type,
-        dataUrl: reader.result as string
+        dataUrl: url // Actually it's a regular URL now, but we'll keep the key dataUrl for backward compatibility
       });
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'خطا در بارگذاری فایل');
+    }
   };
 
   return (

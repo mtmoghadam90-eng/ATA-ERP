@@ -225,7 +225,8 @@ export const SEED_SUPPLIERS: Supplier[] = [
 export const SEED_EXCHANGE_RATES: ExchangeRate[] = [
   { id: 'rate-1', currency: 'USD', name: 'دلار آمریکا', rateToRIYAL: 625000, lastUpdated: '2026-07-05T09:00:00Z' },
   { id: 'rate-2', currency: 'EUR', name: 'یورو', rateToRIYAL: 678000, lastUpdated: '2026-07-05T09:00:00Z' },
-  { id: 'rate-3', currency: 'AED', name: 'درهم امارات', rateToRIYAL: 171000, lastUpdated: '2026-07-05T09:00:00Z' }
+  { id: 'rate-3', currency: 'AED', name: 'درهم امارات', rateToRIYAL: 171000, lastUpdated: '2026-07-05T09:00:00Z' },
+  { id: 'rate-4', currency: 'CNY', name: 'یوان چین', rateToRIYAL: 86000, lastUpdated: '2026-07-05T09:00:00Z' }
 ];
 
 // Seed Projects
@@ -393,8 +394,8 @@ export const SEED_PURCHASE_ORDERS: PurchaseOrder[] = [
     paymentDate: '1405/04/01', // تاریخ پرداخت به تامین‌کننده و جاری شدن سفارش
     goodsReadyDate: '1405/04/15', // تاریخ آماده شدن کالا
     shipmentDate: '1405/04/22', // تاریخ حمل کالا
-    // clearanceDate & receivedDate are not set yet as it is in-transit (در حال حمل)
-    status: 'در حال حمل',
+    // clearanceDate & receivedDate are not set yet as it is in-transit (ترخیص گمرک)
+    status: 'ترخیص گمرک',
     createdAt: '1405/03/28'
   },
   {
@@ -560,7 +561,7 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     customerStatuses: ['فعال', 'غیرفعال'],
     categories: ['ابزار دقیق - فشار', 'ابزار دقیق - دما', 'ابزار دقیق - جریان (فلو)', 'ابزار دقیق - سطح (لول)', 'ابزار دقیق - آنالایزرها', 'ابزار دقیق - شیرهای کنترل', 'قطعات یدکی و اتصالات'],
     units: ['عدد', 'دستگاه', 'متر', 'ست', 'شاخه'],
-    currencies: ['ریال', 'دلار', 'یورو', 'درهم'],
+    currencies: ['ریال', 'دلار', 'یورو', 'درهم', 'یوان'],
     paymentTerms: ['نقدی', '۳۰ روزه', '۶۰ روزه', '۹۰ روزه', '۵۰٪ پیش‌پرداخت / ۵۰٪ تحویل', 'صندوق ضمانت'],
     paymentTypes: ['حواله بانکی', 'چک', 'نقدی', 'کارت به کارت'],
     projectStatuses: ['جدید', 'در حال مذاکره', 'ارائه پیش‌فاکتور', 'برنده (موفق)', 'باخته', 'لغو شده', 'نیمه برنده'],
@@ -571,7 +572,7 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     taskPriorities: ['پایین', 'متوسط', 'بالا', 'فوری'],
     taskStatuses: ['در حال انجام', 'انجام شده', 'کنسل شده'],
     proformaStatuses: ['پیش‌نویس', 'ارسال شده', 'تأیید شده (برنده)', 'لغو شده', 'باخته'],
-    purchaseOrderStatuses: ['پیش‌نویس', 'سفارش داده شده', 'در حال حمل', 'ترخیص گمرک', 'تحویل شده (رسید انبار)'],
+    purchaseOrderStatuses: ['پیش‌نویس', 'پرداخت و سفارش به سازنده', 'در حال آماده‌سازی سازنده', 'حمل و ترانزیت', 'ترخیص گمرک', 'در حال حمل به انبار', 'تحویل شده (رسید انبار)'],
     positions: ['مدیرعامل', 'رئیس هیئت مدیره', 'مدیر بازرگانی', 'کارشناس خرید', 'مدیر فنی', 'کارشناس ارشد فنی', 'مدیر پروژه', 'مسئول تدارکات', 'کارشناس ابزار دقیق', 'سایر'],
     receiptTypes: ['پیش پرداخت', 'میاندوره', 'تسویه'],
     supplierInquiryActionTypes: ['تماس تلفنی پیگیری قیمت', 'مکاتبه از طریق ایمیل', 'ارسال مجدد مشخصات فنی', 'مذاکره حضوری / آنلاین', 'دریافت پروپوزال فنی/مالی', 'سایر'],

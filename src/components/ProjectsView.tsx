@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { Project, Customer, ERPSettings, Product, Proforma, ProjectCategoryGroup, ProjectActivity, User as ERPUser } from '../types';
 import { getTodayShamsi } from '../dateUtils';
+import { getProformaOutcomeStatus } from '../useERPStore';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -60,6 +61,8 @@ interface ProjectsViewProps {
   ) => any;
   completeProjectCategoryGroup?: (categoryGroupId: string, createdBy?: string) => void;
   resumeProjectCategoryGroup?: (categoryGroupId: string, createdBy?: string) => void;
+  updateProjectActivity?: (projectId: string, categoryGroupId: string, activityId: string, newText: string) => void;
+  deleteProjectActivity?: (projectId: string, categoryGroupId: string, activityId: string) => void;
   currentUser?: ERPUser | null;
   users?: ERPUser[];
   initialSelectedProjectId?: string | null;
@@ -82,6 +85,8 @@ export default function ProjectsView({
   addProjectActivity,
   completeProjectCategoryGroup,
   resumeProjectCategoryGroup,
+  updateProjectActivity,
+  deleteProjectActivity,
   currentUser,
   users = [],
   initialSelectedProjectId,
@@ -93,6 +98,10 @@ export default function ProjectsView({
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
+  const [editingActivityText, setEditingActivityText] = useState<string>('');
+
 
   // Quick Add State
   const [quickAddType, setQuickAddType] = useState<'customer' | 'project' | 'supplier' | 'product' | null>(null);
@@ -137,6 +146,10 @@ export default function ProjectsView({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [projectToDeleteId, setProjectToDeleteId] = useState<string | null>(null);
   const [projectToDeleteName, setProjectToDeleteName] = useState<string>('');
+
+  const [activityDeleteConfirmOpen, setActivityDeleteConfirmOpen] = useState(false);
+  const [activityToDeleteGroupId, setActivityToDeleteGroupId] = useState<string | null>(null);
+  const [activityToDeleteId, setActivityToDeleteId] = useState<string | null>(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -197,7 +210,11 @@ export default function ProjectsView({
   };
 
   const getApprovedProformaDeliveryDate = (projectId: string) => {
-    const approved = proformas.find(pf => pf.projectId === projectId && pf.status === 'تأیید شده (برنده)');
+    const approved = proformas.find(pf => {
+      if (pf.projectId !== projectId) return false;
+      const outcome = getProformaOutcomeStatus(pf);
+      return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+    });
     return approved?.deliveryDate;
   };
 
@@ -1620,26 +1637,94 @@ export default function ProjectsView({
                                               </span>
                                             )}
                                           </div>
-                                          {act.attachment && (
-                                            act.attachment.content ? (
-                                              <a
-                                                href={act.attachment.content}
-                                                download={act.attachment.name}
-                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-100 hover:bg-sky-200 border border-sky-200 text-sky-800 text-[9px] font-bold transition"
-                                                title="دانلود فایل پیوست"
+                                          <div className="flex items-center gap-2">
+                                            {act.attachment && (
+                                              act.attachment.content ? (
+                                                <a
+                                                  href={act.attachment.content}
+                                                  download={act.attachment.name}
+                                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-100 hover:bg-sky-200 border border-sky-200 text-sky-800 text-[9px] font-bold transition mr-1"
+                                                  title="دانلود فایل پیوست"
+                                                >
+                                                  <Paperclip size={10} />
+                                                  {act.attachment.name} ({act.attachment.size})
+                                                </a>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 border border-sky-100 text-sky-700 text-[9px] font-bold mr-1">
+                                                  <Paperclip size={10} />
+                                                  {act.attachment.name} ({act.attachment.size})
+                                                </span>
+                                              )
+                                            )}
+
+                                            {/* Edit & Delete Action Buttons */}
+                                            <div className="flex items-center gap-1 bg-slate-100/60 p-0.5 rounded border border-slate-200/40">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditingActivityId(act.id);
+                                                  setEditingActivityText(act.text);
+                                                }}
+                                                className="text-slate-400 hover:text-sky-600 transition p-1 hover:bg-white rounded"
+                                                title="ویرایش"
                                               >
-                                                <Paperclip size={10} />
-                                                {act.attachment.name} ({act.attachment.size})
-                                              </a>
-                                            ) : (
-                                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 border border-sky-100 text-sky-700 text-[9px] font-bold">
-                                                <Paperclip size={10} />
-                                                {act.attachment.name} ({act.attachment.size})
-                                              </span>
-                                            )
-                                          )}
+                                                <Edit size={10} />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setActivityToDeleteGroupId(group.id);
+                                                  setActivityToDeleteId(act.id);
+                                                  setActivityDeleteConfirmOpen(true);
+                                                }}
+                                                className="text-slate-400 hover:text-rose-600 transition p-1 hover:bg-white rounded"
+                                                title="حذف"
+                                              >
+                                                <Trash2 size={10} />
+                                              </button>
+                                            </div>
+                                          </div>
                                         </div>
-                                        <p className="text-slate-700 leading-relaxed font-semibold">{act.text}</p>
+                                        {editingActivityId === act.id ? (
+                                          <div className="space-y-2 mt-1">
+                                            <textarea
+                                              value={editingActivityText}
+                                              onChange={(e) => setEditingActivityText(e.target.value)}
+                                              className="w-full text-xs p-2 border border-sky-300 rounded focus:ring-1 focus:ring-sky-500 focus:outline-none bg-white font-semibold text-slate-800 text-right"
+                                              rows={2}
+                                              dir="rtl"
+                                            />
+                                            <div className="flex gap-2 justify-end">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (editingActivityText.trim() && selectedProjectForActivities) {
+                                                    updateProjectActivity?.(selectedProjectForActivities.id, group.id, act.id, editingActivityText.trim());
+                                                    setEditingActivityId(null);
+                                                    setEditingActivityText('');
+                                                  }
+                                                }}
+                                                className="px-2 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded font-bold text-[10px] flex items-center gap-1 transition"
+                                              >
+                                                <Check size={10} />
+                                                ذخیره
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditingActivityId(null);
+                                                  setEditingActivityText('');
+                                                }}
+                                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold text-[10px] flex items-center gap-1 transition"
+                                              >
+                                                <X size={10} />
+                                                انصراف
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <p className="text-slate-700 leading-relaxed font-semibold">{act.text}</p>
+                                        )}
                                         
                                         {/* Referral details inside activity card */}
                                         {act.referral && (
@@ -1930,6 +2015,23 @@ export default function ProjectsView({
         }}
         title="حذف پروژه"
         message={`آیا از حذف پروژه "${projectToDeleteName}" اطمینان دارید؟ این عمل غیرقابل بازگشت است.`}
+      />
+
+      {/* Confirm Delete Activity Modal */}
+      <ConfirmModal
+        isOpen={activityDeleteConfirmOpen}
+        onClose={() => {
+          setActivityDeleteConfirmOpen(false);
+          setActivityToDeleteGroupId(null);
+          setActivityToDeleteId(null);
+        }}
+        onConfirm={() => {
+          if (selectedProjectForActivities && activityToDeleteGroupId && activityToDeleteId) {
+            deleteProjectActivity?.(selectedProjectForActivities.id, activityToDeleteGroupId, activityToDeleteId);
+          }
+        }}
+        title="حذف فعالیت پروژه"
+        message="آیا از حذف این فعالیت اطمینان دارید؟ این عمل غیرقابل بازگشت است."
       />
 
       {/* Quick Customer Add Modal */}

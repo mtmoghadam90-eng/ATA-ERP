@@ -21,8 +21,11 @@ import {
   PackingItem,
   DeliveryChecklistItem,
   PackagingDelivery,
-  AfterSalesService
+  AfterSalesService,
+  AuditLog
 } from './types';
+import { compressLZW, decompressLZW } from './utils/compress';
+
 import { 
   SEED_PRODUCTS, 
   SEED_CUSTOMERS, 
@@ -37,6 +40,44 @@ import {
 } from './seedData';
 import { toShamsiStr, getTodayShamsi, gregorianToJalali, addDaysToShamsi, addWorkingDaysToShamsi } from './dateUtils';
 import { formatERPNumber } from './numUtils';
+
+
+export const getProformaOutcomeStatus = (pf: Proforma): 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده' | 'جاری' => {
+  if (pf.isCancelled || pf.status === 'لغو شده') return 'لغو شده';
+  
+  const items = pf.items || [];
+  if (items.length === 0) {
+    if (pf.status === 'تأیید شده (برنده)' || pf.status === 'باخته' || pf.status === 'نیمه برنده') {
+      return pf.status;
+    }
+    return pf.status === 'پیش‌نویس' ? 'پیش‌نویس' : 'جاری';
+  }
+
+  const wonCount = items.filter(i => i.status === 'برنده').length;
+  const lostCount = items.filter(i => i.status === 'بازنده').length;
+
+  if (wonCount === items.length) return 'تأیید شده (برنده)';
+  if (lostCount === items.length) return 'باخته';
+  if (wonCount > 0) return 'نیمه برنده';
+  
+  if (pf.status === 'تأیید شده (برنده)' || pf.status === 'باخته' || pf.status === 'نیمه برنده') {
+    return pf.status;
+  }
+
+  if (pf.status === 'پیش‌نویس') return 'پیش‌نویس';
+  return 'جاری';
+};
+
+export const getWonItemsOfProforma = (pf: Proforma) => {
+  const outcome = getProformaOutcomeStatus(pf);
+  if (outcome !== 'تأیید شده (برنده)' && outcome !== 'نیمه برنده') return [];
+  const hasExplicitWon = pf.items?.some(item => item.status === 'برنده');
+  if (hasExplicitWon) {
+    return pf.items.filter(item => item.status === 'برنده');
+  }
+  return pf.items?.filter(item => item.status !== 'بازنده') || [];
+};
+
 
 
 export const SEED_PROJECT_CATEGORY_GROUPS: ProjectCategoryGroup[] = [];
@@ -153,6 +194,43 @@ export function useERPStore() {
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
+  // Function to log actions with LZW compressed state changes
+  const logAction = (
+    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT',
+    module: string,
+    entityId: string,
+    description: string,
+    before?: any,
+    after?: any
+  ) => {
+    const nowJalali = getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const beforeState = before ? compressLZW(JSON.stringify(before)) : undefined;
+    const afterState = after ? compressLZW(JSON.stringify(after)) : undefined;
+
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: nowJalali,
+      userId: currentUser?.id || 'system',
+      userFullName: currentUser?.fullName || 'کاربر سیستم',
+      action,
+      module,
+      entityId,
+      description,
+      beforeState,
+      afterState
+    };
+
+    setAuditLogs(prev => {
+      const updated = [newLog, ...prev];
+      const truncated = updated.slice(0, 1000);
+      saveToServer('erp_audit_logs', truncated);
+      return truncated;
+    });
+  };
+
+
   const [completionPrompt, setCompletionPrompt] = useState<{projectId: string, categoryName: string, message: string} | null>(null);
 
   const completeCategoryGroup = (projectId: string, categoryName: string) => {
@@ -242,12 +320,13 @@ export function useERPStore() {
           fetchKey('erp_purchase_orders', setPurchaseOrders, []),
           fetchKey('erp_transactions', setTransactions, []),
           fetchKey('erp_tasks', setTasks, []),
-          fetchKey('erp_settings', setSettings, null),
+          fetchKey('erp_settings', setSettings, DEFAULT_SETTINGS),
           fetchKey('erp_project_category_groups', setProjectCategoryGroups, []),
           fetchKey('erp_supplier_inquiries', setSupplierInquiries, []),
           fetchKey('erp_packaging_deliveries', setPackagingDeliveries, []),
           fetchKey('erp_after_sales_services', setAfterSalesServices, []),
           fetchKey('erp_users', setUsers, []),
+          fetchKey('erp_audit_logs', setAuditLogs, []),
         ]);
 
         const storedCurrentUser = localStorage.getItem('erp_current_user');
@@ -330,6 +409,7 @@ export function useERPStore() {
     setCustomers(prev => {
       const updated = [newCustomer, ...prev];
       saveToServer('erp_customers', updated);
+      logAction('CREATE', 'مشتریان', newCustomer.id, `ایجاد مشتری جدید: ${newCustomer.companyName || `${newCustomer.firstName || ''} ${newCustomer.lastName || ''}`.trim()}`, undefined, newCustomer);
       return updated;
     });
     return newCustomer;
@@ -337,19 +417,26 @@ export function useERPStore() {
 
   const updateCustomer = (updatedCust: Customer) => {
     setCustomers(prev => {
+      const before = prev.find(c => c.id === updatedCust.id);
       const updated = prev.map(c => c.id === updatedCust.id ? updatedCust : c);
       saveToServer('erp_customers', updated);
+      logAction('UPDATE', 'مشتریان', updatedCust.id, `ویرایش اطلاعات مشتری: ${updatedCust.companyName || `${updatedCust.firstName || ''} ${updatedCust.lastName || ''}`.trim()}`, before, updatedCust);
       return updated;
     });
   };
 
   const deleteCustomer = (id: string) => {
     setCustomers(prev => {
+      const before = prev.find(c => c.id === id);
       const updated = prev.filter(c => c.id !== id);
       saveToServer('erp_customers', updated);
+      if (before) {
+        logAction('DELETE', 'مشتریان', id, `حذف مشتری: ${before.companyName || `${before.firstName || ''} ${before.lastName || ''}`.trim()}`, before, undefined);
+      }
       return updated;
     });
   };
+
 
   const batchUpdateCustomers = (updatedList: Customer[]) => {
     saveToStorage('erp_customers', updatedList, setCustomers);
@@ -377,27 +464,39 @@ export function useERPStore() {
     };
     const updated = [newProduct, ...products];
     saveToStorage('erp_products', updated, setProducts);
+    logAction('CREATE', 'کالاها', newProduct.id, `ایجاد کالای جدید: ${newProduct.name} (کد: ${newProduct.code})`, undefined, newProduct);
     return newProduct;
   };
 
   const updateProduct = (updatedProd: Product) => {
+    const before = products.find(p => p.id === updatedProd.id);
     const updated = products.map(p => p.id === updatedProd.id ? updatedProd : p);
     saveToStorage('erp_products', updated, setProducts);
+    logAction('UPDATE', 'کالاها', updatedProd.id, `ویرایش اطلاعات کالا: ${updatedProd.name} (کد: ${updatedProd.code})`, before, updatedProd);
   };
 
   const deleteProduct = (id: string) => {
+    const before = products.find(p => p.id === id);
     const updated = products.filter(p => p.id !== id);
     saveToStorage('erp_products', updated, setProducts);
+    if (before) {
+      logAction('DELETE', 'کالاها', id, `حذف کالا: ${before.name} (کد: ${before.code})`, before, undefined);
+    }
   };
 
   const adjustProductStock = (id: string, amount: number) => {
+    const before = products.find(p => p.id === id);
     const updated = products.map(p => {
       if (p.id === id) {
         return { ...p, stockLevel: Math.max(0, p.stockLevel + amount) };
       }
       return p;
     });
+    const after = updated.find(p => p.id === id);
     saveToStorage('erp_products', updated, setProducts);
+    if (before && after) {
+      logAction('UPDATE', 'کالاها', id, `تعدیل موجودی کالا: ${before.name} (کد: ${before.code}) از ${before.stockLevel} به ${after.stockLevel} (${amount > 0 ? '+' : ''}${amount})`, before, after);
+    }
   };
 
   // --- Suppliers CRUD ---
@@ -409,23 +508,35 @@ export function useERPStore() {
     };
     const updated = [newSupplier, ...suppliers];
     saveToStorage('erp_suppliers', updated, setSuppliers);
+    logAction('CREATE', 'تامین‌کنندگان', newSupplier.id, `ثبت تامین‌کننده جدید: ${newSupplier.name}`, undefined, newSupplier);
     return newSupplier;
   };
 
   const updateSupplier = (updatedSupp: Supplier) => {
+    const before = suppliers.find(s => s.id === updatedSupp.id);
     const updated = suppliers.map(s => s.id === updatedSupp.id ? updatedSupp : s);
     saveToStorage('erp_suppliers', updated, setSuppliers);
+    logAction('UPDATE', 'تامین‌کنندگان', updatedSupp.id, `ویرایش اطلاعات تامین‌کننده: ${updatedSupp.name}`, before, updatedSupp);
   };
 
   const deleteSupplier = (id: string) => {
+    const before = suppliers.find(s => s.id === id);
     const updated = suppliers.filter(s => s.id !== id);
     saveToStorage('erp_suppliers', updated, setSuppliers);
+    if (before) {
+      logAction('DELETE', 'تامین‌کنندگان', id, `حذف تامین‌کننده: ${before.name}`, before, undefined);
+    }
   };
 
   // --- Exchange Rates ---
   const updateExchangeRate = (id: string, newRate: number) => {
+    const before = exchangeRates.find(r => r.id === id);
     const updated = exchangeRates.map(r => r.id === id ? { ...r, rateToRIYAL: newRate, lastUpdated: new Date().toISOString() } : r);
+    const after = updated.find(r => r.id === id);
     saveToStorage('erp_exchange_rates', updated, setExchangeRates);
+    if (before && after) {
+      logAction('UPDATE', 'ارزها', id, `به‌روزرسانی نرخ برابری ارز ${before.currency} به ریال از ${before.rateToRIYAL} به ${newRate}`, before, after);
+    }
   };
 
   // --- Projects CRUD ---
@@ -448,6 +559,7 @@ export function useERPStore() {
     saveToStorage('erp_projects', updated, setProjects);
 
     notifyModuleResponsible('projects', 'ثبت پروژه جدید', `پروژه جدید ${newProject.name} (${newProject.code}) توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`, newProject.id);
+    logAction('CREATE', 'پروژه‌ها', newProject.id, `ثبت پروژه جدید: ${newProject.name} (کد: ${newProject.code})`, undefined, newProject);
 
     return newProject;
   };
@@ -462,11 +574,16 @@ export function useERPStore() {
     } else {
       notifyModuleResponsible('projects', 'ویرایش اطلاعات پروژه', `پروژه ${updatedProj.name} بروزرسانی شد.`, updatedProj.id);
     }
+    logAction('UPDATE', 'پروژه‌ها', updatedProj.id, `ویرایش اطلاعات پروژه: ${updatedProj.name} (کد: ${updatedProj.code})`, oldProj, updatedProj);
   };
 
   const deleteProject = (id: string) => {
+    const before = projects.find(p => p.id === id);
     const updated = projects.filter(p => p.id !== id);
     saveToStorage('erp_projects', updated, setProjects);
+    if (before) {
+      logAction('DELETE', 'پروژه‌ها', id, `حذف پروژه: ${before.name} (کد: ${before.code})`, before, undefined);
+    }
   };
 
   // Helper to convert Persian digits to English
@@ -518,32 +635,48 @@ export function useERPStore() {
   };
 
   // --- Proformas CRUD & Stock Integration ---
+  const getWonItemsOfProforma = (pf: Proforma) => {
+    const outcome = getProformaOutcomeStatus(pf);
+    if (outcome !== 'تأیید شده (برنده)' && outcome !== 'نیمه برنده') return [];
+    const hasExplicitWon = pf.items?.some(item => item.status === 'برنده');
+    if (hasExplicitWon) {
+      return pf.items.filter(item => item.status === 'برنده');
+    }
+    return pf.items?.filter(item => item.status !== 'بازنده') || [];
+  };
+
   const syncProjectStatus = (projId: string, currentProformas: Proforma[], currentProjects: Project[]) => {
     if (!projId) return currentProjects;
     const projectProformas = currentProformas.filter(p => p.projectId === projId);
     if (projectProformas.length === 0) return currentProjects;
 
-    // Find the latest proforma for this project (sorted by timestamp in id, latest first)
-    const sortedProformas = [...projectProformas].sort((a, b) => {
-      const getTs = (id: string) => {
-        const match = id.match(/\d+/);
-        return match ? parseInt(match[0], 10) : 0;
-      };
-      return getTs(b.id) - getTs(a.id);
+    // Find a won/approved/partially won proforma first
+    let targetProforma = projectProformas.find(pf => {
+      const outcome = getProformaOutcomeStatus(pf);
+      return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
     });
 
-    const latestProforma = sortedProformas[0];
+    // If no won proforma, fall back to the latest proforma (sorted by timestamp in id, latest first)
+    if (!targetProforma) {
+      const sortedProformas = [...projectProformas].sort((a, b) => {
+        const getTs = (id: string) => {
+          const match = id.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        };
+        return getTs(b.id) - getTs(a.id);
+      });
+      targetProforma = sortedProformas[0];
+    }
 
     let totalItems = 0;
     let wonItems = 0;
     let lostItems = 0;
     let pendingItems = 0;
 
-    if (latestProforma && latestProforma.items) {
-      latestProforma.items.forEach(item => {
+    if (targetProforma && targetProforma.items) {
+      targetProforma.items.forEach(item => {
         totalItems++;
-        // If the item status is explicitly set, use it. Otherwise, infer from the latest proforma's overall status.
-        const itemStatus = item.status || (latestProforma.status === 'تأیید شده (برنده)' ? 'برنده' : latestProforma.status === 'باخته' ? 'بازنده' : 'جاری');
+        const itemStatus = item.status || 'جاری';
         if (itemStatus === 'برنده') {
           wonItems++;
         } else if (itemStatus === 'بازنده') {
@@ -554,8 +687,16 @@ export function useERPStore() {
       });
     }
 
+    // Determine project status
+    const allCancelled = projectProformas.length > 0 && projectProformas.every(pf => getProformaOutcomeStatus(pf) === 'لغو شده');
+    const allLost = projectProformas.length > 0 && projectProformas.every(pf => getProformaOutcomeStatus(pf) === 'باخته');
+
     let newStatus: Project['status'] = 'ارائه پیش‌فاکتور';
-    if (totalItems > 0) {
+    if (allCancelled) {
+      newStatus = 'لغو شده';
+    } else if (allLost) {
+      newStatus = 'باخته';
+    } else if (totalItems > 0) {
       if (wonItems === totalItems) {
         newStatus = 'برنده (موفق)';
       } else if (lostItems === totalItems) {
@@ -583,16 +724,19 @@ export function useERPStore() {
           }
           
           // Try to find a won proforma for this project to calculate expected delivery date
-          const wonPf = projectProformas.find(pf => pf.status === 'تأیید شده (برنده)');
+          const wonPf = projectProformas.find(pf => {
+            const outcome = getProformaOutcomeStatus(pf);
+            return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+          });
           if (wonPf && wonPf.deliveryDate) {
             // Only set/overwrite if not set before, or if it was empty, or if we are newly transitioning to won
             if (!updatedProject.agreedDeliveryDate || !wasWonBefore) {
-              const offsetDays = parseDeliveryPeriodToDays(wonPf.deliveryDate);
-              const isWorkingDays = wonPf.deliveryDate.includes('کاری') || wonPf.deliveryDate.includes('کار') || wonPf.deliveryDate.toLowerCase().includes('work');
-              const targetDate = isWorkingDays
-                ? addWorkingDaysToShamsi(updatedProject.winningDate || today, offsetDays)
-                : addDaysToShamsi(updatedProject.winningDate || today, offsetDays);
-              updatedProject.agreedDeliveryDate = targetDate;
+               const offsetDays = parseDeliveryPeriodToDays(wonPf.deliveryDate);
+               const isWorkingDays = wonPf.deliveryDate.includes('کاری') || wonPf.deliveryDate.includes('کار') || wonPf.deliveryDate.toLowerCase().includes('work');
+               const targetDate = isWorkingDays
+                 ? addWorkingDaysToShamsi(updatedProject.winningDate || today, offsetDays)
+                 : addDaysToShamsi(updatedProject.winningDate || today, offsetDays);
+               updatedProject.agreedDeliveryDate = targetDate;
             }
           } else {
             // Default fallback if no won proforma with deliveryDate
@@ -600,7 +744,7 @@ export function useERPStore() {
               updatedProject.agreedDeliveryDate = today;
             }
           }
-        } else if (newStatus === 'باخته') {
+        } else if (newStatus === 'باخته' || newStatus === 'لغو شده') {
           if (!updatedProject.closingDate) {
             updatedProject.closingDate = today;
           }
@@ -705,14 +849,14 @@ export function useERPStore() {
       );
     }
 
-    // If instantly created as "won", reduce inventory stock
-    if (newProforma.status === 'تأیید شده (برنده)') {
-      newProforma.items.forEach(item => {
-        adjustProductStock(item.productId, -item.quantity);
-      });
-    }
+    // If instantly created as "won" or contains won items, reduce inventory stock
+    const initialWonItems = getWonItemsOfProforma(newProforma);
+    initialWonItems.forEach(item => {
+      adjustProductStock(item.productId, -item.quantity);
+    });
 
     notifyModuleResponsible('proformas', 'ثبت پیش‌فاکتور جدید', `پیش‌فاکتور شماره ${newProforma.proformaNumber} صادر شد.`, newProforma.projectId);
+    logAction('CREATE', 'پیش‌فاکتورها', newProforma.id, `ایجاد پیش‌فاکتور جدید شماره ${newProforma.proformaNumber} به مبلغ کل ${newProforma.totalAmount.toLocaleString('fa-IR')} ${newProforma.currency}`, undefined, newProforma);
 
     return newProforma;
   };
@@ -721,24 +865,22 @@ export function useERPStore() {
     const oldProforma = proformas.find(p => p.id === id);
     if (!oldProforma) return;
 
-    const isNowWon = newStatus === 'تأیید شده (برنده)' && oldProforma.status !== 'تأیید شده (برنده)';
-    const wasWonButNowCancelled = oldProforma.status === 'تأیید شده (برنده)' && newStatus !== 'تأیید شده (برنده)';
-
     const updated = proformas.map(p => {
       if (p.id === id) {
-        // Also if we mark the entire proforma as won, let's mark all its items as 'برنده'.
-        // If we mark the entire proforma as lost, let's mark all its items as 'بازنده'.
-        const updatedItems = p.items.map(item => ({
-          ...item,
-          status: newStatus === 'تأیید شده (برنده)' ? ('برنده' as const) : newStatus === 'باخته' ? ('بازنده' as const) : item.status,
-          lossReason: newStatus === 'باخته' ? (lossReason || item.lossReason) : item.lossReason
-        }));
-        return { ...p, status: newStatus, lossReason, items: updatedItems };
+        return { 
+          ...p, 
+          status: newStatus, 
+          isCancelled: false,
+          lossReason: newStatus === 'باخته' ? lossReason : p.lossReason 
+        };
       }
       return p;
     });
 
     saveToStorage('erp_proformas', updated, setProformas);
+
+    const newProformaObj = updated.find(p => p.id === id);
+    logAction('UPDATE', 'پیش‌فاکتورها', id, `تغییر وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} به «${newStatus}»`, oldProforma, newProformaObj);
 
     if (oldProforma.projectId) {
       const syncedProjects = syncProjectStatus(oldProforma.projectId, updated, projects);
@@ -747,20 +889,22 @@ export function useERPStore() {
       autoLogFactActivity(
         oldProforma.projectId,
         'پیش‌فاکتور',
-        `وضعیت پیش‌فاکتور شماره ${oldProforma.proformaNumber} به «${newStatus}» تغییر یافت.`
+        `وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} به «${newStatus}» تغییر یافت.`
       );
     }
 
-    // Inventory Adjustment Trigger
-    if (isNowWon) {
-      // Subtract from inventory
-      oldProforma.items.forEach(item => {
-        adjustProductStock(item.productId, -item.quantity);
-      });
-    } else if (wasWonButNowCancelled) {
-      // Revert stock (add back)
-      oldProforma.items.forEach(item => {
+    // Dynamic self-healing inventory adjustment
+    if (newProformaObj) {
+      // 1. Revert old won items (add back)
+      const oldWon = getWonItemsOfProforma(oldProforma);
+      oldWon.forEach(item => {
         adjustProductStock(item.productId, item.quantity);
+      });
+
+      // 2. Deduct new won items (subtract)
+      const newWon = getWonItemsOfProforma(newProformaObj);
+      newWon.forEach(item => {
+        adjustProductStock(item.productId, -item.quantity);
       });
     }
   };
@@ -769,60 +913,68 @@ export function useERPStore() {
     const oldPf = proformas.find(p => p.id === updatedPf.id);
     if (!oldPf) return;
 
-    const updated = proformas.map(p => p.id === updatedPf.id ? updatedPf : p);
-    saveToStorage('erp_proformas', updated, setProformas);
+    const finalUpdatedPf = { ...updatedPf };
 
-    if (updatedPf.projectId) {
-      const syncedProjects = syncProjectStatus(updatedPf.projectId, updated, projects);
+    const updated = proformas.map(p => p.id === updatedPf.id ? finalUpdatedPf : p);
+    saveToStorage('erp_proformas', updated, setProformas);
+    
+    const oldOutcome = getProformaOutcomeStatus(oldPf);
+    const newOutcome = getProformaOutcomeStatus(finalUpdatedPf);
+    const outcomeChanged = oldOutcome !== newOutcome;
+
+    let logText = `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`;
+    if (outcomeChanged) {
+      logText += ` وضعیت نهایی به «${newOutcome}» تغییر یافت.`;
+    }
+
+    logAction('UPDATE', 'پیش‌فاکتورها', updatedPf.id, logText, oldPf, finalUpdatedPf);
+
+    if (finalUpdatedPf.projectId) {
+      const syncedProjects = syncProjectStatus(finalUpdatedPf.projectId, updated, projects);
       saveToStorage('erp_projects', syncedProjects, setProjects);
       
-      const statusChanged = oldPf.status !== updatedPf.status;
-
-      const logText = statusChanged
-        ? `پیش‌فاکتور شماره ${updatedPf.proformaNumber} ویرایش شد و وضعیت آن به «${updatedPf.status}» تغییر یافت.`
-        : `پیش‌فاکتور شماره ${updatedPf.proformaNumber} ویرایش و اطلاعات آن بروزرسانی شد.`;
+      autoLogFactActivity(finalUpdatedPf.projectId, 'پیش‌فاکتور', logText);
       
-      autoLogFactActivity(updatedPf.projectId, 'پیش‌فاکتور', logText);
-      
-      if (statusChanged && updatedPf.status === 'تایید شده') {
+      if (outcomeChanged && (newOutcome === 'تأیید شده (برنده)' || newOutcome === 'نیمه برنده')) {
         setCompletionPrompt({
-          projectId: updatedPf.projectId,
+          projectId: finalUpdatedPf.projectId,
           categoryName: 'پیش‌فاکتور',
-          message: `پیش‌فاکتور ${updatedPf.proformaNumber} تایید شد. آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
+          message: `پیش‌فاکتور ${finalUpdatedPf.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
         });
       }
-
     }
 
-    // If won state changed
-    const wasWon = oldPf.status === 'تأیید شده (برنده)';
-    const isWon = updatedPf.status === 'تأیید شده (برنده)';
+    // Dynamic self-healing inventory adjustment
+    // 1. Revert old won items
+    const oldWon = getWonItemsOfProforma(oldPf);
+    oldWon.forEach(item => {
+      adjustProductStock(item.productId, item.quantity);
+    });
 
-    if (!wasWon && isWon) {
-      // Deduct new items
-      updatedPf.items.forEach(item => adjustProductStock(item.productId, -item.quantity));
-    } else if (wasWon && !isWon) {
-      // Revert old items
-      oldPf.items.forEach(item => adjustProductStock(item.productId, item.quantity));
-    } else if (wasWon && isWon) {
-      // Recalculate difference
-      // Return old items first
-      oldPf.items.forEach(item => adjustProductStock(item.productId, item.quantity));
-      // Deduct new items
-      updatedPf.items.forEach(item => adjustProductStock(item.productId, -item.quantity));
-    }
+    // 2. Deduct new won items
+    const newWon = getWonItemsOfProforma(finalUpdatedPf);
+    newWon.forEach(item => {
+      adjustProductStock(item.productId, -item.quantity);
+    });
 
-    notifyModuleResponsible('proformas', 'ویرایش پیش‌فاکتور', `پیش‌فاکتور شماره ${updatedPf.proformaNumber} ویرایش شد.`, updatedPf.projectId);
+    notifyModuleResponsible('proformas', 'ویرایش پیش‌فاکتور', `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`, finalUpdatedPf.projectId);
   };
 
   const deleteProforma = (id: string) => {
     const pf = proformas.find(p => p.id === id);
-    if (pf && pf.status === 'تأیید شده (برنده)') {
-      // Revert inventory before deleting
-      pf.items.forEach(item => adjustProductStock(item.productId, item.quantity));
+    if (pf) {
+      // Revert inventory before deleting using getWonItemsOfProforma helper
+      const oldWon = getWonItemsOfProforma(pf);
+      oldWon.forEach(item => {
+        adjustProductStock(item.productId, item.quantity);
+      });
     }
     const updated = proformas.filter(p => p.id !== id);
     saveToStorage('erp_proformas', updated, setProformas);
+
+    if (pf) {
+      logAction('DELETE', 'پیش‌فاکتورها', id, `حذف پیش‌فاکتور شماره ${pf.proformaNumber}`, pf, undefined);
+    }
 
     if (pf && pf.projectId) {
       const syncedProjects = syncProjectStatus(pf.projectId, updated, projects);
@@ -840,19 +992,55 @@ export function useERPStore() {
     // Find all proformas of this project
     const updated = proformas.map(p => {
       if (p.projectId === projectId) {
+        if (newStatus === 'لغو شده') {
+          return {
+            ...p,
+            isCancelled: true,
+            lossReason: undefined
+          };
+        }
+        if (newStatus === 'باخته') {
+          const updatedItems = p.items.map(item => ({
+            ...item,
+            status: 'بازنده' as const,
+            lossReason: batchLossReason || item.lossReason
+          }));
+          return {
+            ...p,
+            isCancelled: false,
+            lossReason: batchLossReason,
+            items: updatedItems
+          };
+        }
+        
+        // Fallback or explicit other statuses
         const updatedItems = p.items.map(item => ({
           ...item,
-          status: newStatus === 'تأیید شده (برنده)' ? ('برنده' as const) : newStatus === 'باخته' ? ('بازنده' as const) : item.status,
-          lossReason: newStatus === 'باخته' ? (batchLossReason || item.lossReason) : undefined
+          status: newStatus === 'تأیید شده (برنده)' ? ('برنده' as const) : item.status
         }));
         return {
           ...p,
-          status: newStatus,
-          lossReason: newStatus === 'باخته' ? batchLossReason : undefined,
+          isCancelled: false,
           items: updatedItems
         };
       }
       return p;
+    });
+
+    // Inventory Adjustment before saving state
+    proformas.forEach(oldPf => {
+      if (oldPf.projectId === projectId) {
+        // Revert old won items
+        const oldWon = getWonItemsOfProforma(oldPf);
+        oldWon.forEach(item => adjustProductStock(item.productId, item.quantity));
+
+        // Deduct new won items
+        const updatedPfObj = updated.find(p => p.id === oldPf.id);
+        if (updatedPfObj) {
+          const newWon = getWonItemsOfProforma(updatedPfObj);
+          newWon.forEach(item => adjustProductStock(item.productId, -item.quantity));
+        }
+      }
     });
 
     saveToStorage('erp_proformas', updated, setProformas);
@@ -866,19 +1054,6 @@ export function useERPStore() {
       'پیش‌فاکتور',
       `تغییر وضعیت گروهی تمام پیش‌فاکتورهای پروژه به «${newStatus}» انجام شد.`
     );
-
-    // Adjust stock
-    proformas.forEach(oldPf => {
-      if (oldPf.projectId === projectId) {
-        const wasWon = oldPf.status === 'تأیید شده (برنده)';
-        const isWon = newStatus === 'تأیید شده (برنده)';
-        if (!wasWon && isWon) {
-          oldPf.items.forEach(item => adjustProductStock(item.productId, -item.quantity));
-        } else if (wasWon && !isWon) {
-          oldPf.items.forEach(item => adjustProductStock(item.productId, item.quantity));
-        }
-      }
-    });
   };
 
   // --- Purchase Orders CRUD & Stock Integration ---
@@ -1217,17 +1392,24 @@ export function useERPStore() {
     };
     const updated = [newTask, ...tasks];
     saveToStorage('erp_tasks', updated, setTasks);
+    logAction('CREATE', 'وظایف/پیگیری‌ها', newTask.id, `ثبت وظیفه جدید: "${newTask.title}" ارجاع به ${newTask.assignedTo}`, undefined, newTask);
     return newTask;
   };
 
   const updateTask = (updatedTask: Task) => {
+    const before = tasks.find(t => t.id === updatedTask.id);
     const updated = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
     saveToStorage('erp_tasks', updated, setTasks);
+    logAction('UPDATE', 'وظایف/پیگیری‌ها', updatedTask.id, `ویرایش اطلاعات وظیفه: "${updatedTask.title}"`, before, updatedTask);
   };
 
   const deleteTask = (id: string) => {
+    const before = tasks.find(t => t.id === id);
     const updated = tasks.filter(t => t.id !== id);
     saveToStorage('erp_tasks', updated, setTasks);
+    if (before) {
+      logAction('DELETE', 'وظایف/پیگیری‌ها', id, `حذف وظیفه: "${before.title}"`, before, undefined);
+    }
   };
 
   const addPackagingDelivery = (delivery: Omit<PackagingDelivery, 'id' | 'createdAt' | 'packingListNumber'>) => {
@@ -1245,9 +1427,9 @@ export function useERPStore() {
     const updated = [newDelivery, ...packagingDeliveries];
     saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
     
-
     const logText = `ثبت پکینگ لیست و تحویل کالا به شماره ${packingListNumber} با روش ارسال ${delivery.shippingMethod}`;
     autoLogFactActivity(delivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
+    logAction('CREATE', 'بسته‌بندی و ارسال', newDelivery.id, `ثبت پکینگ لیست و تحویل کالا به شماره ${packingListNumber}`, undefined, newDelivery);
     
     setCompletionPrompt({
       projectId: delivery.projectId,
@@ -1255,16 +1437,17 @@ export function useERPStore() {
       message: `پکینگ لیست ${packingListNumber} صادر شد. آیا می‌خواهید وضعیت دسته فعالیت بسته‌بندی را به «اتمام کار» تغییر دهید؟`
     });
 
-    
     return newDelivery;
   };
 
   const updatePackagingDelivery = (updatedDelivery: PackagingDelivery) => {
+    const before = packagingDeliveries.find(d => d.id === updatedDelivery.id);
     const updated = packagingDeliveries.map(d => d.id === updatedDelivery.id ? updatedDelivery : d);
     saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
     
     const logText = `بروزرسانی پکینگ لیست و تحویل کالا به شماره ${updatedDelivery.packingListNumber}`;
     autoLogFactActivity(updatedDelivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
+    logAction('UPDATE', 'بسته‌بندی و ارسال', updatedDelivery.id, `بروزرسانی پکینگ لیست شماره ${updatedDelivery.packingListNumber}`, before, updatedDelivery);
   };
 
   const deletePackagingDelivery = (id: string, deleteLogs: boolean = false) => {
@@ -1273,6 +1456,8 @@ export function useERPStore() {
     saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
     
     if (delivery) {
+      logAction('DELETE', 'بسته‌بندی و ارسال', id, `حذف پکینگ لیست شماره ${delivery.packingListNumber}`, delivery, undefined);
+
       if (deleteLogs) {
         // Delete activities related to this packing list
         setProjectCategoryGroups(prevGroups => {
@@ -1310,9 +1495,11 @@ export function useERPStore() {
     
     const logText = `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName}`;
     autoLogFactActivity(service.projectId, 'خدمات پس از فروش', logText);
+    logAction('CREATE', 'خدمات پس از فروش', newService.id, `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName}`, undefined, newService);
     
     return newService;
   };
+
 
 
   const updateAfterSalesService = (updatedService: AfterSalesService) => {
@@ -1322,6 +1509,7 @@ export function useERPStore() {
     
     const logText = `بروزرسانی خدمات پس از فروش کالای ${updatedService.itemName} - وضعیت: ${updatedService.status}`;
     autoLogFactActivity(updatedService.projectId, 'خدمات پس از فروش', logText);
+    logAction('UPDATE', 'خدمات پس از فروش', updatedService.id, `بروزرسانی خدمات پس از فروش برای کالای ${updatedService.itemName}`, oldService, updatedService);
     
     if (oldService && oldService.status !== updatedService.status && updatedService.status === 'تحویل داده شده') {
       setCompletionPrompt({
@@ -1339,6 +1527,8 @@ export function useERPStore() {
     saveToStorage('erp_after_sales_services', updated, setAfterSalesServices);
     
     if (service) {
+      logAction('DELETE', 'خدمات پس از فروش', id, `حذف رکورد خدمات پس از فروش برای کالای ${service.itemName}`, service, undefined);
+
       if (deleteLogs) {
         setProjectCategoryGroups(prevGroups => {
           const normalize = (str: string) => str.replace(/[\s‌]/g, '').trim();
@@ -1596,11 +1786,100 @@ export function useERPStore() {
           return g;
         });
         saveToServer('erp_project_category_groups', updated);
+        logAction(
+          'CREATE',
+          'فعالیت‌های پروژه',
+          newActivity.id,
+          `ثبت فعالیت جدید در دسته‌بندی پروژه با شناسه ${categoryGroupId}: "${text}"`,
+          undefined,
+          newActivity
+        );
         return updated;
       });
 
       return newActivity;
     },
+
+    updateProjectActivity: (
+      projectId: string,
+      categoryGroupId: string,
+      activityId: string,
+      newText: string
+    ) => {
+      let beforeAct: any = null;
+      let afterAct: any = null;
+      setProjectCategoryGroups(prev => {
+        const updated = prev.map(g => {
+          if (g.id === categoryGroupId) {
+            const updatedActivities = (g.activities || []).map(act => {
+              if (act.id === activityId) {
+                beforeAct = { ...act };
+                const updatedAct = {
+                  ...act,
+                  text: newText
+                };
+                afterAct = updatedAct;
+                return updatedAct;
+              }
+              return act;
+            });
+            return {
+              ...g,
+              activities: updatedActivities
+            };
+          }
+          return g;
+        });
+        saveToServer('erp_project_category_groups', updated);
+        
+        if (beforeAct && afterAct) {
+          logAction(
+            'UPDATE',
+            'فعالیت‌های پروژه',
+            activityId,
+            `ویرایش فعالیت در دسته‌بندی پروژه با شناسه ${categoryGroupId} از "${beforeAct.text}" به "${newText}"`,
+            beforeAct,
+            afterAct
+          );
+        }
+        return updated;
+      });
+    },
+
+    deleteProjectActivity: (
+      projectId: string,
+      categoryGroupId: string,
+      activityId: string
+    ) => {
+      let deletedAct: any = null;
+      setProjectCategoryGroups(prev => {
+        const updated = prev.map(g => {
+          if (g.id === categoryGroupId) {
+            deletedAct = (g.activities || []).find(act => act.id === activityId) || null;
+            const updatedActivities = (g.activities || []).filter(act => act.id !== activityId);
+            return {
+              ...g,
+              activities: updatedActivities
+            };
+          }
+          return g;
+        });
+        saveToServer('erp_project_category_groups', updated);
+        
+        if (deletedAct) {
+          logAction(
+            'DELETE',
+            'فعالیت‌های پروژه',
+            activityId,
+            `حذف فعالیت از دسته‌بندی پروژه با شناسه ${categoryGroupId}: "${deletedAct.text}"`,
+            deletedAct,
+            undefined
+          );
+        }
+        return updated;
+      });
+    },
+
 
     completeProjectCategoryGroup: (categoryGroupId: string, createdBy?: string) => {
       setProjectCategoryGroups(prev => {
@@ -1791,6 +2070,8 @@ export function useERPStore() {
     },
     
     projectCategoryGroups,
+    auditLogs,
+    logAction,
     
     updateSettings
   };

@@ -17,6 +17,8 @@ interface QuickAddModalProps {
   addSupplier?: (supplier: Omit<Supplier, 'id' | 'createdAt'>) => Supplier;
   addProduct?: (product: Omit<Product, 'id' | 'stockLevel'> & { stockLevel?: number }) => Product;
   users?: ERPUser[];
+  initialCustType?: 'حقوقی' | 'حقیقی';
+  initialLinkedCustomerIds?: string[];
 }
 
 export default function QuickAddModal({
@@ -31,7 +33,9 @@ export default function QuickAddModal({
   addProject,
   addSupplier,
   addProduct,
-  users = []
+  users = [],
+  initialCustType,
+  initialLinkedCustomerIds
 }: QuickAddModalProps) {
   if (!isOpen) return null;
 
@@ -46,7 +50,7 @@ export default function QuickAddModal({
   // ---------------------------------------------------------------------------
   // 1. CUSTOMER FORM STATES
   // ---------------------------------------------------------------------------
-  const [custType, setCustType] = useState<'حقوقی' | 'حقیقی'>('حقوقی');
+  const [custType, setCustType] = useState<'حقوقی' | 'حقیقی'>(initialCustType || 'حقوقی');
   const [companyName, setCompanyName] = useState('');
   const [economicCode, setEconomicCode] = useState('');
   const [custPhone, setCustPhone] = useState('');
@@ -63,7 +67,7 @@ export default function QuickAddModal({
   const [custNotes, setCustNotes] = useState('');
   const [custTags, setCustTags] = useState('');
   const [custStatus, setCustStatus] = useState<'فعال' | 'غیرفعال'>('فعال');
-  const [selectedLinks, setSelectedLinks] = useState<string[]>([]);
+  const [selectedLinks, setSelectedLinks] = useState<string[]>(initialLinkedCustomerIds || []);
 
   // ---------------------------------------------------------------------------
   // 2. PROJECT FORM STATES

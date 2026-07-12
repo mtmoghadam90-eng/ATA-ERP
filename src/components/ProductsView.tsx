@@ -12,6 +12,7 @@ import { Product, ERPSettings } from '../types';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import ConfirmModal from './ConfirmModal';
+import { uploadFile } from '../imageUtils';
 
 interface ProductsViewProps {
   products: Product[];
@@ -386,18 +387,17 @@ export default function ProductsView({
                       type="file"
                       accept="image/*"
                       multiple
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const files = e.target.files;
                         if (files) {
-                          Array.from(files).forEach((file: File) => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              if (typeof reader.result === 'string') {
-                                setImages(prev => [...prev, reader.result as string]);
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                          });
+                          for (const file of Array.from(files) as File[]) {
+                            try {
+                              const url = await uploadFile(file);
+                              setImages(prev => [...prev, url]);
+                            } catch (err: any) {
+                              alert(err.message || 'خطا در بارگذاری تصویر محصول');
+                            }
+                          }
                         }
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"

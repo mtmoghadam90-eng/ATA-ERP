@@ -4,6 +4,8 @@ import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 import bcrypt from "bcrypt";
 import fs from "fs";
+import multer from "multer";
+import sharp from "sharp";
 
 // We need to import seed data. 
 // Since esbuild bundles server.ts, we can import from src/seedData.ts
@@ -72,20 +74,89 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+
+  // Serve static files from uploads folder
+  app.use("/uploads", express.static(UPLOADS_DIR));
+
   // Parse JSON bodies
-  app.use(express.json({ limit: '50mb' }));
+  app.use(express.json({ limit: "50mb" }));
+
+  // Multer config for file upload
+  const storage = multer.memoryStorage();
+  const upload = multer({
+    storage: storage,
+    limits: {
+      fileSize: 20 * 1024 * 1024 // 20 MB max overall limit
+    }
+  });
+
+  app.post("/api/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "فایلی بارگذاری نشده است." });
+      }
+
+      const { originalname, mimetype, buffer } = req.file;
+      const ext = path.extname(originalname).toLowerCase();
+      const uniqueName = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}${ext}`;
+      const targetPath = path.join(UPLOADS_DIR, uniqueName);
+
+      if (mimetype.startsWith("image/")) {
+        if (buffer.length > 10 * 1024 * 1024) {
+          return res.status(400).json({ success: false, error: "حجم عکس نباید بیشتر از ۱۰ مگابایت باشد." });
+        }
+
+        let pipeline = sharp(buffer);
+        const metadata = await pipeline.metadata();
+
+        if (metadata.width && metadata.height && (metadata.width > 1200 || metadata.height > 1200)) {
+          pipeline = pipeline.resize({
+            width: metadata.width > metadata.height ? 1200 : undefined,
+            height: metadata.height >= metadata.width ? 1200 : undefined,
+            fit: "inside",
+            withoutEnlargement: true
+          });
+        }
+
+        if (metadata.format === "png") {
+          pipeline = pipeline.png({ quality: 80, compressionLevel: 8 });
+        } else {
+          pipeline = pipeline.jpeg({ quality: 80, progressive: true });
+        }
+
+        await pipeline.toFile(targetPath);
+      } else {
+        if (buffer.length > 20 * 1024 * 1024) {
+          return res.status(400).json({ success: false, error: "حجم فایل نباید بیشتر از ۲۰ مگابایت باشد." });
+        }
+        await fs.promises.writeFile(targetPath, buffer);
+      }
+
+      const fileUrl = `/uploads/${uniqueName}`;
+      res.json({ success: true, url: fileUrl });
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      res.status(500).json({ success: false, error: "خطا در بارگذاری فایل در سرور" });
+    }
+  });
 
   // Existing rates API
   app.get("/api/rates", async (req, res) => {
     const fallbacks = {
       USD: 625000,
       EUR: 678000,
-      AED: 171000
+      AED: 171000,
+      CNY: 86000
     };
     const urls = {
       USD: 'https://www.tgju.org/profile/price_dollar_rl',
       EUR: 'https://www.tgju.org/profile/price_eur',
-      AED: 'https://www.tgju.org/profile/price_aed'
+      AED: 'https://www.tgju.org/profile/price_aed',
+      CNY: 'https://www.tgju.org/profile/price_cny'
     };
 
     const rates: Record<string, number> = {};
@@ -97,7 +168,7 @@ async function startServer() {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
-            signal: AbortSignal.timeout(2000)
+            signal: AbortSignal.timeout(10000)
           });
           if (!response.ok) {
             throw new Error(`HTTP error ${response.status}`);
