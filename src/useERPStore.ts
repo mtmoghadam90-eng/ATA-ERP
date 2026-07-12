@@ -22,7 +22,8 @@ import {
   DeliveryChecklistItem,
   PackagingDelivery,
   AfterSalesService,
-  AuditLog
+  AuditLog,
+  WorkflowRule
 } from './types';
 import { compressLZW, decompressLZW } from './utils/compress';
 
@@ -571,6 +572,13 @@ export function useERPStore() {
     
     if (oldProj && oldProj.status !== updatedProj.status) {
       notifyModuleResponsible('projects', 'تغییر وضعیت پروژه', `پروژه ${updatedProj.name} به وضعیت «${updatedProj.status}» تغییر یافت.`, updatedProj.id);
+      runWorkflows('project_status_change', {
+        projectId: updatedProj.id,
+        projectName: updatedProj.name,
+        oldStatus: oldProj.status,
+        newStatus: updatedProj.status,
+        salesExpert: updatedProj.salesExpert
+      });
     } else {
       notifyModuleResponsible('projects', 'ویرایش اطلاعات پروژه', `پروژه ${updatedProj.name} بروزرسانی شد.`, updatedProj.id);
     }
@@ -858,6 +866,17 @@ export function useERPStore() {
     notifyModuleResponsible('proformas', 'ثبت پیش‌فاکتور جدید', `پیش‌فاکتور شماره ${newProforma.proformaNumber} صادر شد.`, newProforma.projectId);
     logAction('CREATE', 'پیش‌فاکتورها', newProforma.id, `ایجاد پیش‌فاکتور جدید شماره ${newProforma.proformaNumber} به مبلغ کل ${newProforma.totalAmount.toLocaleString('fa-IR')} ${newProforma.currency}`, undefined, newProforma);
 
+    const newOutcome = getProformaOutcomeStatus(newProforma);
+    const relatedProj = newProforma.projectId ? projects.find(p => p.id === newProforma.projectId) : undefined;
+    runWorkflows('proforma_outcome_change', {
+      projectId: newProforma.projectId,
+      projectName: relatedProj?.name || newProforma.customerName,
+      proformaNumber: newProforma.proformaNumber,
+      oldOutcome: '',
+      newOutcome,
+      salesExpert: relatedProj?.salesExpert
+    });
+
     return newProforma;
   };
 
@@ -906,6 +925,21 @@ export function useERPStore() {
       newWon.forEach(item => {
         adjustProductStock(item.productId, -item.quantity);
       });
+
+      // 3. Trigger workflows
+      const oldOutcome = getProformaOutcomeStatus(oldProforma);
+      const newOutcome = getProformaOutcomeStatus(newProformaObj);
+      if (oldOutcome !== newOutcome) {
+        const relatedProj = oldProforma.projectId ? projects.find(p => p.id === oldProforma.projectId) : undefined;
+        runWorkflows('proforma_outcome_change', {
+          projectId: oldProforma.projectId,
+          projectName: relatedProj?.name || oldProforma.customerName,
+          proformaNumber: oldProforma.proformaNumber,
+          oldOutcome,
+          newOutcome,
+          salesExpert: relatedProj?.salesExpert
+        });
+      }
     }
   };
 
@@ -942,6 +976,18 @@ export function useERPStore() {
           message: `پیش‌فاکتور ${finalUpdatedPf.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
         });
       }
+    }
+
+    if (outcomeChanged) {
+      const relatedProj = finalUpdatedPf.projectId ? projects.find(p => p.id === finalUpdatedPf.projectId) : undefined;
+      runWorkflows('proforma_outcome_change', {
+        projectId: finalUpdatedPf.projectId,
+        projectName: relatedProj?.name || finalUpdatedPf.customerName,
+        proformaNumber: finalUpdatedPf.proformaNumber,
+        oldOutcome,
+        newOutcome,
+        salesExpert: relatedProj?.salesExpert
+      });
     }
 
     // Dynamic self-healing inventory adjustment
@@ -1136,6 +1182,17 @@ export function useERPStore() {
         adjustProductStock(item.productId, -item.quantity);
       });
     }
+
+    if (oldPO.status !== newStatus) {
+      runWorkflows('purchase_order_status_change', {
+        projectId: oldPO.projectId,
+        projectName: oldPO.projectName,
+        poNumber: oldPO.poNumber,
+        oldStatus: oldPO.status,
+        newStatus,
+        salesExpert: oldPO.projectId ? (projects.find(p => p.id === oldPO.projectId)?.salesExpert) : undefined
+      });
+    }
   };
 
   const updatePurchaseOrder = (updatedPO: PurchaseOrder) => {
@@ -1160,7 +1217,17 @@ export function useERPStore() {
           message: `سفارش خرید ${updatedPO.poNumber} به انبار تحویل شد. آیا می‌خواهید وضعیت فعالیت‌های سفارش خرید این پروژه را به «اتمام کار» تغییر دهید؟`
         });
       }
+    }
 
+    if (oldPO.status !== updatedPO.status) {
+      runWorkflows('purchase_order_status_change', {
+        projectId: updatedPO.projectId,
+        projectName: updatedPO.projectName,
+        poNumber: updatedPO.poNumber,
+        oldStatus: oldPO.status,
+        newStatus: updatedPO.status,
+        salesExpert: updatedPO.projectId ? (projects.find(p => p.id === updatedPO.projectId)?.salesExpert) : undefined
+      });
     }
 
     // Handle delivered state stock updates
@@ -1555,6 +1622,106 @@ export function useERPStore() {
   // --- Settings Customizer ---
   const updateSettings = (newSettings: ERPSettings) => {
     saveToStorage('erp_settings', newSettings, setSettings);
+  };
+
+  const runWorkflows = (
+    triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change',
+    context: {
+      projectId?: string;
+      projectName?: string;
+      proformaNumber?: string;
+      poNumber?: string;
+      oldOutcome?: string;
+      newOutcome?: string;
+      oldStatus?: string;
+      newStatus?: string;
+      salesExpert?: string;
+    }
+  ) => {
+    const rules = settings.workflows || [];
+    const activeRules = rules.filter(r => r.active && r.triggerType === triggerType);
+
+    if (activeRules.length === 0) return;
+
+    activeRules.forEach(rule => {
+      let conditionsMet = true;
+      for (const cond of rule.conditions) {
+        let actualValue = '';
+        if (cond.field === 'newOutcome') actualValue = context.newOutcome || '';
+        else if (cond.field === 'oldOutcome') actualValue = context.oldOutcome || '';
+        else if (cond.field === 'newStatus') actualValue = context.newStatus || '';
+        else if (cond.field === 'oldStatus') actualValue = context.oldStatus || '';
+
+        if (cond.operator === 'equals') {
+          if (actualValue !== cond.value) {
+            conditionsMet = false;
+            break;
+          }
+        } else if (cond.operator === 'not_equals') {
+          if (actualValue === cond.value) {
+            conditionsMet = false;
+            break;
+          }
+        }
+      }
+
+      if (!conditionsMet) return;
+
+      const replaceTokens = (tmpl: string) => {
+        return tmpl
+          .replace(/{projectName}/g, context.projectName || '')
+          .replace(/{projectCode}/g, context.projectId ? (projects.find(p => p.id === context.projectId)?.code || '') : '')
+          .replace(/{proformaNumber}/g, context.proformaNumber || '')
+          .replace(/{poNumber}/g, context.poNumber || '')
+          .replace(/{oldOutcome}/g, context.oldOutcome || '')
+          .replace(/{newOutcome}/g, context.newOutcome || '')
+          .replace(/{oldStatus}/g, context.oldStatus || '')
+          .replace(/{newStatus}/g, context.newStatus || '');
+      };
+
+      rule.actions.forEach(action => {
+        if (action.type === 'create_task' && action.taskConfig) {
+          const config = action.taskConfig;
+          const title = replaceTokens(config.titleTemplate);
+          const description = replaceTokens(config.descTemplate);
+
+          let assignedToName = config.assignedTo;
+          if (assignedToName.startsWith('MODULE_RESPONSIBLE_')) {
+            const moduleKey = assignedToName.replace('MODULE_RESPONSIBLE_', '');
+            assignedToName = settings.moduleResponsibles?.[moduleKey] || '';
+          } else if (assignedToName === 'SALES_EXPERT') {
+            assignedToName = context.salesExpert || (context.projectId ? (projects.find(p => p.id === context.projectId)?.salesExpert || '') : '');
+          }
+
+          if (!assignedToName) {
+            assignedToName = currentUser?.fullName || 'محمد توکل مقدم';
+          }
+
+          const dueDate = config.dueDaysOffset 
+            ? addDaysToShamsi(getTodayShamsi(), config.dueDaysOffset) 
+            : getTodayShamsi();
+
+          const taskToCreate: Omit<Task, 'id'> = {
+            title,
+            description,
+            relatedToType: triggerType === 'proforma_outcome_change' ? 'پیش‌فاکتور' : triggerType === 'project_status_change' ? 'پروژه' : 'سفارش خرید',
+            relatedToId: context.projectId,
+            relatedToName: context.projectName,
+            priority: config.priority || 'متوسط',
+            dueDate,
+            assignedTo: assignedToName,
+            status: 'در حال انجام'
+          };
+
+          addTask(taskToCreate);
+        } else if (action.type === 'send_notification' && action.notificationConfig) {
+          const config = action.notificationConfig;
+          const title = replaceTokens(config.titleTemplate);
+          const description = replaceTokens(config.descTemplate);
+          notifyModuleResponsible(config.module, title, description, context.projectId);
+        }
+      });
+    });
   };
 
   // --- Module Notifications ---
@@ -2073,6 +2240,7 @@ export function useERPStore() {
     auditLogs,
     logAction,
     
-    updateSettings
+    updateSettings,
+    runWorkflows
   };
 }

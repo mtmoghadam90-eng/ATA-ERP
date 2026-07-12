@@ -123,7 +123,7 @@ export default function PackagingDeliveryView({
       const wonItems = getWonItemsOfProforma(prof);
       const defaultPackingItems: PackingItem[] = wonItems.map((item, idx) => ({
         id: `pack-item-auto-${idx}-${Date.now()}`,
-        itemOrDocName: `${item.productName} (${item.brand})`,
+        itemOrDocName: item.brand ? `${item.productName} (${item.brand})` : item.productName,
         productId: item.productId,
         quantity: item.quantity,
         packageType: 'کارتن',

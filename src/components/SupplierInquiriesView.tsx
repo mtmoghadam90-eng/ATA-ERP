@@ -1123,7 +1123,7 @@ export default function SupplierInquiriesView({
               >
                 <option value="">همه کالاها</option>
                 {compareItems.map(it => (
-                  <option key={it.id} value={it.id}>{it.productName} ({it.brand})</option>
+                  <option key={it.id} value={it.id}>{it.productName}{it.brand ? ` (${it.brand})` : ''}</option>
                 ))}
               </select>
             </div>

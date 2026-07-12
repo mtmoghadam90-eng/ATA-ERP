@@ -41,7 +41,7 @@ import {
   Wrench,
   History
 } from 'lucide-react';
-import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog } from '../types';
+import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog, WorkflowRule } from '../types';
 import { decompressLZW } from '../utils/compress';
 import ConfirmModal from './ConfirmModal';
 import { compressAndResizeImage, uploadFile } from '../imageUtils';
@@ -93,7 +93,11 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows'>('general');
+
+  // Workflow builder states
+  const [editingRule, setEditingRule] = useState<WorkflowRule | null>(null);
+  const [isRuleFormOpen, setIsRuleFormOpen] = useState(false);
 
   // Audit log filters
   const [logSearch, setLogSearch] = useState('');
@@ -285,6 +289,54 @@ export default function SettingsView({
     setDeleteTargetId(reasonToDelete);
     setDeleteTargetName(reasonToDelete);
     setDeleteConfirmOpen(true);
+  };
+
+  const handleToggleWorkflowActive = (ruleId: string) => {
+    const rules = settings.workflows || [];
+    const updated = rules.map(r => r.id === ruleId ? { ...r, active: !r.active } : r);
+    updateSettings({
+      ...settings,
+      workflows: updated
+    });
+  };
+
+  const handleDeleteWorkflowRule = (ruleId: string) => {
+    const rules = settings.workflows || [];
+    const updated = rules.filter(r => r.id !== ruleId);
+    updateSettings({
+      ...settings,
+      workflows: updated
+    });
+  };
+
+  const handleSaveWorkflowRule = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRule) return;
+    if (!editingRule.name.trim()) {
+      alert('لطفاً نام قانون را وارد کنید.');
+      return;
+    }
+    
+    const rules = settings.workflows || [];
+    let updatedRules: WorkflowRule[];
+    
+    if (editingRule.id.startsWith('new-')) {
+      const newRule: WorkflowRule = {
+        ...editingRule,
+        id: `wf-${Date.now()}`
+      };
+      updatedRules = [...rules, newRule];
+    } else {
+      updatedRules = rules.map(r => r.id === editingRule.id ? editingRule : r);
+    }
+    
+    updateSettings({
+      ...settings,
+      workflows: updatedRules
+    });
+    
+    setEditingRule(null);
+    setIsRuleFormOpen(false);
   };
 
   // General settings states
@@ -591,6 +643,18 @@ export default function SettingsView({
         >
           <FileCheck size={16} className="text-emerald-500" />
           چک‌لیست تحویل کالا
+        </button>
+        <button
+          onClick={() => setActiveTab('workflows')}
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
+            activeTab === 'workflows'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <RefreshCw size={16} className="text-emerald-600" />
+          اتوماسیون و ورک‌فلوها
+          <span className="bg-emerald-100 text-emerald-700 text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-bold">جدید</span>
         </button>
         <button
           onClick={() => setActiveTab('auditLog')}
@@ -2165,6 +2229,626 @@ export default function SettingsView({
                 );
               })()}
             </div>
+          </div>
+        ) : activeTab === 'workflows' ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-lg text-slate-800">قوانین گردش‌کار هوشمند (ورک‌فلو)</h3>
+                <p className="text-slate-500 text-xs mt-1">
+                  اتوماسیون اقدامات سیستمی مانند ایجاد وظایف یا ارسال اعلان‌های خودکار بر اساس رویدادهای سیستم
+                </p>
+              </div>
+              {!isRuleFormOpen && (
+                <button
+                  onClick={() => {
+                    setEditingRule({
+                      id: `new-${Date.now()}`,
+                      name: '',
+                      active: true,
+                      triggerType: 'proforma_outcome_change',
+                      conditions: [
+                        { field: 'newOutcome', operator: 'equals', value: 'تأیید شده (برنده)' }
+                      ],
+                      actions: [
+                        {
+                          type: 'create_task',
+                          taskConfig: {
+                            titleTemplate: 'پیگیری سفارش خرید پروژه {projectName}',
+                            descTemplate: 'پیش‌فاکتور شماره {proformaNumber} برنده شده است. لطفا هماهنگی‌های لازم جهت ثبت سفارش خرید خارجی را انجام دهید.',
+                            assignedTo: 'MODULE_RESPONSIBLE_purchaseOrders',
+                            priority: 'بالا',
+                            dueDaysOffset: 3
+                          }
+                        }
+                      ]
+                    });
+                    setIsRuleFormOpen(true);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl text-xs md:text-sm flex items-center gap-2 transition-all shadow-sm"
+                >
+                  <Plus size={16} />
+                  ایجاد قانون جدید
+                </button>
+              )}
+            </div>
+
+            {isRuleFormOpen && editingRule ? (
+              <form onSubmit={handleSaveWorkflowRule} className="space-y-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-200 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-slate-700 text-xs font-bold mb-2">نام قانون ورک‌فلو <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={editingRule.name}
+                      onChange={(e) => setEditingRule({ ...editingRule, name: e.target.value })}
+                      placeholder="مثال: ایجاد خودکار تسک سفارش خرید پس از برنده شدن پیش‌فاکتور"
+                      className="w-full text-xs md:text-sm border border-slate-200 rounded-xl p-3 focus:outline-none focus:border-sky-500 bg-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 text-xs font-bold mb-2">نوع رویداد تحریک‌کننده (Trigger)</label>
+                    <select
+                      value={editingRule.triggerType}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        let defaultField = 'newOutcome';
+                        let defaultValue = 'تأیید شده (برنده)';
+                        if (val === 'project_status_change') {
+                          defaultField = 'newStatus';
+                          defaultValue = 'برنده شده';
+                        } else if (val === 'purchase_order_status_change') {
+                          defaultField = 'newStatus';
+                          defaultValue = 'تحویل شده (رسید انبار)';
+                        }
+                        setEditingRule({
+                          ...editingRule,
+                          triggerType: val,
+                          conditions: [
+                            { field: defaultField, operator: 'equals', value: defaultValue }
+                          ]
+                        });
+                      }}
+                      className="w-full text-xs md:text-sm border border-slate-200 rounded-xl p-3 focus:outline-none focus:border-sky-500 bg-white"
+                    >
+                      <option value="proforma_outcome_change">تغییر وضعیت نهایی پیش‌فاکتور</option>
+                      <option value="project_status_change">تغییر وضعیت پروژه</option>
+                      <option value="purchase_order_status_change">تغییر وضعیت سفارش خرید</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Status Switch */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="workflow_active_checkbox"
+                    checked={editingRule.active}
+                    onChange={(e) => setEditingRule({ ...editingRule, active: e.target.checked })}
+                    className="rounded text-sky-500 focus:ring-sky-500 h-4 w-4"
+                  />
+                  <label htmlFor="workflow_active_checkbox" className="text-slate-700 text-xs font-bold cursor-pointer select-none">
+                    این قانون فعال باشد
+                  </label>
+                </div>
+
+                {/* Conditions Block */}
+                <div className="border border-slate-200 rounded-2xl bg-white p-4 space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <h4 className="font-bold text-xs text-slate-800 flex items-center gap-2">
+                      <Sliders size={14} className="text-sky-500" />
+                      شرط‌های اجرا (Conditions) - اجرای قانون در صورت برقراری همه شرایط
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const fieldMap: Record<string, string> = {
+                          proforma_outcome_change: 'newOutcome',
+                          project_status_change: 'newStatus',
+                          purchase_order_status_change: 'newStatus'
+                        };
+                        const conds = editingRule.conditions || [];
+                        setEditingRule({
+                          ...editingRule,
+                          conditions: [
+                            ...conds,
+                            { field: fieldMap[editingRule.triggerType] || 'newOutcome', operator: 'equals', value: '' }
+                          ]
+                        });
+                      }}
+                      className="text-sky-600 hover:text-sky-700 text-xs font-bold flex items-center gap-1"
+                    >
+                      <Plus size={14} />
+                      افزودن شرط جدید
+                    </button>
+                  </div>
+
+                  {editingRule.conditions.length === 0 ? (
+                    <div className="text-center py-4 text-slate-400 text-xs">
+                      هیچ شرطی تعریف نشده است. این قانون در صورت وقوع رویداد همواره اجرا خواهد شد.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {editingRule.conditions.map((cond, condIdx) => {
+                        // Options for select
+                        let fieldOptions: { value: string; label: string }[] = [];
+                        let valueOptions: string[] = [];
+
+                        if (editingRule.triggerType === 'proforma_outcome_change') {
+                          fieldOptions = [
+                            { value: 'newOutcome', label: 'وضعیت نهایی جدید پیش‌فاکتور' },
+                            { value: 'oldOutcome', label: 'وضعیت نهایی قبلی پیش‌فاکتور' }
+                          ];
+                          valueOptions = ['تأیید شده (برنده)', 'نیمه برنده', 'باخته', 'لغو شده', 'در حال بررسی', 'پیش‌نویس'];
+                        } else if (editingRule.triggerType === 'project_status_change') {
+                          fieldOptions = [
+                            { value: 'newStatus', label: 'وضعیت جدید پروژه' },
+                            { value: 'oldStatus', label: 'وضعیت قبلی پروژه' }
+                          ];
+                          valueOptions = ['پیشنهاد فنی مالی', 'در دست بررسی', 'برنده شده', 'باخته شده'];
+                        } else if (editingRule.triggerType === 'purchase_order_status_change') {
+                          fieldOptions = [
+                            { value: 'newStatus', label: 'وضعیت جدید سفارش خرید' },
+                            { value: 'oldStatus', label: 'وضعیت قبلی سفارش خرید' }
+                          ];
+                          valueOptions = ['پیش‌نویس', 'در انتظار تأیید', 'تأیید شده', 'ارسال شده', 'تحویل شده (رسید انبار)', 'لغو شده'];
+                        }
+
+                        return (
+                          <div key={condIdx} className="flex flex-wrap items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150 animate-fade-in text-xs">
+                            <span className="text-slate-500 font-medium">اگر</span>
+                            <select
+                              value={cond.field}
+                              onChange={(e) => {
+                                const updatedConds = [...editingRule.conditions];
+                                updatedConds[condIdx].field = e.target.value;
+                                setEditingRule({ ...editingRule, conditions: updatedConds });
+                              }}
+                              className="border border-slate-200 rounded-lg p-2 bg-white focus:outline-none focus:border-sky-500"
+                            >
+                              {fieldOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={cond.operator}
+                              onChange={(e) => {
+                                const updatedConds = [...editingRule.conditions];
+                                updatedConds[condIdx].operator = e.target.value as any;
+                                setEditingRule({ ...editingRule, conditions: updatedConds });
+                              }}
+                              className="border border-slate-200 rounded-lg p-2 bg-white focus:outline-none focus:border-sky-500"
+                            >
+                              <option value="equals">برابر باشد با</option>
+                              <option value="not_equals">مخالف باشد با</option>
+                            </select>
+
+                            <select
+                              value={cond.value}
+                              onChange={(e) => {
+                                const updatedConds = [...editingRule.conditions];
+                                updatedConds[condIdx].value = e.target.value;
+                                setEditingRule({ ...editingRule, conditions: updatedConds });
+                              }}
+                              className="border border-slate-200 rounded-lg p-2 bg-white focus:outline-none focus:border-sky-500"
+                            >
+                              <option value="">-- انتخاب مقدار --</option>
+                              {valueOptions.map(val => (
+                                <option key={val} value={val}>{val}</option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedConds = editingRule.conditions.filter((_, idx) => idx !== condIdx);
+                                setEditingRule({ ...editingRule, conditions: updatedConds });
+                              }}
+                              className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 mr-auto flex items-center justify-center"
+                              title="حذف شرط"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions Block */}
+                <div className="border border-slate-200 rounded-2xl bg-white p-4 space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <h4 className="font-bold text-xs text-slate-800 flex items-center gap-2">
+                      <RefreshCw size={14} className="text-emerald-500" />
+                      اقدامات خودکار (Actions)
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const acts = editingRule.actions || [];
+                        setEditingRule({
+                          ...editingRule,
+                          actions: [
+                            ...acts,
+                            {
+                              type: 'create_task',
+                              taskConfig: {
+                                titleTemplate: 'وظیفه جدید پروژه {projectName}',
+                                descTemplate: 'توضیحات وظیفه مربوط به پروژه {projectName}',
+                                assignedTo: 'MODULE_RESPONSIBLE_purchaseOrders',
+                                priority: 'متوسط',
+                                dueDaysOffset: 3
+                              }
+                            }
+                          ]
+                        });
+                      }}
+                      className="text-emerald-600 hover:text-emerald-700 text-xs font-bold flex items-center gap-1"
+                    >
+                      <Plus size={14} />
+                      افزودن اقدام جدید
+                    </button>
+                  </div>
+
+                  {editingRule.actions.length === 0 ? (
+                    <div className="text-center py-4 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                      حداقل یک اقدام برای این ورک‌فلو باید تعریف کنید.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {editingRule.actions.map((act, actIdx) => {
+                        return (
+                          <div key={actIdx} className="bg-slate-50 p-4 rounded-xl border border-slate-200 animate-fade-in space-y-3 relative text-xs">
+                            <div className="flex justify-between items-center border-b border-slate-150 pb-2">
+                              <div className="flex items-center gap-2 font-bold text-slate-700">
+                                <span>اقدام #{actIdx + 1}:</span>
+                                <select
+                                  value={act.type}
+                                  onChange={(e) => {
+                                    const val = e.target.value as any;
+                                    const updatedActs = [...editingRule.actions];
+                                    if (val === 'create_task') {
+                                      updatedActs[actIdx] = {
+                                        type: 'create_task',
+                                        taskConfig: {
+                                          titleTemplate: 'پیگیری برای پروژه {projectName}',
+                                          descTemplate: 'توضیحات برای پروژه {projectName}',
+                                          assignedTo: 'MODULE_RESPONSIBLE_purchaseOrders',
+                                          priority: 'متوسط',
+                                          dueDaysOffset: 3
+                                        }
+                                      };
+                                    } else {
+                                      updatedActs[actIdx] = {
+                                        type: 'send_notification',
+                                        notificationConfig: {
+                                          module: 'purchaseOrders',
+                                          titleTemplate: 'اطلاع‌رسانی پروژه {projectName}',
+                                          descTemplate: 'وضعیت جدید پروژه {projectName} به {newStatus} تغییر یافت.'
+                                        }
+                                      };
+                                    }
+                                    setEditingRule({ ...editingRule, actions: updatedActs });
+                                  }}
+                                  className="border border-slate-200 rounded-lg p-1.5 bg-white text-xs"
+                                >
+                                  <option value="create_task">ایجاد وظیفه جدید (تسک)</option>
+                                  <option value="send_notification">ارسال اعلان درون‌برنامه‌ای</option>
+                                </select>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedActs = editingRule.actions.filter((_, idx) => idx !== actIdx);
+                                  setEditingRule({ ...editingRule, actions: updatedActs });
+                                }}
+                                className="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50"
+                                title="حذف اقدام"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+
+                            {/* Show Token Helpers */}
+                            <div className="bg-sky-50 text-sky-800 p-2.5 rounded-lg border border-sky-100 flex flex-wrap items-center gap-2 text-[10px]">
+                              <span className="font-bold">متغیرهای پویا قابل استفاده در قالب‌ها:</span>
+                              <code className="bg-white px-1.5 py-0.5 rounded border border-sky-200 cursor-pointer">{'{projectName}'}</code>
+                              <code className="bg-white px-1.5 py-0.5 rounded border border-sky-200 cursor-pointer">{'{projectCode}'}</code>
+                              <code className="bg-white px-1.5 py-0.5 rounded border border-sky-200 cursor-pointer">{'{proformaNumber}'}</code>
+                              <code className="bg-white px-1.5 py-0.5 rounded border border-sky-200 cursor-pointer">{'{poNumber}'}</code>
+                              <code className="bg-white px-1.5 py-0.5 rounded border border-sky-200 cursor-pointer">{'{newStatus}'}</code>
+                              <code className="bg-white px-1.5 py-0.5 rounded border border-sky-200 cursor-pointer">{'{newOutcome}'}</code>
+                            </div>
+
+                            {act.type === 'create_task' && act.taskConfig && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">قالب عنوان وظیفه <span className="text-red-500">*</span></label>
+                                  <input
+                                    type="text"
+                                    value={act.taskConfig.titleTemplate}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].taskConfig!.titleTemplate = e.target.value;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white"
+                                    required
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">مسئول انجام وظیفه</label>
+                                  <select
+                                    value={act.taskConfig.assignedTo}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].taskConfig!.assignedTo = e.target.value;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white"
+                                  >
+                                    <optgroup label="سمت‌های پویا">
+                                      <option value="SALES_EXPERT">کارشناس فروش پروژه</option>
+                                      <option value="MODULE_RESPONSIBLE_purchaseOrders">مسئول ماژول سفارش خرید</option>
+                                      <option value="MODULE_RESPONSIBLE_proformas">مسئول ماژول پیش‌فاکتورها</option>
+                                      <option value="MODULE_RESPONSIBLE_projects">مسئول ماژول پروژه‌ها</option>
+                                      <option value="MODULE_RESPONSIBLE_afterSales">مسئول خدمات پس از فروش</option>
+                                    </optgroup>
+                                    <optgroup label="کاربران سیستم">
+                                      {users.map(u => (
+                                        <option key={u.id} value={u.fullName}>{u.fullName}</option>
+                                      ))}
+                                    </optgroup>
+                                  </select>
+                                </div>
+
+                                <div className="md:col-span-2">
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">قالب توضیحات وظیفه</label>
+                                  <textarea
+                                    value={act.taskConfig.descTemplate}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].taskConfig!.descTemplate = e.target.value;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    rows={2}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">اولویت وظیفه</label>
+                                  <select
+                                    value={act.taskConfig.priority}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].taskConfig!.priority = e.target.value as any;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white"
+                                  >
+                                    <option value="پایین">پایین</option>
+                                    <option value="متوسط">متوسط</option>
+                                    <option value="بالا">بالا</option>
+                                    <option value="فوری">فوری</option>
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">مهلت انجام (تعداد روز بعد از رویداد)</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={act.taskConfig.dueDaysOffset || 0}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].taskConfig!.dueDaysOffset = parseInt(e.target.value) || 0;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white text-left font-mono"
+                                    dir="ltr"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {act.type === 'send_notification' && act.notificationConfig && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">قالب عنوان اعلان <span className="text-red-500">*</span></label>
+                                  <input
+                                    type="text"
+                                    value={act.notificationConfig.titleTemplate}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].notificationConfig!.titleTemplate = e.target.value;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white"
+                                    required
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">ارسال به مسئول ماژول</label>
+                                  <select
+                                    value={act.notificationConfig.module}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].notificationConfig!.module = e.target.value;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white font-mono"
+                                  >
+                                    <option value="proformas">پیش‌فاکتورها (Proformas)</option>
+                                    <option value="projects">پروژه‌ها (Projects)</option>
+                                    <option value="purchaseOrders">سفارشات خرید (Purchase Orders)</option>
+                                    <option value="inventory">انبار و کالا (Inventory)</option>
+                                    <option value="customers">مشتریان (Customers)</option>
+                                    <option value="suppliers">تأمین‌کنندگان (Suppliers)</option>
+                                    <option value="afterSales">خدمات پس از فروش (After Sales)</option>
+                                  </select>
+                                </div>
+
+                                <div className="md:col-span-2">
+                                  <label className="block text-slate-600 text-[11px] font-bold mb-1">قالب متن پیام اعلان</label>
+                                  <textarea
+                                    value={act.notificationConfig.descTemplate}
+                                    onChange={(e) => {
+                                      const updatedActs = [...editingRule.actions];
+                                      updatedActs[actIdx].notificationConfig!.descTemplate = e.target.value;
+                                      setEditingRule({ ...editingRule, actions: updatedActs });
+                                    }}
+                                    rows={2}
+                                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Form Buttons */}
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRule(null);
+                      setIsRuleFormOpen(false);
+                    }}
+                    className="bg-white hover:bg-slate-100 text-slate-700 font-bold py-2 px-5 rounded-xl text-xs md:text-sm border border-slate-200 transition-all"
+                  >
+                    انصراف
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-5 rounded-xl text-xs md:text-sm transition-all shadow-sm"
+                  >
+                    ذخیره قانون ورک‌فلو
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                {(settings.workflows || []).length === 0 ? (
+                  <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/30">
+                    <RefreshCw size={40} className="text-slate-300 mx-auto animate-spin-slow mb-3" />
+                    <p className="text-slate-600 font-bold text-sm">هیچ قانون ورک‌فلویی تعریف نشده است</p>
+                    <p className="text-slate-400 text-xs mt-1">با ایجاد قوانین داینامیک، فرآیندهای کاری سازمان خود را خودکار کنید.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {(settings.workflows || []).map((rule) => {
+                      const triggerLabelMap: Record<string, string> = {
+                        proforma_outcome_change: 'تغییر وضعیت نهایی پیش‌فاکتور',
+                        project_status_change: 'تغییر وضعیت پروژه',
+                        purchase_order_status_change: 'تغییر وضعیت سفارش خرید'
+                      };
+
+                      return (
+                        <div key={rule.id} className="bg-white p-5 rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          <div className="space-y-2 text-right">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full ${rule.active ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                              <h4 className="font-bold text-slate-800 text-sm md:text-base">{rule.name}</h4>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                rule.active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                              }`}>
+                                {rule.active ? 'فعال' : 'غیرفعال'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-1 text-xs text-slate-600">
+                              <div>
+                                <span className="font-bold text-slate-500">رویداد:</span> {triggerLabelMap[rule.triggerType] || rule.triggerType}
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-500">تعداد شرط‌ها:</span> {rule.conditions?.length || 0} مورد
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-500">تعداد اقدامات:</span> {rule.actions?.length || 0} اقدام
+                              </div>
+                            </div>
+
+                            {/* Brief execution description */}
+                            <div className="bg-slate-50 p-2.5 rounded-lg text-slate-500 text-[11px] border border-slate-100 max-w-2xl leading-relaxed">
+                              <span className="font-bold text-sky-600">فرآیند: </span>
+                              در زمان وقوع <span className="text-slate-800 font-bold">{triggerLabelMap[rule.triggerType] || rule.triggerType}</span>،
+                              {rule.conditions && rule.conditions.length > 0 ? (
+                                <>
+                                  {' '}اگر{' '}
+                                  {rule.conditions.map((c, i) => (
+                                    <span key={i} className="text-slate-800 font-bold bg-white px-1.5 py-0.5 rounded border border-slate-200 mx-0.5 font-mono">
+                                      {c.field === 'newOutcome' ? 'وضعیت جدید' : c.field === 'newStatus' ? 'وضعیت جدید' : c.field} {c.operator === 'equals' ? 'برابر باشد با' : 'مخالف باشد با'} «{c.value}»
+                                    </span>
+                                  ))}
+                                  {' '}باشد، آنگاه:{' '}
+                                </>
+                              ) : (
+                                ' بدون هیچ شرطی، آنگاه '
+                              )}
+                              {rule.actions.map((act, i) => (
+                                <span key={i} className="text-emerald-700 font-bold bg-white px-1.5 py-0.5 rounded border border-slate-200 mx-0.5">
+                                  {act.type === 'create_task' ? `ایجاد تسک «${act.taskConfig?.titleTemplate}»` : `ارسال اعلان به مسئول ماژول`}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end md:self-center mr-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleWorkflowActive(rule.id)}
+                              className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                                rule.active 
+                                  ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' 
+                                  : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                              }`}
+                              title={rule.active ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
+                            >
+                              {rule.active ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRule({ ...rule });
+                                setIsRuleFormOpen(true);
+                              }}
+                              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900"
+                              title="ویرایش"
+                            >
+                              <Sliders size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm('آیا از حذف این قانون مطمئن هستید؟')) {
+                                  handleDeleteWorkflowRule(rule.id);
+                                }
+                              }}
+                              className="p-2 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-500 hover:text-rose-700"
+                              title="حذف"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : null)}
 

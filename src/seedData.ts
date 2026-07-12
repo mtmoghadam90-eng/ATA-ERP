@@ -611,5 +611,29 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     'تکمیل و امضای برگه تست تجهیزات قبل از تحویل',
     'قرار دادن کاتالوگ، دفترچه راهنما و مدارک فنی مرتبط',
     'بسته‌بندی ایمن با پلاستیک حباب‌دار و ضربه‌گیر استاندارد'
+  ],
+  workflows: [
+    {
+      id: 'wf-default-1',
+      name: 'ایجاد تسک سفارش خرید پس از برنده شدن پیش‌فاکتور',
+      active: true,
+      triggerType: 'proforma_outcome_change',
+      conditions: [
+        { field: 'newOutcome', operator: 'equals', value: 'تأیید شده (برنده)' }
+      ],
+      actions: [
+        {
+          id: 'wfa-1',
+          type: 'create_task',
+          taskConfig: {
+            titleTemplate: 'پیگیری سفارش خرید خارجی - {projectName}',
+            descTemplate: 'پیش‌فاکتور شماره {proformaNumber} برای پروژه {projectName} برنده شد. لطفاً خرید خارجی را از تامین‌کننده پیگیری نمایید.',
+            assignedTo: 'MODULE_RESPONSIBLE_purchaseOrders',
+            priority: 'بالا',
+            dueDaysOffset: 3
+          }
+        }
+      ]
+    }
   ]
 };

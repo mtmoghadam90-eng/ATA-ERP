@@ -338,6 +338,7 @@ export interface ERPSettings {
     importantProjectIds: string[];
   }>;
   deliveryChecklistTemplate?: string[];
+  workflows?: WorkflowRule[];
 }
 
 export interface ProjectReferralResponse {
@@ -487,6 +488,18 @@ export interface PackagingDelivery {
 
 
 
+export interface AfterSalesServiceItem {
+  id: string;
+  productId?: string;
+  productName: string;
+  issueDescription: string;
+  actionsTaken?: string;
+  startDate: string;
+  endDate?: string;
+  returnDate?: string;
+  status: 'در حال بررسی' | 'در حال تعمیر/خدمات' | 'تکمیل شده' | 'تحویل داده شده';
+}
+
 export interface AfterSalesService {
   id: string;
   projectId: string;
@@ -502,6 +515,7 @@ export interface AfterSalesService {
   status: 'در حال بررسی' | 'در حال تعمیر/خدمات' | 'تکمیل شده' | 'تحویل داده شده';
   createdAt: string;
   createdBy: string;
+  items?: AfterSalesServiceItem[];
 }
 
 export interface AuditLog {
@@ -515,5 +529,33 @@ export interface AuditLog {
   description: string;
   beforeState?: string; // LZW compressed
   afterState?: string;  // LZW compressed
+}
+
+export interface WorkflowRule {
+  id: string;
+  name: string;
+  active: boolean;
+  triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change';
+  conditions: {
+    field: string; // e.g. 'newOutcome', 'newStatus'
+    operator: 'equals' | 'not_equals';
+    value: string;
+  }[];
+  actions: {
+    id: string;
+    type: 'create_task' | 'send_notification';
+    taskConfig?: {
+      titleTemplate: string;
+      descTemplate: string;
+      assignedTo: string; // "MODULE_RESPONSIBLE_<moduleName>", "SALES_EXPERT", or a specific user full name
+      priority: 'پایین' | 'متوسط' | 'بالا' | 'فوری';
+      dueDaysOffset: number;
+    };
+    notificationConfig?: {
+      titleTemplate: string;
+      descTemplate: string;
+      module: string;
+    };
+  }[];
 }
 

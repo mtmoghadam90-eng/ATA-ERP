@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AfterSalesService, Project, Proforma, User, ERPSettings } from '../types';
+import { AfterSalesService, AfterSalesServiceItem, Project, Proforma, User, ERPSettings } from '../types';
 import { 
   Wrench, 
   Search, 
@@ -12,11 +12,14 @@ import {
   Calendar,
   CheckCircle2,
   AlertCircle,
-  Briefcase
+  Briefcase,
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { getTodayShamsi } from '../dateUtils';
 import ShamsiDatePicker from './ShamsiDatePicker';
+import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
 
 interface AfterSalesServicesViewProps {
   afterSalesServices: AfterSalesService[];
@@ -47,29 +50,67 @@ export default function AfterSalesServicesView({
   
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedProformaNumber, setSelectedProformaNumber] = useState('');
-  const [itemName, setItemName] = useState('');
-  const [issueDescription, setIssueDescription] = useState('');
-  const [actionsTaken, setActionsTaken] = useState('');
-  const [startDate, setStartDate] = useState(getTodayShamsi());
-  const [endDate, setEndDate] = useState('');
-  const [returnDate, setReturnDate] = useState('');
-  const [status, setStatus] = useState<AfterSalesService['status']>('در حال بررسی');
   
+  // List of multiple items in table
+  const [serviceItems, setServiceItems] = useState<AfterSalesServiceItem[]>([]);
+
+  // Individual item form states (for adding/updating a row)
+  const [itemProductDropdownVal, setItemProductDropdownVal] = useState(''); // holds productId or 'custom' or ''
+  const [itemCustomName, setItemCustomName] = useState('');
+  const [itemIssue, setItemIssue] = useState('');
+  const [itemAction, setItemAction] = useState('');
+  const [itemStartDate, setItemStartDate] = useState(getTodayShamsi());
+  const [itemStatus, setItemStatus] = useState<AfterSalesServiceItem['status']>('در حال بررسی');
+  const [itemEndDate, setItemEndDate] = useState('');
+  const [itemReturnDate, setItemReturnDate] = useState('');
+  
+  // Track currently edited row ID in the table
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
   const [deleteActivitiesWithService, setDeleteActivitiesWithService] = useState(true);
+
+  // Filter proformas of the selected project to won/approved ones
+  const selectedProjectProformas = useMemo(() => {
+    if (!selectedProjectId) return [];
+    return proformas.filter(p => {
+      if (p.projectId !== selectedProjectId) return false;
+      const outcome = getProformaOutcomeStatus(p);
+      return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+    });
+  }, [selectedProjectId, proformas]);
+
+  // Selected proforma object
+  const selectedProfObj = useMemo(() => {
+    if (!selectedProformaNumber || !selectedProjectId) return null;
+    return proformas.find(p => p.proformaNumber === selectedProformaNumber && p.projectId === selectedProjectId);
+  }, [selectedProformaNumber, selectedProjectId, proformas]);
+
+  // Won items of the selected proforma
+  const proformaItems = useMemo(() => {
+    if (!selectedProfObj) return [];
+    return getWonItemsOfProforma(selectedProfObj);
+  }, [selectedProfObj]);
+
+  const resetItemForm = () => {
+    setItemProductDropdownVal('');
+    setItemCustomName('');
+    setItemIssue('');
+    setItemAction('');
+    setItemStartDate(getTodayShamsi());
+    setItemStatus('در حال بررسی');
+    setItemEndDate('');
+    setItemReturnDate('');
+    setEditingRowId(null);
+  };
 
   const resetForm = () => {
     setEditingService(null);
     setSelectedProjectId('');
     setSelectedProformaNumber('');
-    setItemName('');
-    setIssueDescription('');
-    setActionsTaken('');
-    setStartDate(getTodayShamsi());
-    setEndDate('');
-    setReturnDate('');
-    setStatus('در حال بررسی');
+    setServiceItems([]);
+    resetItemForm();
   };
 
   const handleOpenModal = (service?: AfterSalesService) => {
@@ -77,41 +118,194 @@ export default function AfterSalesServicesView({
       setEditingService(service);
       setSelectedProjectId(service.projectId);
       setSelectedProformaNumber(service.proformaNumber || '');
-      setItemName(service.itemName);
-      setIssueDescription(service.issueDescription);
-      setActionsTaken(service.actionsTaken);
-      setStartDate(service.startDate);
-      setEndDate(service.endDate || '');
-      setReturnDate(service.returnDate || '');
-      setStatus(service.status);
+      
+      // Load items or fall back to legacy top-level fields
+      if (service.items && service.items.length > 0) {
+        setServiceItems(service.items);
+      } else {
+        setServiceItems([
+          {
+            id: `item-legacy-${Date.now()}`,
+            productName: service.itemName,
+            issueDescription: service.issueDescription,
+            actionsTaken: service.actionsTaken,
+            startDate: service.startDate,
+            endDate: service.endDate,
+            returnDate: service.returnDate,
+            status: service.status
+          }
+        ]);
+      }
     } else {
       resetForm();
     }
     setIsModalOpen(true);
   };
 
+  // Add or update a row in the table
+  const handleAddOrUpdateItem = () => {
+    let finalProductName = '';
+    let finalProductId: string | undefined = undefined;
+
+    if (itemProductDropdownVal === 'custom') {
+      if (!itemCustomName.trim()) {
+        alert('لطفاً نام کالا را به صورت دستی وارد کنید.');
+        return;
+      }
+      finalProductName = itemCustomName.trim();
+    } else if (itemProductDropdownVal) {
+      const selectedItem = proformaItems.find(item => item.productId === itemProductDropdownVal);
+      if (selectedItem) {
+        finalProductName = selectedItem.brand ? `${selectedItem.productName} (${selectedItem.brand})` : selectedItem.productName;
+        finalProductId = selectedItem.productId;
+      } else {
+        // Fallback
+        finalProductName = itemProductDropdownVal;
+      }
+    } else {
+      // If no dropdown chosen (e.g. no proforma selected), they must type
+      if (!itemCustomName.trim()) {
+        alert('لطفاً نام کالا را وارد کنید.');
+        return;
+      }
+      finalProductName = itemCustomName.trim();
+    }
+
+    if (!itemIssue) {
+      alert('لطفاً مشکل / دلیل برگشت را انتخاب یا مشخص کنید.');
+      return;
+    }
+
+    const itemData: AfterSalesServiceItem = {
+      id: editingRowId || `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      productId: finalProductId,
+      productName: finalProductName,
+      issueDescription: itemIssue,
+      actionsTaken: itemAction || undefined,
+      startDate: itemStartDate,
+      status: itemStatus,
+      endDate: (itemStatus === 'تکمیل شده' || itemStatus === 'تحویل داده شده') ? (itemEndDate || getTodayShamsi()) : undefined,
+      returnDate: itemStatus === 'تحویل داده شده' ? (itemReturnDate || getTodayShamsi()) : undefined,
+    };
+
+    if (editingRowId) {
+      setServiceItems(prev => prev.map(item => item.id === editingRowId ? itemData : item));
+    } else {
+      setServiceItems(prev => [...prev, itemData]);
+    }
+
+    resetItemForm();
+  };
+
+  const handleEditRow = (row: AfterSalesServiceItem) => {
+    setEditingRowId(row.id);
+    
+    // Attempt to match with proforma won items
+    if (proformaItems.length > 0) {
+      const matched = proformaItems.find(pi => pi.productId === row.productId);
+      if (matched) {
+        setItemProductDropdownVal(row.productId || '');
+      } else {
+        setItemProductDropdownVal('custom');
+        setItemCustomName(row.productName);
+      }
+    } else {
+      setItemCustomName(row.productName);
+    }
+
+    setItemIssue(row.issueDescription);
+    setItemAction(row.actionsTaken || '');
+    setItemStartDate(row.startDate);
+    setItemStatus(row.status);
+    setItemEndDate(row.endDate || '');
+    setItemReturnDate(row.returnDate || '');
+  };
+
+  const handleDeleteRow = (rowId: string) => {
+    setServiceItems(prev => prev.filter(item => item.id !== rowId));
+    if (editingRowId === rowId) {
+      resetItemForm();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedProjectId || !itemName || !issueDescription) {
-      alert('لطفاً فیلدهای ضروری (پروژه، نام کالا/خدمات، مشکل/دلیل برگشت) را پر کنید.');
+    if (!selectedProjectId) {
+      alert('لطفاً پروژه را مشخص کنید.');
+      return;
+    }
+
+    if (serviceItems.length === 0) {
+      alert('لطفاً حداقل یک کالا در جدول اقلام خدمات پس از فروش ثبت کنید.');
       return;
     }
 
     const project = projects.find(p => p.id === selectedProjectId);
     if (!project) return;
 
+    // Calculate overall statistics from the items list
+    // Name summary: First product + other items count
+    const firstItem = serviceItems[0];
+    const itemNameSummary = serviceItems.length > 1 
+      ? `${firstItem.productName} و ${serviceItems.length - 1} کالای دیگر`
+      : firstItem.productName;
+
+    // Issue summary: First item issue
+    const issueSummary = firstItem.issueDescription;
+
+    // Combined actions summary
+    const actionsSummary = serviceItems
+      .map(item => item.actionsTaken)
+      .filter(Boolean)
+      .join(' | ') || '';
+
+    // Earliest start date
+    const startDates = serviceItems.map(item => item.startDate).sort();
+    const startDateSummary = startDates[0] || getTodayShamsi();
+
+    // Latest end dates and return dates
+    const completedItems = serviceItems.filter(item => item.endDate);
+    const endDates = completedItems.map(item => item.endDate as string).sort();
+    const endDateSummary = completedItems.length === serviceItems.length && endDates.length > 0 
+      ? endDates[endDates.length - 1] 
+      : undefined;
+
+    const deliveredItems = serviceItems.filter(item => item.returnDate);
+    const returnDates = deliveredItems.map(item => item.returnDate as string).sort();
+    const returnDateSummary = deliveredItems.length === serviceItems.length && returnDates.length > 0 
+      ? returnDates[returnDates.length - 1] 
+      : undefined;
+
+    // Calculate status:
+    // If all delivered -> تحویل داده شده
+    // Else if all completed or delivered -> تکمیل شده
+    // Else if any in progress/repair -> در حال تعمیر/خدمات
+    // Else -> در حال بررسی
+    let overallStatus: AfterSalesService['status'] = 'در حال بررسی';
+    const statuses = serviceItems.map(item => item.status);
+    if (statuses.every(s => s === 'تحویل داده شده')) {
+      overallStatus = 'تحویل داده شده';
+    } else if (statuses.every(s => s === 'تکمیل شده' || s === 'تحویل داده شده')) {
+      overallStatus = 'تکمیل شده';
+    } else if (statuses.some(s => s === 'در حال تعمیر/خدمات')) {
+      overallStatus = 'در حال تعمیر/خدمات';
+    } else {
+      overallStatus = 'در حال بررسی';
+    }
+
     const serviceData = {
       projectId: selectedProjectId,
       projectName: project.name,
       proformaNumber: selectedProformaNumber || undefined,
-      itemName,
-      issueDescription,
-      actionsTaken,
-      startDate,
-      endDate: endDate || undefined,
-      returnDate: returnDate || undefined,
-      status,
+      itemName: itemNameSummary,
+      issueDescription: issueSummary,
+      actionsTaken: actionsSummary,
+      startDate: startDateSummary,
+      endDate: endDateSummary,
+      returnDate: returnDateSummary,
+      status: overallStatus,
+      items: serviceItems,
       createdBy: currentUser?.fullName || 'سیستم'
     };
 
@@ -151,11 +345,6 @@ export default function AfterSalesServicesView({
       default: return 'bg-slate-100 text-slate-800 border-slate-200';
     }
   };
-
-  const selectedProjectProformas = useMemo(() => {
-    if (!selectedProjectId) return [];
-    return proformas.filter(p => p.projectId === selectedProjectId);
-  }, [selectedProjectId, proformas]);
 
   return (
     <div className="space-y-6">
@@ -210,13 +399,13 @@ export default function AfterSalesServicesView({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredServices.map(service => (
           <div key={service.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col">
-            <div className="p-5 flex-1">
+            <div className="p-5 flex-1 font-sans">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-bold border ${getStatusColor(service.status)} mb-2`}>
                     {service.status}
                   </span>
-                  <h3 className="font-bold text-slate-800 text-lg">{service.itemName}</h3>
+                  <h3 className="font-bold text-slate-800 text-lg leading-tight">{service.itemName}</h3>
                 </div>
                 <div className="flex gap-1">
                   <button
@@ -265,18 +454,44 @@ export default function AfterSalesServicesView({
                 )}
               </div>
 
-              <div className="mt-5 p-4 bg-slate-50 rounded-xl space-y-3 text-sm">
-                <div>
-                  <span className="text-slate-500 font-bold block mb-1">دلیل برگشت/مشکل:</span>
-                  <p className="text-slate-700 leading-relaxed font-medium">{service.issueDescription}</p>
-                </div>
-                {service.actionsTaken && (
-                  <div>
-                    <span className="text-slate-500 font-bold block mb-1">اقدامات انجام شده:</span>
-                    <p className="text-slate-700 leading-relaxed font-medium">{service.actionsTaken}</p>
+              {service.items && service.items.length > 0 ? (
+                <div className="mt-5 border-t border-slate-100 pt-4 space-y-3">
+                  <span className="text-xs font-extrabold text-slate-400 block mb-2">لیست اقلام و وضعیت‌ها:</span>
+                  <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-1">
+                    {service.items.map((item, idx) => (
+                      <div key={item.id || idx} className="p-3 bg-slate-50 rounded-xl border border-slate-150 space-y-2 hover:bg-slate-100/50 transition-colors">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="font-bold text-slate-800 text-xs leading-tight">{item.productName}</span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${getStatusColor(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-600 space-y-1">
+                          <p><span className="text-slate-400 font-bold">مشکل:</span> {item.issueDescription}</p>
+                          {item.actionsTaken && <p><span className="text-slate-400 font-bold">اقدامات:</span> {item.actionsTaken}</p>}
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1.5 border-t border-slate-200/50 mt-1">
+                            <span>شروع: <span className="font-mono">{item.startDate}</span></span>
+                            {item.endDate && <span>پایان: <span className="font-mono">{item.endDate}</span></span>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="mt-5 p-4 bg-slate-50 rounded-xl space-y-3 text-sm">
+                  <div>
+                    <span className="text-slate-500 font-bold block mb-1">دلیل برگشت/مشکل:</span>
+                    <p className="text-slate-700 leading-relaxed font-medium">{service.issueDescription}</p>
+                  </div>
+                  {service.actionsTaken && (
+                    <div>
+                      <span className="text-slate-500 font-bold block mb-1">اقدامات انجام شده:</span>
+                      <p className="text-slate-700 leading-relaxed font-medium">{service.actionsTaken}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
               <span>ثبت کننده: {service.createdBy}</span>
@@ -296,9 +511,9 @@ export default function AfterSalesServicesView({
       {/* Modal Form */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
             <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                 <Wrench className="text-indigo-500" size={20} />
                 {editingService ? 'ویرایش خدمات پس از فروش' : 'ثبت خدمات پس از فروش جدید'}
               </h3>
@@ -308,28 +523,39 @@ export default function AfterSalesServicesView({
             </div>
             
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* بخش ۱: اطلاعات پروژه و پیش‌فاکتور */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">پروژه (مشتری) <span className="text-red-500">*</span></label>
                   <select
                     value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
+                    onChange={(e) => {
+                      setSelectedProjectId(e.target.value);
+                      setSelectedProformaNumber('');
+                      resetItemForm();
+                      setServiceItems([]);
+                    }}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700"
                     required
                   >
                     <option value="">انتخاب پروژه...</option>
                     {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                      <option key={p.id} value={p.id}>
+                        {p.code ? `${p.code} - ` : ''}{p.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">پیش‌فاکتور مرجع (اختیاری)</label>
+                  <label className="text-sm font-bold text-slate-700">پیش‌فاکتور مرجع (فقط پیش‌فاکتورهای تایید شده)</label>
                   <select
                     value={selectedProformaNumber}
-                    onChange={(e) => setSelectedProformaNumber(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium font-mono"
+                    onChange={(e) => {
+                      setSelectedProformaNumber(e.target.value);
+                      resetItemForm();
+                    }}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700 font-mono"
                     disabled={!selectedProjectId}
                   >
                     <option value="">انتخاب پیش‌فاکتور...</option>
@@ -338,98 +564,252 @@ export default function AfterSalesServicesView({
                     ))}
                   </select>
                 </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700">نام کالا یا خدمات درخواستی <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={itemName}
-                    onChange={(e) => setItemName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
-                    placeholder="مثال: سنسور دما PT100"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700">مشکل / دلیل برگشت <span className="text-red-500">*</span></label>
-                  <select
-                    value={issueDescription}
-                    onChange={(e) => setIssueDescription(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-700"
-                    required
-                  >
-                    <option value="">انتخاب کنید...</option>
-                    {settings.dropdownItems?.returnReasons?.map((reason, idx) => (
-                      <option key={idx} value={reason}>{reason}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700">اقدامات انجام شده</label>
-                  <textarea
-                    value={actionsTaken}
-                    onChange={(e) => setActionsTaken(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium min-h-[100px] resize-y"
-                    placeholder="شرح اقداماتی که برای رفع مشکل انجام شده است (تعمیر، تعویض، تنظیم مجدد و ...)"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <ShamsiDatePicker
-                    label="تاریخ دریافت کالا / شروع خدمات"
-                    value={startDate}
-                    onChange={(val) => setStartDate(val)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">وضعیت <span className="text-red-500">*</span></label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as any)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700"
-                    required
-                  >
-                    <option value="در حال بررسی">در حال بررسی</option>
-                    <option value="در حال تعمیر/خدمات">در حال تعمیر/خدمات</option>
-                    <option value="تکمیل شده">تکمیل شده</option>
-                    <option value="تحویل داده شده">تحویل داده شده</option>
-                  </select>
-                </div>
-
-                <div className={`space-y-2 ${(status === 'در حال بررسی' || status === 'در حال تعمیر/خدمات') ? 'pointer-events-none opacity-50' : ''}`}>
-                  <ShamsiDatePicker
-                    label="تاریخ پایان تعمیرات (تکمیل شده)"
-                    value={endDate}
-                    onChange={(val) => setEndDate(val)}
-                  />
-                </div>
-
-                <div className={`space-y-2 ${status !== 'تحویل داده شده' ? 'pointer-events-none opacity-50' : ''}`}>
-                  <ShamsiDatePicker
-                    label="تاریخ تحویل مجدد به مشتری"
-                    value={returnDate}
-                    onChange={(val) => setReturnDate(val)}
-                  />
-                </div>
-
               </div>
 
+              {/* بخش ۲: فرم ثبت یا ویرایش ردیف کالا در جدول */}
+              <div className="border border-indigo-100 rounded-2xl p-4 bg-indigo-50/25 space-y-4">
+                <h4 className="text-sm font-black text-indigo-950 flex items-center gap-2 pb-2 border-b border-indigo-100">
+                  <Wrench size={16} className="text-indigo-600" />
+                  {editingRowId ? 'ویرایش ردیف کالا در جدول اقلام' : 'ثبت ردیف جدید در جدول کالاها'}
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* نام کالا */}
+                  <div className="space-y-1.5 md:col-span-2 lg:col-span-1">
+                    <label className="text-xs font-bold text-slate-700">نام کالا / تجهیز برگشتی <span className="text-red-500">*</span></label>
+                    {selectedProformaNumber && proformaItems.length > 0 ? (
+                      <div className="space-y-2">
+                        <select
+                          value={itemProductDropdownVal}
+                          onChange={(e) => {
+                            setItemProductDropdownVal(e.target.value);
+                            if (e.target.value !== 'custom' && e.target.value !== '') {
+                              const selected = proformaItems.find(pi => pi.productId === e.target.value);
+                              if (selected) {
+                                setItemCustomName(selected.brand ? `${selected.productName} (${selected.brand})` : selected.productName);
+                              }
+                            } else {
+                              setItemCustomName('');
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                        >
+                          <option value="">انتخاب کالا از پیش‌فاکتور...</option>
+                          {proformaItems.map(pi => (
+                            <option key={pi.productId} value={pi.productId}>
+                              {pi.productName}{pi.brand ? ` (${pi.brand})` : ''} - {pi.quantity} {pi.unit}
+                            </option>
+                          ))}
+                          <option value="custom">ورود دستی نام کالا...</option>
+                        </select>
+                        {(itemProductDropdownVal === 'custom' || !itemProductDropdownVal) && (
+                          <input
+                            type="text"
+                            value={itemCustomName}
+                            onChange={(e) => setItemCustomName(e.target.value)}
+                            placeholder="نام کالا را دستی وارد کنید"
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={itemCustomName}
+                        onChange={(e) => setItemCustomName(e.target.value)}
+                        placeholder="نام کالا را وارد کنید"
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                        disabled={!selectedProjectId}
+                      />
+                    )}
+                  </div>
+
+                  {/* علت برگشت */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">علت برگشت / نوع مشکل <span className="text-red-500">*</span></label>
+                    <select
+                      value={itemIssue}
+                      onChange={(e) => setItemIssue(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-750"
+                      disabled={!selectedProjectId}
+                    >
+                      <option value="">انتخاب کنید...</option>
+                      {settings.dropdownItems?.returnReasons?.map((reason, idx) => (
+                        <option key={idx} value={reason}>{reason}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* وضعیت کالا */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">وضعیت کالا <span className="text-red-500">*</span></label>
+                    <select
+                      value={itemStatus}
+                      onChange={(e) => setItemStatus(e.target.value as any)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold text-slate-700"
+                      disabled={!selectedProjectId}
+                    >
+                      <option value="در حال بررسی">در حال بررسی</option>
+                      <option value="در حال تعمیر/خدمات">در حال تعمیر/خدمات</option>
+                      <option value="تکمیل شده">تکمیل شده</option>
+                      <option value="تحویل داده شده">تحویل داده شده</option>
+                    </select>
+                  </div>
+
+                  {/* اقدامات انجام شده */}
+                  <div className="space-y-1.5 lg:col-span-3">
+                    <label className="text-xs font-bold text-slate-700">اقدامات انجام شده</label>
+                    <input
+                      type="text"
+                      value={itemAction}
+                      onChange={(e) => setItemAction(e.target.value)}
+                      placeholder="شرح کارها و تعمیراتی که روی این کالا انجام شده است..."
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                      disabled={!selectedProjectId}
+                    />
+                  </div>
+
+                  {/* تاریخ دریافت */}
+                  <div className="space-y-1.5">
+                    <ShamsiDatePicker
+                      label="تاریخ دریافت کالا"
+                      value={itemStartDate}
+                      onChange={(val) => setItemStartDate(val)}
+                    />
+                  </div>
+
+                  {/* تاریخ پایان */}
+                  <div className={`space-y-1.5 ${(itemStatus === 'در حال بررسی' || itemStatus === 'در حال تعمیر/خدمات') ? 'pointer-events-none opacity-50' : ''}`}>
+                    <ShamsiDatePicker
+                      label="تاریخ پایان خدمات"
+                      value={itemEndDate}
+                      onChange={(val) => setItemEndDate(val)}
+                    />
+                  </div>
+
+                  {/* تاریخ تحویل */}
+                  <div className={`space-y-1.5 ${itemStatus !== 'تحویل داده شده' ? 'pointer-events-none opacity-50' : ''}`}>
+                    <ShamsiDatePicker
+                      label="تاریخ تحویل به مشتری"
+                      value={itemReturnDate}
+                      onChange={(val) => setItemReturnDate(val)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-indigo-100/50">
+                  {editingRowId && (
+                    <button
+                      type="button"
+                      onClick={resetItemForm}
+                      className="px-4 py-1.5 text-xs text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold"
+                    >
+                      انصراف از ویرایش
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddOrUpdateItem}
+                    className="flex items-center gap-1.5 px-5 py-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold shadow-sm"
+                    disabled={!selectedProjectId}
+                  >
+                    {editingRowId ? <Check size={14} /> : <Plus size={14} />}
+                    <span>{editingRowId ? 'بروزرسانی کالا در جدول' : 'افزودن کالا به جدول'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* بخش ۳: جدول اقلام ثبت شده در خدمات */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-black text-slate-800">لیست اقلام ثبت شده برای این خدمات ({serviceItems.length} کالا)</label>
+                  <span className="text-xs text-slate-400 font-medium">حداقل ثبت یک کالا الزامی است</span>
+                </div>
+                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-right text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                          <th className="p-3 w-12 text-center">ردیف</th>
+                          <th className="p-3">نام کالا / تجهیز</th>
+                          <th className="p-3">علت برگشت و اقدامات</th>
+                          <th className="p-3 text-center">وضعیت</th>
+                          <th className="p-3">تاریخ‌ها</th>
+                          <th className="p-3 w-20 text-center">عملیات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {serviceItems.map((item, index) => (
+                          <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                            <td className="p-3 text-center font-mono text-slate-400">{index + 1}</td>
+                            <td className="p-3 font-bold text-slate-800">{item.productName}</td>
+                            <td className="p-3 space-y-1">
+                              <p><span className="text-slate-400 font-bold">علت برگشت:</span> <span className="text-slate-700 font-semibold">{item.issueDescription}</span></p>
+                              {item.actionsTaken && <p><span className="text-slate-400 font-bold">اقدام:</span> <span className="text-slate-600 font-medium">{item.actionsTaken}</span></p>}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${getStatusColor(item.status)}`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="p-3 space-y-0.5 text-[11px] font-medium text-slate-600">
+                              <p>دریافت: <span className="font-mono">{item.startDate}</span></p>
+                              {item.endDate && <p>پایان: <span className="font-mono">{item.endDate}</span></p>}
+                              {item.returnDate && <p>تحویل: <span className="font-mono">{item.returnDate}</span></p>}
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditRow(item)}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                  title="ویرایش ردیف"
+                                >
+                                  <Edit size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRow(item.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="حذف ردیف"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {serviceItems.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="p-8 text-center text-slate-400 font-medium">
+                              <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                                <AlertTriangle className="text-amber-500" size={32} />
+                                <p className="text-sm font-bold text-slate-600">جدول اقلام خالی است</p>
+                                <p className="text-xs text-slate-400">لطفاً ابتدا از فرم بالا کالا را ثبت و روی دکمه «افزودن کالا به جدول» کلیک کنید.</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* دکمه‌های فرم */}
               <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors font-bold"
+                  className="px-5 py-2.5 text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors font-bold text-sm"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all font-bold"
+                  className="px-5 py-2.5 text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all font-bold text-sm"
                 >
-                  {editingService ? 'ذخیره تغییرات' : 'ثبت خدمات پس از فروش'}
+                  {editingService ? 'ذخیره کل تغییرات' : 'ثبت نهایی خدمات پس از فروش'}
                 </button>
               </div>
             </form>
