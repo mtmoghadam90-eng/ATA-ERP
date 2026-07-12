@@ -3,6 +3,7 @@ import { X, Plus, Users, Briefcase, Truck, Package, Building, User, Trash2 } fro
 import { Customer, Project, Supplier, Product, ERPSettings, User as ERPUser } from '../types';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
+import { uploadFile } from '../imageUtils';
 
 interface QuickAddModalProps {
   isOpen: boolean;
@@ -154,6 +155,12 @@ export default function QuickAddModal({
   const [prodCategory, setProdCategory] = useState(() => (settings.dropdownItems?.categories || ['کنترلر و PLC', 'سنسور و ترانسمیتر', 'فلومتر و ابزار جریان', 'شیرآلات صنعتی', 'اتصالات و متریال نصب', 'تجهیزات هیدرولیک', 'سایر'])[0] || 'سایر');
   const [prodDisplayName, setProdDisplayName] = useState('');
   const [prodDescription, setProdDescription] = useState('');
+  const [prodSize, setProdSize] = useState('');
+  const [prodMeasurementRange, setProdMeasurementRange] = useState('');
+  const [prodSupplyType, setProdSupplyType] = useState<'INVENTORY' | 'ORDER'>('ORDER');
+  const [prodInitialStock, setProdInitialStock] = useState('');
+  const [prodImages, setProdImages] = useState<string[]>([]);
+
 
   // ---------------------------------------------------------------------------
   // TITLES & ICONS
@@ -319,7 +326,11 @@ export default function QuickAddModal({
         unit: "عدد",
         basePriceRIYAL: 0,
         minStockLevel: 0,
-        stockLevel: 0,
+        stockLevel: prodSupplyType === 'INVENTORY' ? (parseInt(prodInitialStock) || 0) : 0,
+        size: prodSize,
+        measurementRange: prodMeasurementRange,
+        supplyType: prodSupplyType,
+        images: prodImages,
         customValues
       });
       onSuccess(newProd);
@@ -644,6 +655,60 @@ export default function QuickAddModal({
                 )}
               </div>
 
+              {/* Product Images */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500">تصاویر محصول</label>
+                <div className="border-2 border-dashed border-slate-250 hover:border-sky-500 rounded-xl p-4 transition text-center cursor-pointer bg-slate-50/50 hover:bg-slate-50 relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={async (e) => {
+                      const files = e.target.files;
+                      if (files) {
+                        for (const file of Array.from(files) as File[]) {
+                          try {
+                            const url = await uploadFile(file);
+                            setProdImages(prev => [...prev, url]);
+                          } catch (err: any) {
+                            alert(err.message || 'خطا در بارگذاری تصویر محصول');
+                          }
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                  />
+                  <div className="text-slate-500 space-y-1">
+                    <div className="text-xs font-bold text-slate-700">انتخاب یا رها کردن تصاویر کالا</div>
+                    <div className="text-[10px] text-slate-400">فرمت‌های تصویری (JPG, PNG) - ذخیره‌سازی محلی</div>
+                  </div>
+                </div>
+
+                {/* Thumbnail Previews */}
+                {prodImages.length > 0 && (
+                  <div className="grid grid-cols-4 gap-3 pt-2">
+                    {prodImages.map((img, idx) => (
+                      <div key={idx} className="relative group aspect-square rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                        <img
+                          src={img}
+                          alt={`Product image ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setProdImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-red-700 z-20"
+                          title="حذف تصویر"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Custom Fields */}
               <div className="pt-3 border-t border-slate-100">
                 <CustomFieldsForm
@@ -838,11 +903,16 @@ export default function QuickAddModal({
                         <option value="">-- انتخاب فرد مالی (مشتری) --</option>
                         {(() => {
                           const selectedCustObj = customers.find(c => c.id === projCustomerId);
-                          const filtered = selectedCustObj && selectedCustObj.linkedCustomerIds && selectedCustObj.linkedCustomerIds.length > 0
-                            ? customers.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id))
-                            : customers;
+                          let filtered = customers.filter(c => c.customerType === 'حقیقی');
+                          if (selectedCustObj) {
+                            if (selectedCustObj.customerType === 'حقوقی') {
+                              filtered = filtered.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            } else {
+                              filtered = filtered.filter(c => c.id === selectedCustObj.id || selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            }
+                          }
                           return filtered.map(c => {
-                            const name = c.customerType === 'حقوقی' ? c.companyName : `${c.firstName || ''} ${c.lastName || ''}`.trim();
+                            const name = `${c.firstName || ''} ${c.lastName || ''}`.trim();
                             return (
                               <option key={c.id} value={c.id}>{name}</option>
                             );
@@ -876,11 +946,16 @@ export default function QuickAddModal({
                         <option value="">-- انتخاب فرد فنی (مشتری) --</option>
                         {(() => {
                           const selectedCustObj = customers.find(c => c.id === projCustomerId);
-                          const filtered = selectedCustObj && selectedCustObj.linkedCustomerIds && selectedCustObj.linkedCustomerIds.length > 0
-                            ? customers.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id))
-                            : customers;
+                          let filtered = customers.filter(c => c.customerType === 'حقیقی');
+                          if (selectedCustObj) {
+                            if (selectedCustObj.customerType === 'حقوقی') {
+                              filtered = filtered.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            } else {
+                              filtered = filtered.filter(c => c.id === selectedCustObj.id || selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            }
+                          }
                           return filtered.map(c => {
-                            const name = c.customerType === 'حقوقی' ? c.companyName : `${c.firstName || ''} ${c.lastName || ''}`.trim();
+                            const name = `${c.firstName || ''} ${c.lastName || ''}`.trim();
                             return (
                               <option key={c.id} value={c.id}>{name}</option>
                             );
@@ -1002,14 +1077,29 @@ export default function QuickAddModal({
                 <div className="space-y-3 pt-3">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-bold text-slate-700">محصولات یا اقلام درخواستی کارفرما / مشتری</label>
-                    <button
-                      type="button"
-                      onClick={handleAddItemLine}
-                      className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded text-[10px] font-bold flex items-center gap-1 transition"
-                    >
-                      <Plus size={12} />
-                      افزودن ردیف محصول
-                    </button>
+                    <div className="flex gap-2 items-center">
+                      {addProduct && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNestedProductIndex(null);
+                            setNestedQuickAddType('product');
+                          }}
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded text-[10px] font-bold flex items-center gap-1 transition"
+                        >
+                          <Plus size={12} />
+                          تعریف سریع کالا
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleAddItemLine}
+                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded text-[10px] font-bold flex items-center gap-1 transition"
+                      >
+                        <Plus size={12} />
+                        افزودن ردیف محصول
+                      </button>
+                    </div>
                   </div>
 
                   {projItemsNeeded.length > 0 ? (
@@ -1023,22 +1113,10 @@ export default function QuickAddModal({
                               className="flex-1 border border-slate-200 rounded px-2 py-1 text-xs bg-white text-right min-w-0"
                             >
                               {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.displayName}</option>
+                                <option key={p.id} value={p.id}>{p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}</option>
                               ))}
                             </select>
-                            {addProduct && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setNestedProductIndex(index);
-                                  setNestedQuickAddType('product');
-                                }}
-                                className="px-2 py-1 text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 rounded border border-sky-200 hover:border-sky-300 transition shrink-0 flex items-center justify-center font-bold"
-                                title="تعریف سریع کالای جدید"
-                              >
-                                <Plus size={12} />
-                              </button>
-                            )}
+
                           </div>
                           <div className="w-20">
                             <input
@@ -1239,6 +1317,55 @@ export default function QuickAddModal({
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">سایز (Size)</label>
+                  <input
+                    type="text"
+                    value={prodSize}
+                    onChange={(e) => setProdSize(e.target.value)}
+                    placeholder="مثال: '2 یا DN50"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right font-medium"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">رنج اندازه‌گیری (Range)</label>
+                  <input
+                    type="text"
+                    value={prodMeasurementRange}
+                    onChange={(e) => setProdMeasurementRange(e.target.value)}
+                    placeholder="مثال: 0 to 10 bar"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right font-medium"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">نوع تامین</label>
+                  <select
+                    value={prodSupplyType}
+                    onChange={(e) => setProdSupplyType(e.target.value as 'INVENTORY' | 'ORDER')}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                  >
+                    <option value="INVENTORY">موجود در انبار</option>
+                    <option value="ORDER">قابل سفارش</option>
+                  </select>
+                </div>
+                {prodSupplyType === 'INVENTORY' && (
+                  <div className="space-y-1.5 border-t border-slate-100 pt-3 mt-3">
+                    <label className="text-xs font-semibold text-emerald-600">موجودی اولیه در انبار</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={prodInitialStock}
+                      onChange={(e) => setProdInitialStock(e.target.value)}
+                      placeholder="0"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-right font-medium bg-emerald-50/30"
+                    />
+                  </div>
+                )}
+              </div>
+
+
+
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500">مشخصات فنی و توضیحات</label>
                 <textarea
@@ -1297,6 +1424,8 @@ export default function QuickAddModal({
           products={products}
           addProduct={addProduct}
           users={users}
+          initialCustType={(nestedCustomerTarget === 'projFinancialContact' || nestedCustomerTarget === 'projTechnicalContact') ? 'حقیقی' : undefined}
+          initialLinkedCustomerIds={((nestedCustomerTarget === 'projFinancialContact' || nestedCustomerTarget === 'projTechnicalContact') && projCustomerId) ? [projCustomerId] : undefined}
           onSuccess={(newEntity) => {
             if (newEntity && newEntity.id) {
               if (nestedQuickAddType === 'customer') {

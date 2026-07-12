@@ -62,7 +62,7 @@ export default function Sidebar({
     { id: 'customers', name: 'مشتریان', icon: Users },
     { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)', icon: Briefcase },
     { id: 'proformas', name: 'پیش‌فاکتورها', icon: FileText },
-    { id: 'products', name: 'کالاها و تجهیزات', icon: Package },
+    { id: 'products', name: 'کالا و انبار', icon: Package },
     { id: 'suppliers', name: 'تأمین‌کنندگان', icon: Truck },
     { id: 'supplierInquiries', name: 'استعلام از تأمین‌کنندگان', icon: HelpCircle },
     { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', icon: ShoppingCart },

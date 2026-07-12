@@ -2,6 +2,17 @@
  * Types & Interfaces for Abzar Tamin Arshia ERP
  */
 
+export interface InventoryTransaction {
+  id: string;
+  productId: string;
+  date: string;
+  type: 'IN' | 'OUT';
+  quantity: number;
+  referenceId?: string; // proformaId, etc.
+  referenceType?: 'PROFORMA' | 'MANUAL' | 'PURCHASE_ORDER' | 'PROJECT';
+  notes?: string;
+}
+
 export interface Customer {
   id: string;
   customerType: 'حقیقی' | 'حقوقی';
@@ -52,6 +63,7 @@ export interface Product {
   description: string;
   stockLevel: number; // Current inventory
   minStockLevel: number; // Threshold for reordering
+  supplyType?: 'INVENTORY' | 'ORDER';
   size?: string; // سایز
   measurementRange?: string; // رنج اندازه گیری
   images?: string[]; // فایل های تصویر
@@ -83,6 +95,7 @@ export interface ProformaItem {
   quantity: number;
   unitPriceRIYAL: number;
   totalPriceRIYAL: number;
+  supplyMethod?: 'INVENTORY' | 'ORDER';
   status?: 'جاری' | 'برنده' | 'بازنده';
   lossReason?: string;
   techSpecs?: string;
@@ -177,7 +190,7 @@ export interface Project {
   estimatedValueRIYAL?: number; // Optional/legacy
   probabilityPercent?: number; // Optional/legacy
   status: 'جدید' | 'در حال مذاکره' | 'ارائه پیش‌فاکتور' | 'برنده (موفق)' | 'باخته' | 'لغو شده' | 'نیمه برنده';
-  itemsNeeded?: { productId: string; name: string; quantity: number }[];
+  itemsNeeded?: { productId: string; name: string; quantity: number, supplyMethod?: 'INVENTORY' | 'ORDER' }[];
   description: string;
   customValues?: Record<string, any>;
   lossReason?: string;
@@ -196,6 +209,7 @@ export interface Project {
   agreedDeliveryDate?: string;      // تاریخ توافق‌شده تحویل
   endUser?: string;                 // مصرف‌کننده نهایی
   closingDate?: string;             // تاریخ بسته شدن
+  attachments?: { name: string; url: string; }[]; // فایل‌های درخواست
 }
 
 export interface Transaction {

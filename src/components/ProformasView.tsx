@@ -316,6 +316,7 @@ export default function ProformasView({
       productName: prod.displayName,
       productCode: prod.code,
       brand: prod.brand,
+      supplyMethod: prod.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY',
       quantity: newItems[index].quantity,
       unitPriceRIYAL: Math.round(basePriceInSelectedCurrency * 100) / 100,
       techSpecs: newItems[index].techSpecs || '',
@@ -500,10 +501,11 @@ export default function ProformasView({
   const formatRawRIYAL = (num: number) => {
     return num.toLocaleString('fa-IR') + ' ریال';
   };
-  const mapPersianCurrencyToEnglish = (cur: string): 'USD' | 'EUR' | 'AED' | undefined => {
+  const mapPersianCurrencyToEnglish = (cur: string): 'USD' | 'EUR' | 'AED' | 'CNY' | undefined => {
     if (cur === 'دلار') return 'USD';
     if (cur === 'یورو') return 'EUR';
     if (cur === 'درهم') return 'AED';
+    if (cur === 'یوان') return 'CNY';
     return undefined;
   };
   const formatCurrency = (num: number, cur?: Proforma['currency']) => {
@@ -1971,6 +1973,7 @@ export default function ProformasView({
                     <option value="دلار">دلار آمریکا (USD)</option>
                     <option value="یورو">یورو (EUR)</option>
                     <option value="درهم">درهم امارات (AED)</option>
+                    <option value="یوان">یوان چین (CNY)</option>
                   </select>
                 </div>
               </div>
@@ -2002,6 +2005,7 @@ export default function ProformasView({
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                         {/* Product Selector */}
                         <div className="col-span-5">
+                          <div className="flex flex-col gap-2">
                           <div className="flex gap-1 items-center">
                             <select
                               value={item.productId}
@@ -2009,9 +2013,10 @@ export default function ProformasView({
                               className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white text-right min-w-0"
                             >
                               <option value="">-- انتخاب کالا --</option>
-                              {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.displayName}</option>
-                              ))}
+                              {products.map(p => {
+                                 let stockText = (p.supplyType === 'INVENTORY' || !p.supplyType) ? ` | موجودی: ${p.stockLevel || 0}` : '';
+                                 return <option key={p.id} value={p.id}>{p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}{stockText}</option>
+                              })}
                             </select>
                             {addProduct && (
                               <button
@@ -2026,6 +2031,35 @@ export default function ProformasView({
                                 <Plus size={14} />
                               </button>
                             )}
+                          </div>
+                        
+                        {/* Additional row for item config */}
+                        <div className="flex gap-3 mt-1 pt-1 border-t border-slate-100/50 w-full">
+                           <div className="flex items-center gap-2">
+                             <label className="text-[10px] text-slate-500">منبع تامین:</label>
+                             
+                                {(() => {
+                                  const selectedProd = products.find(p => p.id === item.productId);
+                                  const isOrderOnly = selectedProd?.supplyType === 'ORDER';
+                                  return (
+                                    <select
+                                      value={item.supplyMethod || 'INVENTORY'}
+                                      onChange={(e) => {
+                                        const newItems = [...items];
+                                        newItems[idx].supplyMethod = e.target.value as any;
+                                        setItems(newItems);
+                                      }}
+                                      className="border border-slate-200 rounded-md px-1.5 py-1 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                    >
+                                      {!isOrderOnly && <option value="INVENTORY">از انبار</option>}
+                                      <option value="ORDER">سفارش خارجی (قابل سفارش)</option>
+                                    </select>
+                                  );
+                                })()}
+
+                           </div>
+                        </div>
+
                           </div>
                         </div>
                         {/* Quantity */}

@@ -1195,7 +1195,7 @@ export default function PurchaseOrdersView({
                           >
                             <option value="">-- انتخاب کالا --</option>
                             {products.map(p => (
-                              <option key={p.id} value={p.id}>{p.code} - {p.displayName}</option>
+                              <option key={p.id} value={p.id}>{p.code} - {p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}</option>
                             ))}
                           </select>
                           {addProduct && (

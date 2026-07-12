@@ -32,6 +32,7 @@ import { getTodayShamsi } from '../dateUtils';
 import { getProformaOutcomeStatus } from '../useERPStore';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
+import { uploadFile } from '../imageUtils';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import { exportToCSV } from '../excelUtils';
 import ConfirmModal from './ConfirmModal';
@@ -157,7 +158,7 @@ export default function ProjectsView({
   const [expectedCloseDate, setExpectedCloseDate] = useState('');
   const [status, setStatus] = useState<Project['status']>('جدید');
   const [description, setDescription] = useState('');
-  const [itemsNeeded, setItemsNeeded] = useState<{ productId: string; name: string; quantity: number }[]>([]);
+  const [itemsNeeded, setItemsNeeded] = useState<{ productId: string; name: string; quantity: number, supplyMethod?: 'INVENTORY' | 'ORDER' }[]>([]);
   const [lossReason, setLossReason] = useState('');
 
   // Quick Customer Creation States
@@ -186,6 +187,8 @@ export default function ProjectsView({
   const [agreedDeliveryDate, setAgreedDeliveryDate] = useState('');
   const [endUser, setEndUser] = useState('');
   const [closingDate, setClosingDate] = useState('');
+  const [attachments, setAttachments] = useState<{ name: string; url: string; size: number; }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Helper to get latest proforma of a project
   const getLatestProformaOfProject = (projectId: string) => {
@@ -227,7 +230,8 @@ export default function ProjectsView({
       {
         productId: defaultProduct.id,
         name: defaultProduct.displayName,
-        quantity: 1
+        quantity: 1,
+        supplyMethod: defaultProduct.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY'
       }
     ]);
   };
@@ -242,7 +246,7 @@ export default function ProjectsView({
     setItemsNeeded(
       itemsNeeded.map((item, i) =>
         i === index
-          ? { ...item, productId: prodId, name: selectedProd.displayName }
+          ? { ...item, productId: prodId, name: selectedProd.displayName, supplyMethod: selectedProd.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY' }
           : item
       )
     );
@@ -295,6 +299,7 @@ export default function ProjectsView({
     setAgreedDeliveryDate('');
     setEndUser('');
     setClosingDate('');
+    setAttachments([]);
 
     setShowModal(true);
   };
@@ -325,6 +330,7 @@ export default function ProjectsView({
     setAgreedDeliveryDate(proj.agreedDeliveryDate || '');
     setEndUser(proj.endUser || '');
     setClosingDate(proj.closingDate || '');
+    setAttachments(proj.attachments || []);
 
     setShowModal(true);
   };
@@ -371,7 +377,8 @@ export default function ProjectsView({
       winningDate,
       agreedDeliveryDate,
       endUser,
-      closingDate
+      closingDate,
+      attachments
     };
 
     if (editingProject) {
@@ -497,7 +504,7 @@ export default function ProjectsView({
       p.agreedDeliveryDate || '',
       p.closingDate || '',
       p.expectedCloseDate || '',
-      p.itemsNeeded?.map(item => `${item.name} (${item.quantity} عدد)`).join(' - ') || '',
+      p.itemsNeeded?.map(item => `${item.name} (${item.quantity} عدد - ${item.supplyMethod === 'ORDER' ? 'سفارش' : 'انبار'})`).join(' - ') || '',
       p.description
     ]);
 
@@ -761,8 +768,19 @@ export default function ProjectsView({
                         <span className="text-[9px] font-extrabold text-slate-500">اقلام درخواستی:</span>
                         {p.itemsNeeded.map((item, i) => (
                           <span key={i} className="text-[9px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">
-                            {item.name} ({item.quantity} عدد)
+                            {item.name} ({item.quantity} عدد - {item.supplyMethod === 'ORDER' ? 'سفارشی' : 'انباری'})
                           </span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Attachments Display */}
+                    {p.attachments && p.attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 bg-slate-50/50 p-1.5 rounded-lg border border-slate-100">
+                        <span className="text-[9px] font-extrabold text-slate-500 flex items-center gap-0.5"><Paperclip size={10} /> پیوست‌ها:</span>
+                        {p.attachments.map((att, i) => (
+                          <a key={i} href={att.url} target="_blank" rel="noreferrer" className="text-[9px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 px-1.5 py-0.5 rounded border border-sky-200 transition">
+                            {att.name}
+                          </a>
                         ))}
                       </div>
                     )}
@@ -1092,11 +1110,16 @@ export default function ProjectsView({
                         <option value="">-- انتخاب فرد مالی (مشتری) --</option>
                         {(() => {
                           const selectedCustObj = customers.find(c => c.id === customerId);
-                          const filtered = selectedCustObj && selectedCustObj.linkedCustomerIds && selectedCustObj.linkedCustomerIds.length > 0
-                            ? customers.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id))
-                            : customers;
+                          let filtered = customers.filter(c => c.customerType === 'حقیقی');
+                          if (selectedCustObj) {
+                            if (selectedCustObj.customerType === 'حقوقی') {
+                              filtered = filtered.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            } else {
+                              filtered = filtered.filter(c => c.id === selectedCustObj.id || selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            }
+                          }
                           return filtered.map(c => {
-                            const name = c.customerType === 'حقوقی' ? c.companyName : `${c.firstName || ''} ${c.lastName || ''}`.trim();
+                            const name = `${c.firstName || ''} ${c.lastName || ''}`.trim();
                             return (
                               <option key={c.id} value={c.id}>{name}</option>
                             );
@@ -1131,11 +1154,16 @@ export default function ProjectsView({
                         <option value="">-- انتخاب فرد فنی (مشتری) --</option>
                         {(() => {
                           const selectedCustObj = customers.find(c => c.id === customerId);
-                          const filtered = selectedCustObj && selectedCustObj.linkedCustomerIds && selectedCustObj.linkedCustomerIds.length > 0
-                            ? customers.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id))
-                            : customers;
+                          let filtered = customers.filter(c => c.customerType === 'حقیقی');
+                          if (selectedCustObj) {
+                            if (selectedCustObj.customerType === 'حقوقی') {
+                              filtered = filtered.filter(c => selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            } else {
+                              filtered = filtered.filter(c => c.id === selectedCustObj.id || selectedCustObj.linkedCustomerIds?.includes(c.id));
+                            }
+                          }
                           return filtered.map(c => {
-                            const name = c.customerType === 'حقوقی' ? c.companyName : `${c.firstName || ''} ${c.lastName || ''}`.trim();
+                            const name = `${c.firstName || ''} ${c.lastName || ''}`.trim();
                             return (
                               <option key={c.id} value={c.id}>{name}</option>
                             );
@@ -1264,14 +1292,29 @@ export default function ProjectsView({
                 <div className="md:col-span-2 space-y-3 pt-3 border-t border-slate-100">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-bold text-slate-700">محصولات یا اقلام درخواستی کارفرما / مشتری</label>
-                    <button
-                      type="button"
-                      onClick={handleAddItemLine}
-                      className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded text-xs font-bold flex items-center gap-1.5 transition"
-                    >
-                      <Plus size={12} />
-                      افزودن ردیف محصول
-                    </button>
+                    <div className="flex gap-2 items-center">
+                      {addProduct && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickAddProductIndex(null);
+                            setQuickAddType('product');
+                          }}
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded text-xs font-bold flex items-center gap-1.5 transition"
+                        >
+                          <Plus size={12} />
+                          تعریف سریع کالا
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleAddItemLine}
+                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded text-xs font-bold flex items-center gap-1.5 transition"
+                      >
+                        <Plus size={12} />
+                        افزودن ردیف محصول
+                      </button>
+                    </div>
                   </div>
 
                   {itemsNeeded.length > 0 ? (
@@ -1285,22 +1328,10 @@ export default function ProjectsView({
                               className="flex-1 border border-slate-200 rounded px-2 py-1 text-xs bg-white text-right min-w-0"
                             >
                               {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.code} - {p.displayName}</option>
+                                <option key={p.id} value={p.id}>{p.code} - {p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}</option>
                               ))}
                             </select>
-                            {addProduct && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setQuickAddProductIndex(index);
-                                  setQuickAddType('product');
-                                }}
-                                className="px-2 py-1 text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 rounded border border-sky-200 hover:border-sky-300 transition shrink-0 flex items-center justify-center font-bold"
-                                title="تعریف سریع کالای جدید"
-                              >
-                                <Plus size={12} />
-                              </button>
-                            )}
+
                           </div>
                           <div className="w-24">
                             <input
@@ -1339,6 +1370,68 @@ export default function ProjectsView({
                     placeholder="شرح اهداف کارفرما، نوع متریال درخواستی..."
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
                   />
+                </div>
+
+
+                {/* Attachments */}
+                <div className="space-y-1.5 md:col-span-2 pt-3 border-t border-slate-100 mt-2">
+                  <label className="text-xs font-semibold text-slate-500">فایل‌های پیوست (نقشه‌ها، استعلام‌ها و ...)</label>
+                  <div className="border-2 border-dashed border-slate-200 hover:border-sky-500 rounded-xl p-4 transition text-center cursor-pointer bg-slate-50 relative">
+                    <input
+                      type="file"
+                      multiple
+                      onChange={async (e) => {
+                        const files = e.target.files;
+                        if (files) {
+                          setIsUploading(true);
+                          try {
+                            for (const file of Array.from(files) as File[]) {
+                              const url = await uploadFile(file);
+                              setAttachments(prev => [...prev, { name: file.name, url, size: file.size }]);
+                            }
+                          } catch (err: any) {
+                            alert(err.message || 'خطا در بارگذاری فایل');
+                          } finally {
+                            setIsUploading(false);
+                          }
+                        }
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                      disabled={isUploading}
+                    />
+                    <div className="text-slate-500 space-y-1">
+                      <div className="text-xs font-bold text-slate-700">
+                        {isUploading ? 'در حال بارگذاری...' : 'انتخاب یا رها کردن فایل‌ها'}
+                      </div>
+                      <div className="text-[10px] text-slate-400">PDF, Excel, Word, Images - ذخیره‌سازی ابری</div>
+                    </div>
+                  </div>
+
+                  {attachments.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
+                      {attachments.map((file, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                          <div className="flex flex-col overflow-hidden max-w-[85%]">
+                            <span className="truncate font-semibold text-slate-700" title={file.name}>{file.name}</span>
+                            <span className="text-[10px] text-slate-400">{(file.size / 1024).toFixed(1)} KB</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <a href={file.url} target="_blank" rel="noreferrer" className="text-sky-600 hover:text-sky-800" title="مشاهده">
+                              مشاهده
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-red-500 hover:text-red-700 transition"
+                              title="حذف فایل"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Dynamic Custom Fields Form Section */}
@@ -2050,6 +2143,8 @@ export default function ProjectsView({
           products={products}
           addProduct={addProduct}
           users={users}
+          initialCustType={(quickAddCustomerTarget === 'financialContact' || quickAddCustomerTarget === 'technicalContact') ? 'حقیقی' : undefined}
+          initialLinkedCustomerIds={((quickAddCustomerTarget === 'financialContact' || quickAddCustomerTarget === 'technicalContact') && customerId) ? [customerId] : undefined}
           onSuccess={(newEntity) => {
             if (newEntity && newEntity.id) {
               if (quickAddType === 'customer') {
@@ -2064,8 +2159,12 @@ export default function ProjectsView({
                 } else {
                   setCustomerId(newEntity.id);
                 }
-              } else if (quickAddType === 'product' && quickAddProductIndex !== null) {
-                handleItemProductChange(quickAddProductIndex, newEntity.id);
+              } else if (quickAddType === 'product') {
+                if (quickAddProductIndex !== null) {
+                  handleItemProductChange(quickAddProductIndex, newEntity.id);
+                } else {
+                  setItemsNeeded([...itemsNeeded, { productId: newEntity.id, name: newEntity.displayName || newEntity.name, quantity: 1 }]);
+                }
               }
             }
             setQuickAddType(null);

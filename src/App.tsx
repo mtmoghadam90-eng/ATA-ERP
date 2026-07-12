@@ -200,6 +200,7 @@ export default function App() {
         return (
           <ProductsView 
             products={store.products}
+            inventoryTransactions={store.inventoryTransactions}
             addProduct={store.addProduct}
             updateProduct={store.updateProduct}
             deleteProduct={store.deleteProduct}
