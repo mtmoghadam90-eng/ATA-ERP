@@ -69,11 +69,10 @@ export default function Sidebar({
     { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا', icon: Boxes },
     { id: 'afterSalesServices', name: 'خدمات پس از فروش', icon: Wrench },
     { id: 'transactions', name: 'دریافت و پرداخت ریالی', icon: ArrowDownLeft },
-    { id: 'rates', name: 'نرخ ارز روزانه', icon: TrendingUp },
     { id: 'tasks', name: 'وظایف و پیگیری', icon: CheckSquare, badge: taskCount > 0 ? String(taskCount) : null, badgeColor: 'bg-sky-500 text-white' },
     { id: 'referrals', name: 'کارتابل ارجاعات کار', icon: Inbox, badge: referralsCount > 0 ? String(referralsCount) : null, badgeColor: 'bg-amber-500 text-slate-900 font-extrabold animate-pulse' },
     { id: 'users', name: 'مدیریت کاربران', icon: ShieldCheck },
-    { id: 'settings', name: 'تنظیمات سیستم', icon: SettingsIcon },
+        { id: 'settings', name: 'تنظیمات سیستم', icon: SettingsIcon },
   ];
 
   // Sort menu items based on custom order if configured

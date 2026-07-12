@@ -412,7 +412,6 @@ export interface User {
     suppliers: boolean;
     purchaseOrders: boolean;
     transactions: boolean;
-    rates: boolean;
     tasks: boolean;
     referrals: boolean;
     settings: boolean;

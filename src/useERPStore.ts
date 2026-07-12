@@ -104,7 +104,6 @@ export const SEED_USERS: User[] = [
       suppliers: true,
       purchaseOrders: true,
       transactions: true,
-      rates: true,
       tasks: true,
       referrals: true,
       settings: true,
@@ -129,7 +128,6 @@ export const SEED_USERS: User[] = [
       suppliers: true,
       purchaseOrders: true,
       transactions: true,
-      rates: true,
       tasks: true,
       referrals: true,
       settings: false,
@@ -154,7 +152,6 @@ export const SEED_USERS: User[] = [
       suppliers: true,
       purchaseOrders: true,
       transactions: true,
-      rates: true,
       tasks: true,
       referrals: true,
       settings: false,
@@ -355,7 +352,7 @@ export function useERPStore() {
     loadData();
   }, []);
 
-  const fetchRatesFromAPI = async () => {
+  const fetchRatesFromAPI = async (silent = false) => {
     try {
       const response = await fetch('/api/rates');
       if (!response.ok) throw new Error('API response not ok');
@@ -377,18 +374,37 @@ export function useERPStore() {
           return updated;
         });
         console.log('Exchange rates updated from tgju.com successfully!');
+        
+        if (data.hasErrors || (data.failedCurrencies && data.failedCurrencies.length > 0)) {
+           if (silent && (currentUser?.role === 'admin' || currentUser?.isSystemAdmin)) {
+             alert('در بروزرسانی خودکار نرخ برخی ارزها خطایی رخ داد. لطفا بررسی کنید یا مقادیر را دستی ثبت کنید.');
+           }
+           return false; // Return false if there were some errors so manual click shows failure alert
+        }
+        
         return true;
       }
     } catch (err) {
       console.warn('Failed to auto-fetch exchange rates from tgju:', err);
+      if (silent && (currentUser?.role === 'admin' || currentUser?.isSystemAdmin)) {
+          alert('خطا در ارتباط با سرور برای بروزرسانی نرخ ارز. لطفا قیمت را دستی ثبت کنید.');
+      }
     }
     return false;
   };
 
-  // Auto-fetch exchange rates on startup once initialized from tgju.com API
+  // Auto-fetch exchange rates on startup once initialized from tgju.com API, and daily at 14:00
   useEffect(() => {
     if (isInitialized) {
-      fetchRatesFromAPI();
+      fetchRatesFromAPI(true);
+      
+      const interval = setInterval(() => {
+        const now = new Date();
+        if (now.getHours() === 14 && now.getMinutes() === 0) {
+          fetchRatesFromAPI(true);
+        }
+      }, 60000);
+      return () => clearInterval(interval);
     }
   }, [isInitialized]);
 

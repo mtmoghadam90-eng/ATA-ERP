@@ -41,7 +41,8 @@ import {
   Wrench,
   History
 } from 'lucide-react';
-import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog, WorkflowRule } from '../types';
+import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog, WorkflowRule, ExchangeRate } from '../types';
+import RatesView from './RatesView';
 import { decompressLZW } from '../utils/compress';
 import ConfirmModal from './ConfirmModal';
 import { compressAndResizeImage, uploadFile } from '../imageUtils';
@@ -56,6 +57,9 @@ interface SettingsViewProps {
   currentUser?: User | null;
   projects?: Project[];
   auditLogs?: AuditLog[];
+  exchangeRates?: ExchangeRate[];
+  updateExchangeRate?: (id: string, newRate: number) => void;
+  fetchRatesFromAPI?: (silent?: boolean) => Promise<boolean>;
 }
 
 export default function SettingsView({
@@ -68,6 +72,9 @@ export default function SettingsView({
   currentUser = null,
   projects = [],
   auditLogs = [],
+  exchangeRates = [],
+  updateExchangeRate,
+  fetchRatesFromAPI
 }: SettingsViewProps) {
   const template = settings?.proformaTemplates?.[0] || {
     name: 'قالب پیش‌فرض رسمی',
@@ -93,7 +100,7 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows' | 'rates'>('general');
 
   // Workflow builder states
   const [editingRule, setEditingRule] = useState<WorkflowRule | null>(null);
@@ -667,9 +674,35 @@ export default function SettingsView({
           <History size={16} className="text-violet-500" />
           سابقه اقدامات (Audit Log)
         </button>
+
+        <button
+          onClick={() => setActiveTab('rates')}
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
+            activeTab === 'rates'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <TrendingUp size={16} className="text-emerald-500" />
+          نرخ ارز روزانه
+        </button>
       </div>
 
-      {activeTab === 'general' ? (
+      {activeTab === 'rates' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="mb-6">
+            <h3 className="text-lg font-bold text-slate-800">نرخ ارز روزانه</h3>
+            <p className="text-slate-500 text-sm mt-1">مدیریت نرخ‌های تسعیر ارز در سیستم</p>
+          </div>
+          {exchangeRates && updateExchangeRate && fetchRatesFromAPI && (
+            <RatesView 
+              exchangeRates={exchangeRates} 
+              updateExchangeRate={updateExchangeRate} 
+              fetchRatesFromAPI={fetchRatesFromAPI} 
+            />
+          )}
+        </div>
+      ) : activeTab === 'general' ? (
         <form onSubmit={handleSaveGeneral} className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
@@ -1558,7 +1591,7 @@ export default function SettingsView({
                         'packagingDelivery',
                         'afterSalesServices',
                         'transactions',
-                        'rates',
+                        
                         'tasks',
                         'referrals',
                         'users',
@@ -1587,7 +1620,7 @@ export default function SettingsView({
                   { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا', desc: 'مدیریت پکینگ‌لیست‌ها و تحویل محموله‌ها به مشتری', icon: Boxes },
                   { id: 'afterSalesServices', name: 'خدمات پس از فروش', desc: 'رسیدگی به درخواست‌ها و پشتیبانی پس از فروش و گارانتی', icon: Wrench },
                   { id: 'transactions', name: 'دریافت و پرداخت ریالی', desc: 'ثبت و کنترل تراکنش‌های مالی ریالی و صندوق شرکت', icon: ArrowDownLeft },
-                  { id: 'rates', name: 'نرخ ارز روزانه', desc: 'ثبت نرخ‌های روزانه ارزهای دلار، یورو و درهم', icon: TrendingUp },
+                
                   { id: 'tasks', name: 'وظایف و پیگیری', desc: 'مدیریت کارها، ددلاین‌ها و پیگیری‌های پرسنل فروش و فنی', icon: CheckSquare },
                   { id: 'referrals', name: 'کارتابل ارجاعات کار', desc: 'صندوق ورودی ارجاع امور فنی و بازرگانی پروژه‌ها بین همکاران', icon: Inbox },
                   { id: 'users', name: 'مدیریت کاربران', desc: 'تعریف پرسنل، نقش‌ها و تنظیمات دسترسی به هر ماژول', icon: ShieldCheck },

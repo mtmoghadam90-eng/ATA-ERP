@@ -597,7 +597,6 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     'purchaseOrders',
     'packagingDelivery',
     'transactions',
-    'rates',
     'tasks',
     'referrals',
     'users',

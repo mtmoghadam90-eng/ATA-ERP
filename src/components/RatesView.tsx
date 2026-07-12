@@ -13,7 +13,7 @@ import { ExchangeRate } from '../types';
 interface RatesViewProps {
   exchangeRates: ExchangeRate[];
   updateExchangeRate: (id: string, newRate: number) => void;
-  fetchRatesFromAPI: () => Promise<boolean>;
+  fetchRatesFromAPI: (silent?: boolean) => Promise<boolean>;
 }
 
 export default function RatesView({

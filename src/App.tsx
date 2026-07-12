@@ -8,7 +8,6 @@ import PurchaseOrdersView from './components/PurchaseOrdersView';
 import SuppliersView from './components/SuppliersView';
 import ProjectsView from './components/ProjectsView';
 import TransactionsView from './components/TransactionsView';
-import RatesView from './components/RatesView';
 import TasksView from './components/TasksView';
 import SettingsView from './components/SettingsView';
 import ReferralsView from './components/ReferralsView';
@@ -331,15 +330,7 @@ export default function App() {
             addProject={store.addProject}
           />
         );
-      case 'rates':
-        return (
-          <RatesView 
-            exchangeRates={store.exchangeRates}
-            updateExchangeRate={store.updateExchangeRate}
-            fetchRatesFromAPI={store.fetchRatesFromAPI}
-          />
-        );
-      case 'tasks':
+            case 'tasks':
         return (
           <TasksView 
             tasks={store.tasks}
@@ -412,6 +403,9 @@ export default function App() {
             currentUser={store.currentUser}
             projects={store.projects}
             auditLogs={store.auditLogs}
+            exchangeRates={store.exchangeRates}
+            updateExchangeRate={store.updateExchangeRate}
+            fetchRatesFromAPI={store.fetchRatesFromAPI}
           />
         );
       case 'users':

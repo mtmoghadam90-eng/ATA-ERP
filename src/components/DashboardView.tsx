@@ -410,7 +410,7 @@ export default function DashboardView({
           </div>
 
           <button 
-            onClick={() => setActiveTab('rates')}
+            onClick={() => setActiveTab('settings')}
             className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 hover:text-blue-600 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition text-center"
           >
             مشاهده و ویرایش نرخ ارزها ←

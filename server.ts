@@ -160,6 +160,7 @@ async function startServer() {
     };
 
     const rates: Record<string, number> = {};
+    const failedCurrencies: string[] = [];
 
     await Promise.all(
       Object.entries(urls).map(async ([key, url]) => {
@@ -197,7 +198,7 @@ async function startServer() {
           throw new Error("Could not parse price from HTML");
         } catch (err: any) {
           console.warn(`Failed to fetch rate for ${key}:`, err.message || err);
-          rates[key] = fallbacks[key as keyof typeof fallbacks];
+          failedCurrencies.push(key);
         }
       })
     );
@@ -205,6 +206,7 @@ async function startServer() {
     res.json({
       success: true,
       rates,
+      failedCurrencies,
       timestamp: new Date().toISOString()
     });
   });
