@@ -215,3 +215,8 @@ export function addWorkingDaysToShamsi(shamsiStr: string, workingDays: number): 
   return currentDate;
 }
 
+
+export function parsePersianDate(shamsiStr: string): Date {
+  const gStr = toGregorianStr(shamsiStr);
+  return new Date(gStr);
+}

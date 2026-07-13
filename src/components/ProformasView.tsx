@@ -272,6 +272,10 @@ export default function ProformasView({
     const newEng = mapPersianCurrencyToEnglish(newCurrency || 'ریال');
     const newRateObj = newEng ? exchangeRates.find(r => r.currency === newEng) : undefined;
     const newRate = newRateObj ? newRateObj.rateToRIYAL : 1;
+    
+    // Automatically set historicalExchangeRate to the current exchange rate
+    setHistoricalExchangeRate(newRate);
+
     const updatedItems = items.map(item => {
       // First, convert unit price from prevCurrency back to IRR
       const priceInRial = item.unitPriceRIYAL * (prevCurrency === 'ریال' ? 1 : prevRate);
@@ -2118,10 +2122,16 @@ export default function ProformasView({
                 {currency !== 'ریال' && (
                   <div className="space-y-1.5 bg-amber-50/30 p-2 rounded-lg border border-amber-200/50">
                     <label className="text-xs font-bold text-amber-800">نرخ فروش تاریخی (به ریال) *</label>
-                    <input
-                      type="number"
-                      value={historicalExchangeRate || ''}
-                      onChange={(e) => setHistoricalExchangeRate(Number(e.target.value))}
+                    
+                      <input
+                        type="number"
+                        value={historicalExchangeRate || ''}
+                        onChange={(e) => setHistoricalExchangeRate(Number(e.target.value))}
+                        disabled={(() => {
+                           if (!editingProforma) return false;
+                           return editingProforma.outcome === 'تأیید شده (برنده)' && (editingProforma.historicalExchangeRate || 0) > 0;
+                        })()}
+
                       placeholder="مثال: ۶۵۰۰۰۰"
                       className="w-full border border-amber-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none font-mono text-left bg-white"
                       required

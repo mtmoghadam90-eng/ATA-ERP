@@ -23,7 +23,7 @@ import {
 import { Transaction, Customer, Supplier, Project, ERPSettings, Proforma, ExchangeRate } from '../types';
 import { getTodayShamsi } from '../dateUtils';
 import { formatERPNumber } from '../numUtils';
-import { calculateProjectFinance, calculateCompanyFinanceSummary } from '../utils/finance';
+import { calculateProformaFinance, calculateProjectFinance, calculateCompanyFinanceSummary } from '../utils/finance';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -174,9 +174,25 @@ export default function TransactionsView({
   });
 
   // Total summary for all projects combined
-  const totalProjSales = computedProjectSummaries.reduce((sum, p) => sum + p.salesAmount, 0);
-  const totalProjReceived = computedProjectSummaries.reduce((sum, p) => sum + p.paidAmount, 0);
-  const totalProjRemaining = computedProjectSummaries.reduce((sum, p) => sum + p.remainingAmount, 0);
+  let totalProjSales: number | null = 0;
+  let totalProjReceived = 0;
+  let totalProjRemaining: number | null = 0;
+  
+  for (const p of computedProjectSummaries) {
+    if (p.salesAmount === null) {
+      totalProjSales = null;
+    } else if (totalProjSales !== null) {
+      totalProjSales += p.salesAmount;
+    }
+    
+    totalProjReceived += p.paidAmount;
+    
+    if (p.remainingAmount === null) {
+      totalProjRemaining = null;
+    } else if (totalProjRemaining !== null) {
+      totalProjRemaining += p.remainingAmount;
+    }
+  }
 
   // Find all proformas and transactions with incomplete historical or settlement rates
   const incompleteProformas = proformas.filter(pf => {
@@ -313,6 +329,99 @@ export default function TransactionsView({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. شناسه تراکنش
+    if (!documentNumber || documentNumber.trim() === '') {
+      alert('شناسه تراکنش (شماره سند) نباید خالی باشد.');
+      return;
+    }
+
+    // 2. تاریخ
+    if (!date) {
+      alert('تاریخ نباید خالی باشد.');
+      return;
+    }
+
+    // 4 & 5. شماره پیگیری برای حواله و چک
+    if ((paymentType === 'حواله بانکی' || paymentType === 'چک') && (!referenceNumber || referenceNumber.trim() === '')) {
+      alert('برای حواله بانکی یا چک، شماره پیگیری/شماره چک الزامی است.');
+      return;
+    }
+
+    // 6. مبلغ
+    if (amountRIYAL <= 0 && amountForeign <= 0) {
+      alert('مبلغ باید بیشتر از 0 باشد.');
+      return;
+    }
+
+    // 10. نرخ تبدیل برای ارزی
+    if (amountForeign > 0 && (!exchangeRate || exchangeRate <= 0)) {
+      alert('برای دریافت ارزی، وارد کردن نرخ تسویه (حتی 1 برای دریافت مستقیم) الزامی است.');
+      return;
+    }
+
+    // 8. پیش‌پرداخت بدون پروژه
+    if (receiptType === 'پیش‌پرداخت' && !proformaId && !projectId) {
+      alert('برای ثبت پیش‌پرداخت بدون اتصال به پیش‌فاکتور، انتخاب پروژه الزامی است.');
+      return;
+    }
+
+    // 13 & 15. Validation for editing
+    if (editingTransaction) {
+      if (editingTransaction.status === 'لغو شده' || editingTransaction.status === 'برگشت شده') {
+        alert('تراکنش لغو شده یا برگشت شده قابل ویرایش نیست.');
+        return;
+      }
+      
+      // Prevent changing amount on existing confirmed transaction unless it's just a status update
+      // Actually, if we want to be strict, only allow status changes
+      if (editingTransaction.amountRIYAL !== amountRIYAL || editingTransaction.amountForeign !== amountForeign) {
+         if (editingTransaction.status === 'تأیید شده') {
+             alert('امکان تغییر مبلغ برای تراکنش تأیید شده وجود ندارد. در صورت نیاز باید تراکنش را ابطال یا برگشت وجه ثبت کنید.');
+             return;
+         }
+      }
+    }
+
+    // 7 & 11. Overpayment check
+    if (type === 'دریافت' && proformaId && status !== 'لغو شده' && status !== 'برگشت شده' && !reversalOfTransactionId) {
+      const pf = proformas.find(p => p.id === proformaId);
+      if (pf) {
+        // Calculate remaining manually or use computed summaries
+        // To keep it simple, we use the computed remaining from pf
+        const summary = computedProjectSummaries.find(p => p.id === pf.projectId)?.summary.proformas.find(p => p.proformaId === proformaId);
+        if (summary) {
+           let newAmountForeign = 0;
+           if (amountForeign > 0) {
+              if (isDirectForeign) {
+                 newAmountForeign = amountForeign;
+              } else {
+                 newAmountForeign = exchangeRate > 0 ? (amountRIYAL / exchangeRate) : 0;
+              }
+           } else {
+              newAmountForeign = pf.currency === 'ریال' ? amountRIYAL : (exchangeRate > 0 ? amountRIYAL / exchangeRate : 0);
+           }
+           
+           // If we are editing, we should add back the old amount before checking
+           let oldAmountForeign = 0;
+           if (editingTransaction && editingTransaction.status === 'تأیید شده') {
+              if (editingTransaction.amountForeign > 0) {
+                 oldAmountForeign = editingTransaction.isDirectForeign ? editingTransaction.amountForeign : (editingTransaction.exchangeRate > 0 ? editingTransaction.amountRIYAL / editingTransaction.exchangeRate : 0);
+              } else {
+                 oldAmountForeign = pf.currency === 'ریال' ? editingTransaction.amountRIYAL : (editingTransaction.exchangeRate > 0 ? editingTransaction.amountRIYAL / editingTransaction.exchangeRate : 0);
+              }
+           }
+           
+           const actualRemaining = summary.remainingAmountForeign + oldAmountForeign;
+           
+           if (newAmountForeign > actualRemaining + 0.001) {
+              const confirmOver = window.confirm('مبلغ دریافتی بیش از مانده پیش‌فاکتور است. آیا مطمئن هستید؟ (مبلغ مازاد به عنوان مبلغ تخصیص‌نیافته در سطح پروژه ذخیره خواهد شد)');
+              if (!confirmOver) return;
+           }
+        }
+      }
+    }
+
 
     // Custom Fields Validation
     const moduleFields = (settings?.customFields || []).filter(f => f.module === 'transactions');
@@ -638,7 +747,7 @@ export default function TransactionsView({
               <div className="space-y-1">
                 <p className="text-xs text-slate-400 font-bold">مجموع مبلغ فروش پروژه‌ها</p>
                 <h4 className="text-lg font-extrabold text-slate-800 font-mono">
-                  {totalProjSales.toLocaleString('fa-IR')} <span className="text-xs font-normal text-slate-500">ریال</span>
+                  {totalProjSales !== null ? totalProjSales.toLocaleString('fa-IR') : <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>} <span className="text-xs font-normal text-slate-500">ریال</span>
                 </h4>
                 <p className="text-[10px] text-slate-400">بر اساس پیش‌فاکتورهای تایید شده</p>
               </div>
@@ -664,7 +773,7 @@ export default function TransactionsView({
               <div className="space-y-1">
                 <p className="text-xs text-slate-400 font-bold">مجموع مطالبات معوق (مانده طلب)</p>
                 <h4 className="text-lg font-extrabold text-amber-600 font-mono">
-                  {totalProjRemaining.toLocaleString('fa-IR')} <span className="text-xs font-normal">ریال</span>
+                  {totalProjRemaining !== null ? totalProjRemaining.toLocaleString('fa-IR') : <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>} <span className="text-xs font-normal">ریال</span>
                 </h4>
                 <p className="text-[10px] text-slate-400">مانده کل قابل وصول از پروژه‌ها</p>
               </div>
@@ -766,13 +875,13 @@ export default function TransactionsView({
                             </span>
                           </td>
                           <td className="p-4 text-left font-mono font-semibold text-slate-800">
-                            {p.salesAmount.toLocaleString('fa-IR')}
+                            {p.salesAmount !== null ? p.salesAmount.toLocaleString('fa-IR') : <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>}
                           </td>
                           <td className="p-4 text-left font-mono font-semibold text-emerald-600">
                             {p.paidAmount > 0 ? `+${p.paidAmount.toLocaleString('fa-IR')}` : '۰'}
                           </td>
                           <td className="p-4 text-left font-mono font-bold text-amber-600">
-                            {p.remainingAmount.toLocaleString('fa-IR')}
+                            {p.remainingAmount !== null ? p.remainingAmount.toLocaleString('fa-IR') : <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>}
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col items-center gap-1 min-w-[100px]">
@@ -844,16 +953,30 @@ export default function TransactionsView({
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-100/80">
                                     <div className="text-[10px] text-slate-400 font-bold">سود یا زیان تسعیر تحقق‌یافته</div>
-                                    <div className={`text-xs sm:text-sm font-extrabold font-mono mt-1 ${p.summary.totalRealizedGainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                      {p.summary.totalRealizedGainLoss >= 0 ? '+' : ''}{p.summary.totalRealizedGainLoss.toLocaleString('fa-IR')} <span className="text-[10px] font-normal">ریال</span>
+                                    <div className={`text-xs sm:text-sm font-extrabold font-mono mt-1 ${p.summary.totalRealizedGainLoss === null ? 'text-red-500' : p.summary.totalRealizedGainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                      {p.summary.totalRealizedGainLoss !== null ? (
+                                        <>
+                                          {p.summary.totalRealizedGainLoss >= 0 ? '+' : ''}
+                                          {p.summary.totalRealizedGainLoss.toLocaleString('fa-IR')} <span className="text-[10px] font-normal">ریال</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>
+                                      )}
                                     </div>
                                     <div className="text-[9px] text-slate-400 mt-0.5">سود/زیان مابه‌التفاوت نرخ وصولی و فروش</div>
                                   </div>
 
                                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-100/80">
                                     <div className="text-[10px] text-slate-400 font-bold">سود یا زیان تسعیر تحقق‌نیافته</div>
-                                    <div className={`text-xs sm:text-sm font-extrabold font-mono mt-1 ${p.summary.totalUnrealizedGainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                      {p.summary.totalUnrealizedGainLoss >= 0 ? '+' : ''}{p.summary.totalUnrealizedGainLoss.toLocaleString('fa-IR')} <span className="text-[10px] font-normal">ریال</span>
+                                    <div className={`text-xs sm:text-sm font-extrabold font-mono mt-1 ${p.summary.totalUnrealizedGainLoss === null ? 'text-red-500' : p.summary.totalUnrealizedGainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                      {p.summary.totalUnrealizedGainLoss !== null ? (
+                                        <>
+                                          {p.summary.totalUnrealizedGainLoss >= 0 ? '+' : ''}
+                                          {p.summary.totalUnrealizedGainLoss.toLocaleString('fa-IR')} <span className="text-[10px] font-normal">ریال</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>
+                                      )}
                                     </div>
                                     <div className="text-[9px] text-slate-400 mt-0.5">تغییر ارزش مطالبات وصول‌نشده به نرخ روز</div>
                                   </div>
@@ -907,11 +1030,11 @@ export default function TransactionsView({
                                                   rep.historicalExchangeRate.toLocaleString('fa-IR')
                                                 )}
                                               </td>
-                                              <td className="p-2 text-left font-mono">{rep.salesAmountHistoricalRiyal.toLocaleString('fa-IR')}</td>
+                                              <td className="p-2 text-left font-mono">{rep.salesAmountHistoricalRiyal !== null ? rep.salesAmountHistoricalRiyal.toLocaleString('fa-IR') : <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>}</td>
                                               <td className="p-2 text-left font-mono text-emerald-600">{rep.settledAmountForeign.toLocaleString('fa-IR')}</td>
                                               <td className="p-2 text-left font-mono text-emerald-600">{rep.actualReceivedRiyal.toLocaleString('fa-IR')}</td>
                                               <td className="p-2 text-left font-mono font-bold text-amber-600">{rep.remainingAmountForeign.toLocaleString('fa-IR')}</td>
-                                              <td className="p-2 text-left font-mono font-bold text-amber-600">{rep.remainingAmountCurrentRiyal.toLocaleString('fa-IR')}</td>
+                                              <td className="p-2 text-left font-mono font-bold text-amber-600">{rep.remainingAmountCurrentRiyal !== null ? rep.remainingAmountCurrentRiyal.toLocaleString('fa-IR') : <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded text-[10px]">⚠️ نامشخص</span>}</td>
                                             </tr>
                                           ))}
                                         </tbody>
@@ -1309,16 +1432,55 @@ export default function TransactionsView({
                   </div>
                 )}
 
-                {/* Amount */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">مبلغ نقد ریالی *</label>
-                  <input
-                    type="number"
-                    required
-                    value={amountRIYAL}
-                    onChange={(e) => setAmountRIYAL(Number(e.target.value))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left"
-                  />
+                {/* Financial Amounts */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">مبلغ ریالی (یا معادل ریالی) *</label>
+                    <input
+                      type="number"
+                      required
+                      value={amountRIYAL}
+                      onChange={(e) => setAmountRIYAL(Number(e.target.value))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">مبلغ ارزی (در صورت وجود)</label>
+                    <input
+                      type="number"
+                      value={amountForeign}
+                      onChange={(e) => setAmountForeign(Number(e.target.value))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left"
+                    />
+                  </div>
+                  
+                  {amountForeign > 0 && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">نرخ تبدیل / تسویه *</label>
+                        <input
+                          type="number"
+                          value={exchangeRate}
+                          onChange={(e) => setExchangeRate(Number(e.target.value))}
+                          required={amountForeign > 0}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left"
+                        />
+                      </div>
+                      
+                      <div className="space-y-1.5 flex items-end">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 w-full cursor-pointer h-[38px]">
+                          <input
+                            type="checkbox"
+                            checked={isDirectForeign}
+                            onChange={(e) => setIsDirectForeign(e.target.checked)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span>دریافت مستقیم ارزی است</span>
+                        </label>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Receipt Type */}

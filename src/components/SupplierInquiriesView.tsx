@@ -82,8 +82,31 @@ export default function SupplierInquiriesView({
   // Form States (New Inquiry)
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
-  const [inquiryItems, setInquiryItems] = useState<{id: string, productId: string, productName: string, quantity: number}[]>([]);
+  const [inquiryItems, setInquiryItems] = useState<any[]>([]);
   const [inquiryDate, setInquiryDate] = useState<string>(getTodayShamsi());
+  React.useEffect(() => {
+    if (selectedProjectId) {
+      const proj = projects.find(p => p.id === selectedProjectId);
+      if (proj && proj.itemsNeeded) {
+        setInquiryItems(proj.itemsNeeded.map(item => ({
+          id: `${Date.now()}-${Math.random()}`,
+          requestItemId: item.productId,
+          productName: item.name,
+          quantity: item.quantity,
+          priceForeign: 0,
+          priceRIYAL: 0,
+          currency: 'یورو',
+          deliveryTime: '',
+          notes: ''
+        })));
+      } else {
+        setInquiryItems([]);
+      }
+    } else {
+      setInquiryItems([]);
+    }
+  }, [selectedProjectId, projects]);
+
   const [initialNotes, setInitialNotes] = useState<string>('');
   const [priceRIYAL, setPriceRIYAL] = useState<number>(0);
   const [priceForeign, setPriceForeign] = useState<number>(0);
@@ -277,6 +300,7 @@ export default function SupplierInquiriesView({
   const [editFinFileSize, setEditFinFileSize] = useState<string>('');
   const [editNotes, setEditNotes] = useState<string>('');
   const [editStatus, setEditStatus] = useState<string>('پیش‌نویس');
+  const [editItems, setEditItems] = useState<any[]>([]);
 
   const [isUploadingEditTech, setIsUploadingEditTech] = useState<boolean>(false);
   const [uploadProgressEditTech, setUploadProgressEditTech] = useState<number>(0);
@@ -355,8 +379,8 @@ export default function SupplierInquiriesView({
   // Submit New Inquiry
   const handleSubmitInquiry = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProjectId || !selectedSupplierId) {
-      alert('لطفاً پروژه و تامین‌کننده را حتماً مشخص کنید.');
+    if (!selectedSupplierId) {
+      alert('لطفاً تامین‌کننده را حتماً مشخص کنید.');
       return;
     }
 
@@ -366,11 +390,16 @@ export default function SupplierInquiriesView({
     addSupplierInquiry({
       projectId: selectedProjectId,
       projectName: proj?.name || '',
-      items: inquiryItems.map(item => ({
-        id: `inqitem-${Date.now()}-${item.productId}`,
-        requestItemId: item.productId,
+      items: inquiryItems.map((item, idx) => ({
+        id: `inqitem-${Date.now()}-${idx}`,
+        requestItemId: item.requestItemId || '',
         productName: item.productName,
-        quantity: item.quantity
+        quantity: item.quantity,
+        priceForeign: item.priceForeign || undefined,
+        priceRIYAL: item.priceRIYAL || undefined,
+        currency: item.currency || undefined,
+        deliveryTime: item.deliveryTime || undefined,
+        notes: item.notes || undefined
       })),
       supplierId: selectedSupplierId,
       supplierName: supp?.name || '',
@@ -404,8 +433,8 @@ export default function SupplierInquiriesView({
 
     const updated: SupplierInquiry = {
       ...editingInquiry,
-      projectId: editProjectId,
-      projectName: proj?.name || '',
+      projectId: editProjectId || undefined,
+      projectName: proj?.name || undefined,
       supplierId: editSupplierId,
       supplierName: supp?.name || '',
       inquiryDate: editInquiryDate,
@@ -415,27 +444,14 @@ export default function SupplierInquiriesView({
       deliveryTime: editDeliveryTime || undefined,
       technicalProposalFile: editTechFileName || undefined,
       financialProposalFile: editFinFileName || undefined,
-      technicalProposalFileSize: editTechFileSize || (editTechFileName ? '1.4 MB' : undefined),
-      financialProposalFileSize: editFinFileSize || (editFinFileName ? '980 KB' : undefined),
+      technicalProposalFileSize: editTechFileSize || undefined,
+      financialProposalFileSize: editFinFileSize || undefined,
       notes: editNotes || undefined,
-      status: editStatus as any
+      status: editStatus as any,
+      items: editItems
     };
 
     updateSupplierInquiry(updated);
-    setEditingInquiry(null);
-  };
-
-  // Submit Step Log
-  const handleAddStep = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeInquiryForStep || !stepActionType) return;
-
-    addSupplierInquiryStep(activeInquiryForStep.id, {
-      date: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
-      title: stepActionType,
-      description: stepDesc,
-      type: 'update'
-    });
 
     setStepActionType('');
     setStepDesc('');
@@ -462,6 +478,23 @@ export default function SupplierInquiriesView({
   };
 
   // Submit Answer Log
+  
+  const handleAddStep = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeInquiryForStep) return;
+
+    addSupplierInquiryStep(activeInquiryForStep.id, {
+      date: getTodayShamsi() + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+      title: stepActionType || 'ثبت اقدام',
+      description: stepDesc,
+      type: 'sent'
+    });
+
+    setActiveInquiryForStep(null);
+    setStepActionType('');
+    setStepDesc('');
+  };
+
   const handleAddAnswer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeInquiryForAnswer) return;
@@ -849,6 +882,38 @@ export default function SupplierInquiriesView({
                       <div className="border-t border-slate-100 p-5 bg-slate-50/50 rounded-b-2xl space-y-5">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                           
+                                                    {/* Items Table Full Width */}
+                          {inq.items && inq.items.length > 0 && (
+                            <div className="col-span-1 lg:col-span-3 bg-white p-4 rounded-xl border border-slate-100">
+                              <h4 className="text-xs font-bold text-slate-700 border-b border-slate-100 pb-2 mb-3">اقلام استعلام و پیشنهاد سازنده</h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs text-right">
+                                  <thead className="bg-slate-50 text-slate-500">
+                                    <tr>
+                                      <th className="p-2 font-semibold">شرح کالا</th>
+                                      <th className="p-2 font-semibold text-center w-16">تعداد</th>
+                                      <th className="p-2 font-semibold w-24">قیمت ارزی</th>
+                                      <th className="p-2 font-semibold w-32">قیمت ریالی</th>
+                                      <th className="p-2 font-semibold w-24">زمان تحویل</th>
+                                      <th className="p-2 font-semibold">ملاحظات</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {inq.items.map((item, idx) => (
+                                      <tr key={idx} className="hover:bg-slate-50/50">
+                                        <td className="p-2 font-medium text-slate-700">{item.productName}</td>
+                                        <td className="p-2 text-center text-slate-600 font-mono">{item.quantity}</td>
+                                        <td className="p-2 font-mono text-slate-600">{item.priceForeign ? `${item.priceForeign.toLocaleString('fa-IR')} ${item.currency}` : '-'}</td>
+                                        <td className="p-2 font-mono text-slate-600">{item.priceRIYAL ? `${item.priceRIYAL.toLocaleString('fa-IR')} ریال` : '-'}</td>
+                                        <td className="p-2 text-slate-600">{item.deliveryTime || '-'}</td>
+                                        <td className="p-2 text-slate-500">{item.notes || '-'}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
                           {/* Column 1: Details & Files */}
                           <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-100">
                             <h4 className="text-xs font-bold text-slate-700 border-b border-slate-100 pb-2">مشخصات و مستندات آفر</h4>
@@ -1241,13 +1306,10 @@ export default function SupplierInquiriesView({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Project Select */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">انتخاب پروژه (کارفرما) <span className="text-rose-500">*</span></label>
+              <label className="block text-xs font-bold text-slate-700 mb-2">انتخاب پروژه (کارفرما) <span className="text-slate-400 font-normal">(اختیاری)</span></label>
               <select
                 value={selectedProjectId}
-                onChange={e => {
-                  setSelectedProjectId(e.target.value);
-                }}
-                required
+                onChange={e => setSelectedProjectId(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
               >
                 <option value="">-- انتخاب پروژه --</option>
@@ -1297,221 +1359,146 @@ export default function SupplierInquiriesView({
             </div>
           </div>
 
-          {/* Quick Offer pricing if available */}
-          <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-4">
-            <h3 className="text-xs font-bold text-slate-700">ثبت آفر اولیه (در صورت دریافت پاسخ در زمان ثبت پرونده)</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">ارز آفر</label>
-                <select
-                  value={currency}
-                  onChange={e => setCurrency(e.target.value as any)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none"
+          
+          {/* Items Table */}
+          <div className="mt-8">
+             <div className="flex justify-between items-center mb-4">
+                <label className="block text-sm font-bold text-slate-700">اقلام استعلام و پیشنهاد سازنده</label>
+                <button
+                   type="button"
+                   onClick={() => {
+                     setInquiryItems([...inquiryItems, {
+                       id: `new-${Date.now()}`,
+                       requestItemId: '',
+                       productName: '',
+                       quantity: 1,
+                       priceForeign: 0,
+                       priceRIYAL: 0,
+                       currency: 'یورو',
+                       deliveryTime: '',
+                       notes: ''
+                     }]);
+                   }}
+                   className="text-xs flex items-center gap-1 text-sky-600 hover:text-sky-700 bg-sky-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
-                  <option value="یورو">یورو</option>
-                  <option value="دلار">دلار</option>
-                  <option value="درهم">درهم</option>
-                  <option value="ریال">ریال</option>
-                  <option value="یوان">یوان</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">قیمت ارزی</label>
-                <input
-                  type="number"
-                  placeholder="مثال: 4500"
-                  value={priceForeign || ''}
-                  onChange={e => setPriceForeign(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none text-left"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">قیمت ریالی (اختیاری)</label>
-                <input
-                  type="number"
-                  placeholder="مبلغ به ریال"
-                  value={priceRIYAL || ''}
-                  onChange={e => setPriceRIYAL(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none text-left"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">زمان تحویل (Delivery Time)</label>
-                <input
-                  type="text"
-                  placeholder="مثال: ۶ الی ۸ هفته"
-                  value={deliveryTime}
-                  onChange={e => setDeliveryTime(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Simulated file selector inputs with drag and drop */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              {/* Technical File Dropzone */}
-              <div className="space-y-1">
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">بارگذاری پروپوزال فنی</label>
-                
-                {!techFileName ? (
-                  <div 
-                    className="border border-dashed border-slate-300 hover:border-sky-400 rounded-xl p-4 transition-all duration-200 cursor-pointer text-center bg-white hover:bg-sky-50/20 group relative"
-                    onClick={() => document.getElementById('tech-file-input')?.click()}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.classList.add('border-sky-400', 'bg-sky-50/40');
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.classList.remove('border-sky-400', 'bg-sky-50/40');
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.classList.remove('border-sky-400', 'bg-sky-50/40');
-                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                        handleFileUpload(e.dataTransfer.files[0], 'tech');
-                      }
-                    }}
-                  >
-                    <input 
-                      type="file" 
-                      id="tech-file-input" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleFileUpload(e.target.files[0], 'tech');
-                        }
-                      }}
-                    />
-                    <Upload className="mx-auto mb-2 text-slate-400 group-hover:text-sky-500 transition-colors" size={20} />
-                    <span className="block text-xs font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">انتخاب پروپوزال فنی</span>
-                    <span className="block text-[10px] text-slate-400 mt-1">یا فایل را به اینجا بکشید</span>
-                  </div>
-                ) : isUploadingTech ? (
-                  <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-2">
-                    <div className="flex justify-between items-center text-xs text-slate-600">
-                      <span className="font-medium animate-pulse">در حال آپلود پروپوزال فنی...</span>
-                      <span className="font-mono font-bold text-sky-600">{uploadProgressTech}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-sky-500 h-1.5 rounded-full transition-all duration-100"
-                        style={{ width: `${uploadProgressTech}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border border-emerald-100 rounded-xl p-3 bg-emerald-50/30 flex items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg shrink-0">
-                        <FileText size={16} />
-                      </div>
-                      <div className="overflow-hidden">
-                        <div className="font-bold text-slate-700 truncate" title={techFileName}>{techFileName}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">{techFileSize || '1.4 MB'}</div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTechFileName('');
-                        setTechFileSize('');
-                      }}
-                      className="text-rose-500 hover:text-rose-600 font-bold hover:bg-rose-50 p-1.5 rounded-lg transition-colors shrink-0"
-                      title="حذف فایل"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Financial File Dropzone */}
-              <div className="space-y-1">
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">بارگذاری آفر مالی</label>
-                
-                {!finFileName ? (
-                  <div 
-                    className="border border-dashed border-slate-300 hover:border-sky-400 rounded-xl p-4 transition-all duration-200 cursor-pointer text-center bg-white hover:bg-sky-50/20 group relative"
-                    onClick={() => document.getElementById('fin-file-input')?.click()}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.classList.add('border-sky-400', 'bg-sky-50/40');
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.classList.remove('border-sky-400', 'bg-sky-50/40');
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.classList.remove('border-sky-400', 'bg-sky-50/40');
-                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                        handleFileUpload(e.dataTransfer.files[0], 'fin');
-                      }
-                    }}
-                  >
-                    <input 
-                      type="file" 
-                      id="fin-file-input" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleFileUpload(e.target.files[0], 'fin');
-                        }
-                      }}
-                    />
-                    <Upload className="mx-auto mb-2 text-slate-400 group-hover:text-sky-500 transition-colors" size={20} />
-                    <span className="block text-xs font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">انتخاب آفر مالی</span>
-                    <span className="block text-[10px] text-slate-400 mt-1">یا فایل را به اینجا بکشید</span>
-                  </div>
-                ) : isUploadingFin ? (
-                  <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-2">
-                    <div className="flex justify-between items-center text-xs text-slate-600">
-                      <span className="font-medium animate-pulse">در حال آپلود آفر مالی...</span>
-                      <span className="font-mono font-bold text-sky-600">{uploadProgressFin}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-sky-500 h-1.5 rounded-full transition-all duration-100"
-                        style={{ width: `${uploadProgressFin}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border border-emerald-100 rounded-xl p-3 bg-emerald-50/30 flex items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg shrink-0">
-                        <FileText size={16} />
-                      </div>
-                      <div className="overflow-hidden">
-                        <div className="font-bold text-slate-700 truncate" title={finFileName}>{finFileName}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">{finFileSize || '980 KB'}</div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFinFileName('');
-                        setFinFileSize('');
-                      }}
-                      className="text-rose-500 hover:text-rose-600 font-bold hover:bg-rose-50 p-1.5 rounded-lg transition-colors shrink-0"
-                      title="حذف فایل"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+                   <Plus size={14} />
+                   افزودن ردیف دستی
+                </button>
+             </div>
+             
+             <div className="overflow-x-auto border border-slate-200 rounded-xl">
+               <table className="w-full text-xs text-right">
+                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                   <tr>
+                     <th className="p-3 font-semibold">شرح کالا</th>
+                     <th className="p-3 font-semibold w-24">تعداد</th>
+                     <th className="p-3 font-semibold w-32">قیمت ارزی</th>
+                     <th className="p-3 font-semibold w-24">ارز</th>
+                     <th className="p-3 font-semibold w-36">قیمت ریالی</th>
+                     <th className="p-3 font-semibold w-32">زمان تحویل</th>
+                     <th className="p-3 font-semibold">ملاحظات</th>
+                     <th className="p-3 font-semibold w-12 text-center">حذف</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-100">
+                   {inquiryItems.map((item, idx) => (
+                     <tr key={item.id} className="hover:bg-slate-50/50">
+                       <td className="p-2">
+                         <input type="text" value={item.productName} onChange={(e) => {
+                           const newItems = [...inquiryItems];
+                           newItems[idx].productName = e.target.value;
+                           setInquiryItems(newItems);
+                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-sky-400" placeholder="شرح کالا..." />
+                       </td>
+                       <td className="p-2">
+                         <input type="number" min="1" value={item.quantity} onChange={(e) => {
+                           const newItems = [...inquiryItems];
+                           newItems[idx].quantity = Number(e.target.value);
+                           setInquiryItems(newItems);
+                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-sky-400 font-mono text-left" />
+                       </td>
+                       <td className="p-2">
+                         <input type="number" value={item.priceForeign || ''} onChange={(e) => {
+                           const newItems = [...inquiryItems];
+                           const pf = Number(e.target.value);
+                           newItems[idx].priceForeign = pf;
+                           // Auto calc rial
+                           if (newItems[idx].currency === 'ریال') {
+                              newItems[idx].priceRIYAL = pf;
+                           } else {
+                              const mapping: any = { 'دلار': 'USD', 'یورو': 'EUR', 'درهم': 'AED', 'یوان': 'CNY' };
+                              const rateObj = exchangeRates.find(r => r.currency === mapping[newItems[idx].currency]);
+                              if (rateObj) newItems[idx].priceRIYAL = Math.round(pf * rateObj.rateToRIYAL);
+                           }
+                           setInquiryItems(newItems);
+                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-sky-400 font-mono text-left" placeholder="0" />
+                       </td>
+                       <td className="p-2">
+                         <select value={item.currency || 'یورو'} onChange={(e) => {
+                           const newItems = [...inquiryItems];
+                           const curr = e.target.value as any;
+                           newItems[idx].currency = curr;
+                           // Re-calc
+                           if (curr === 'ریال') {
+                              newItems[idx].priceRIYAL = newItems[idx].priceForeign;
+                           } else {
+                              const mapping: any = { 'دلار': 'USD', 'یورو': 'EUR', 'درهم': 'AED', 'یوان': 'CNY' };
+                              const rateObj = exchangeRates.find(r => r.currency === mapping[curr]);
+                              if (rateObj) newItems[idx].priceRIYAL = Math.round((newItems[idx].priceForeign || 0) * rateObj.rateToRIYAL);
+                           }
+                           setInquiryItems(newItems);
+                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-sky-400">
+                           <option value="یورو">یورو</option>
+                           <option value="دلار">دلار</option>
+                           <option value="درهم">درهم</option>
+                           <option value="یوان">یوان</option>
+                           <option value="ریال">ریال</option>
+                         </select>
+                       </td>
+                       <td className="p-2">
+                         <input type="number" value={item.priceRIYAL || ''} onChange={(e) => {
+                           const newItems = [...inquiryItems];
+                           newItems[idx].priceRIYAL = Number(e.target.value);
+                           setInquiryItems(newItems);
+                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-sky-400 font-mono text-left" placeholder="0" />
+                       </td>
+                       <td className="p-2">
+                         <input type="text" value={item.deliveryTime || ''} onChange={(e) => {
+                           const newItems = [...inquiryItems];
+                           newItems[idx].deliveryTime = e.target.value;
+                           setInquiryItems(newItems);
+                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-sky-400" placeholder="مثال: ۴ هفته" />
+                       </td>
+                       <td className="p-2">
+                         <input type="text" value={item.notes || ''} onChange={(e) => {
+                           const newItems = [...inquiryItems];
+                           newItems[idx].notes = e.target.value;
+                           setInquiryItems(newItems);
+                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-sky-400" placeholder="..." />
+                       </td>
+                       <td className="p-2 text-center">
+                         <button type="button" onClick={() => {
+                           const newItems = [...inquiryItems];
+                           newItems.splice(idx, 1);
+                           setInquiryItems(newItems);
+                         }} className="text-rose-500 hover:bg-rose-50 p-1.5 rounded transition-colors">
+                           <Trash2 size={16} />
+                         </button>
+                       </td>
+                     </tr>
+                   ))}
+                   {inquiryItems.length === 0 && (
+                     <tr>
+                       <td colSpan={8} className="p-6 text-center text-slate-400">ردیفی اضافه نشده است.</td>
+                     </tr>
+                   )}
+                 </tbody>
+               </table>
+             </div>
           </div>
-
+          
           {/* Notes */}
+
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">توضیحات و یادداشت‌ها</label>
             <textarea
@@ -2125,13 +2112,10 @@ export default function SupplierInquiriesView({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                 {/* Project Select */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">انتخاب پروژه (کارفرما) <span className="text-rose-500">*</span></label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">انتخاب پروژه (کارفرما) <span className="text-slate-400 font-normal">(اختیاری)</span></label>
                   <select
                     value={editProjectId}
-                    onChange={e => {
-                      setEditProjectId(e.target.value);
-                    }}
-                    required
+                    onChange={e => setEditProjectId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
                   >
                     <option value="">-- انتخاب پروژه --</option>

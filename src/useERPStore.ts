@@ -1519,6 +1519,7 @@ export function useERPStore() {
     saveToStorage('erp_transactions', updated, setTransactions);
     
     notifyModuleResponsible('transactions', 'ثبت تراکنش جدید', `یک تراکنش ${newTransaction.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} به مبلغ ${newTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال ثبت شد.`, newTransaction.projectId);
+    logAction('CREATE', 'دریافت و پرداخت', newTransaction.id, `ثبت تراکنش ${newTransaction.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} جدید به شماره ${newTransaction.documentNumber} و مبلغ ${newTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال`, undefined, newTransaction);
     
     if (newTransaction.projectId) {
       const typeStr = newTransaction.type === 'دریافت' ? 'دریافت' : 'پرداخت';
@@ -1546,10 +1547,14 @@ export function useERPStore() {
   };
 
   const updateTransaction = (updatedTransaction: Transaction) => {
+    const before = transactions.find(t => t.id === updatedTransaction.id);
     const updated = transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t);
     saveToStorage('erp_transactions', updated, setTransactions);
     
     notifyModuleResponsible('transactions', 'ویرایش تراکنش', `تراکنش شماره ${updatedTransaction.documentNumber} ویرایش شد.`, updatedTransaction.projectId);
+    if (before) {
+      logAction('UPDATE', 'دریافت و پرداخت', updatedTransaction.id, `ویرایش تراکنش ${updatedTransaction.type} به شماره ${updatedTransaction.documentNumber}`, before, updatedTransaction);
+    }
 
     if (updatedTransaction.projectId) {
       const typeStr = updatedTransaction.type === 'دریافت' ? 'دریافت' : 'پرداخت';
@@ -1594,6 +1599,16 @@ export function useERPStore() {
     saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
     
     const logText = `بروزرسانی استعلام تامین‌کننده ${updatedInquiry.supplierName} - وضعیت جدید: ${updatedInquiry.status}`;
+    
+    const oldInquiry = supplierInquiries.find(i => i.id === updatedInquiry.id);
+    if (oldInquiry && oldInquiry.status !== updatedInquiry.status) {
+       runWorkflows('supplier_inquiry_status_change', {
+         projectId: updatedInquiry.projectId,
+         newStatus: updatedInquiry.status,
+         oldStatus: oldInquiry.status,
+         inquiryId: updatedInquiry.id
+       });
+    }
     autoLogFactActivity(updatedInquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
   };
 
@@ -1803,6 +1818,13 @@ export function useERPStore() {
     saveToStorage('erp_after_sales_services', updated, setAfterSalesServices);
     
     const logText = `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName}`;
+    
+    runWorkflows('after_sales_service_status_change', {
+       projectId: newService.projectId,
+       newStatus: newService.status,
+       oldStatus: '',
+       serviceId: newService.id
+    });
     autoLogFactActivity(service.projectId, 'خدمات پس از فروش', logText);
     logAction('CREATE', 'خدمات پس از فروش', newService.id, `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName}`, undefined, newService);
     
@@ -1867,7 +1889,7 @@ export function useERPStore() {
   };
 
   const runWorkflows = (
-    triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change',
+    triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change' | 'packaging_delivery_created' | 'supplier_inquiry_status_change' | 'after_sales_service_status_change',
     context: {
       projectId?: string;
       projectName?: string;
@@ -1878,6 +1900,11 @@ export function useERPStore() {
       oldStatus?: string;
       newStatus?: string;
       salesExpert?: string;
+      proformaAmount?: number;
+      inquiryId?: string;
+      deliveryId?: string;
+      serviceId?: string;
+      action?: string;
     }
   ) => {
     const rules = settings.workflows || [];
@@ -1895,14 +1922,28 @@ export function useERPStore() {
         else if (cond.field === 'oldStatus') actualValue = context.oldStatus || '';
 
         if (cond.operator === 'equals') {
-          if (actualValue !== cond.value) {
-            conditionsMet = false;
-            break;
+          if (cond.field === 'proformaAmount') {
+             if (Number(context.proformaAmount || 0) !== Number(cond.value)) { conditionsMet = false; break; }
+          } else {
+             if (actualValue !== cond.value) { conditionsMet = false; break; }
           }
         } else if (cond.operator === 'not_equals') {
-          if (actualValue === cond.value) {
-            conditionsMet = false;
-            break;
+          if (cond.field === 'proformaAmount') {
+             if (Number(context.proformaAmount || 0) === Number(cond.value)) { conditionsMet = false; break; }
+          } else {
+             if (actualValue === cond.value) { conditionsMet = false; break; }
+          }
+        } else if (cond.operator === 'greater_than') {
+          if (cond.field === 'proformaAmount') {
+             if (Number(context.proformaAmount || 0) <= Number(cond.value)) { conditionsMet = false; break; }
+          } else {
+             if (Number(actualValue) <= Number(cond.value)) { conditionsMet = false; break; }
+          }
+        } else if (cond.operator === 'less_than') {
+          if (cond.field === 'proformaAmount') {
+             if (Number(context.proformaAmount || 0) >= Number(cond.value)) { conditionsMet = false; break; }
+          } else {
+             if (Number(actualValue) >= Number(cond.value)) { conditionsMet = false; break; }
           }
         }
       }
@@ -1946,7 +1987,7 @@ export function useERPStore() {
           const taskToCreate: Omit<Task, 'id'> = {
             title,
             description,
-            relatedToType: triggerType === 'proforma_outcome_change' ? 'پیش‌فاکتور' : triggerType === 'project_status_change' ? 'پروژه' : 'سفارش خرید',
+            relatedToType: triggerType === 'proforma_outcome_change' ? 'پیش‌فاکتور' : triggerType === 'project_status_change' ? 'پروژه' : triggerType === 'packaging_delivery_created' ? 'بسته‌بندی و تحویل' : triggerType === 'supplier_inquiry_status_change' ? 'استعلام تامین‌کننده' : triggerType === 'after_sales_service_status_change' ? 'خدمات پس از فروش' : 'سفارش خرید',
             relatedToId: context.projectId,
             relatedToName: context.projectName,
             priority: config.priority || 'متوسط',

@@ -1,3 +1,20 @@
+import { parsePersianDate } from '../dateUtils';
+export function roundCurrency(val: number): number {
+  return Math.round(val * 100) / 100;
+}
+
+export function roundRiyal(val: number): number {
+  return Math.round(val);
+}
+
+export function isAlmostZero(val: number): boolean {
+  return Math.abs(val) < 0.001;
+}
+
+export function safeDivide(num: number, denom: number): number {
+  if (isAlmostZero(denom)) return 0;
+  return num / denom;
+}
 import { Proforma, Transaction, ExchangeRate, Project } from '../types';
 
 // Helper to map Persian currency names to English codes
@@ -60,10 +77,45 @@ export const getWonItemsCurrencyAmount = (pf: Proforma): number => {
     wonItems = items.filter(item => item.status !== 'بازنده');
   }
   
-  const wonItemsSumRaw = wonItems.reduce((sum, item) => sum + (item.totalPriceRIYAL || (item.quantity * item.unitPriceRIYAL) || 0), 0);
-  const discountAmount = wonItemsSumRaw * (pf.discountPercent || 0) / 100;
-  const taxAmount = (wonItemsSumRaw - discountAmount) * (pf.taxPercent || 0) / 100;
-  return wonItemsSumRaw - discountAmount + taxAmount;
+  // The fields in ProformaItem are named 'unitPriceRIYAL' and 'totalPriceRIYAL'
+  // but they actually store the value in the proforma's selected currency.
+  const wonItemsCurrencySumRaw = wonItems.reduce((sum, item) => sum + (item.totalPriceRIYAL || (item.quantity * item.unitPriceRIYAL) || 0), 0);
+  
+  // Calculate proportionate discount and tax if they were applied as percentages
+  // Note: if discountAmount is an absolute value in Proforma, we should apply it proportionally to the winning items.
+  let discountAmount = 0;
+  if (pf.discountPercent && pf.discountPercent > 0) {
+    discountAmount = wonItemsCurrencySumRaw * (pf.discountPercent / 100);
+  } else if (pf.discountAmount && pf.discountAmount > 0) {
+    // If absolute discount, apply proportion of won items vs total items sum
+    const totalItemsSum = items.reduce((sum, item) => sum + (item.totalPriceRIYAL || (item.quantity * item.unitPriceRIYAL) || 0), 0);
+    if (totalItemsSum > 0) {
+      discountAmount = pf.discountAmount * (wonItemsCurrencySumRaw / totalItemsSum);
+    }
+  }
+
+  // Calculate tax on the discounted amount
+  let taxAmount = 0;
+  if (pf.taxPercent && pf.taxPercent > 0) {
+    taxAmount = (wonItemsCurrencySumRaw - discountAmount) * (pf.taxPercent / 100);
+  } else if (pf.taxAmount && pf.taxAmount > 0) {
+    // Note: total tax amount proportionally
+    const totalItemsSum = items.reduce((sum, item) => sum + (item.totalPriceRIYAL || (item.quantity * item.unitPriceRIYAL) || 0), 0);
+    if (totalItemsSum > 0) {
+      taxAmount = pf.taxAmount * (wonItemsCurrencySumRaw / totalItemsSum);
+    }
+  }
+  
+  // Extra costs proportion
+  let extraCosts = 0;
+  if (pf.extraCosts && pf.extraCosts > 0) {
+    const totalItemsSum = items.reduce((sum, item) => sum + (item.totalPriceRIYAL || (item.quantity * item.unitPriceRIYAL) || 0), 0);
+    if (totalItemsSum > 0) {
+      extraCosts = pf.extraCosts * (wonItemsCurrencySumRaw / totalItemsSum);
+    }
+  }
+
+  return wonItemsCurrencySumRaw - discountAmount + taxAmount + extraCosts;
 };
 
 export interface ProformaFinanceReport {
@@ -73,24 +125,25 @@ export interface ProformaFinanceReport {
   currency: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';
   salesAmountForeign: number;
   historicalExchangeRate: number;
-  salesAmountHistoricalRiyal: number;
+  salesAmountHistoricalRiyal: number | null;
   
   actualReceivedRiyal: number;
   settledAmountForeign: number;
-  settledSalesHistoricalRiyal: number;
+  settledSalesHistoricalRiyal: number | null;
   
   remainingAmountForeign: number;
-  remainingAmountHistoricalRiyal: number;
-  remainingAmountCurrentRiyal: number;
+  remainingAmountHistoricalRiyal: number | null;
+  remainingAmountCurrentRiyal: number | null;
   
-  realizedGainLoss: number;
-  unrealizedGainLoss: number;
+  realizedGainLoss: number | null;
+  unrealizedGainLoss: number | null;
   settlementPercent: number;
   
   unallocatedRiyal: number; // Excess amount over sales amount
   
   missingHistoricalRate: boolean;
   missingSettlementRate: boolean;
+  missingCurrentRate: boolean;
 }
 
 // Compute finance details for a single proforma
@@ -116,13 +169,16 @@ export const calculateProformaFinance = (
   }
   
   // 3. Sales amount historical Rial
-  const salesAmountHistoricalRiyal = salesAmountForeign * historicalExchangeRate;
+  const salesAmountHistoricalRiyal = missingHistoricalRate && salesAmountForeign > 0
+    ? null
+    : salesAmountForeign * historicalExchangeRate;
   
   // 4. Find linked receipts
   const activeTransactions = transactions.filter(t => 
     t.type === 'دریافت' && 
     t.status !== 'پیش‌نویس' && 
-    t.status !== 'لغو شده'
+    t.status !== 'لغو شده' &&
+    t.status !== 'برگشت شده'
   );
   
   let actualReceivedRiyal = 0;
@@ -136,14 +192,17 @@ export const calculateProformaFinance = (
   // Process transactions chronologically to allocate correctly
   const linkedTx = activeTransactions
     .filter(t => t.proformaId === pf.id)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort((a, b) => parsePersianDate(a.date).getTime() - parsePersianDate(b.date).getTime());
     
   for (const t of linkedTx) {
-    let txRiyal = t.amountRIYAL || 0;
-    let txRate = t.exchangeRate || 0;
-    let txForeign = t.amountForeign || 0;
+    const isReversal = !!t.reversalOfTransactionId;
+    const sign = isReversal ? -1 : 1;
     
-    if (!isRiyal && txRate <= 0) {
+    let txRiyal = (t.amountRIYAL || 0) * sign;
+    let txRate = t.exchangeRate || 0;
+    let txForeign = (t.amountForeign || 0) * sign;
+    
+    if (!isRiyal && txRate <= 0 && !isReversal) {
       missingSettlementRate = true;
     }
     
@@ -171,49 +230,76 @@ export const calculateProformaFinance = (
       }
     }
     
-    // Check if we exceed remaining balance
-    if (currentSettledForeign > remainingForeignToSettle + 0.0001) {
-      const allowedForeign = remainingForeignToSettle;
-      const excessForeign = currentSettledForeign - allowedForeign;
-      
-      settledAmountForeign += allowedForeign;
-      remainingForeignToSettle = 0;
-      
-      // Part of the Rial amount goes to unallocated
-      if (isRiyal) {
-        unallocatedRiyal += excessForeign;
-      } else {
-        const rateToUse = txRate || historicalExchangeRate || 1;
-        unallocatedRiyal += excessForeign * rateToUse;
-      }
+    if (isReversal) {
+       // Just subtract from everything directly. 
+       // Don't calculate 'excess' for reversals.
+       settledAmountForeign += currentSettledForeign;
+       remainingForeignToSettle -= currentSettledForeign;
     } else {
-      settledAmountForeign += currentSettledForeign;
-      remainingForeignToSettle -= currentSettledForeign;
+      // Check if we exceed remaining balance
+      if (currentSettledForeign > remainingForeignToSettle + 0.0001) {
+        const allowedForeign = remainingForeignToSettle;
+        const excessForeign = currentSettledForeign - allowedForeign;
+        
+        settledAmountForeign += allowedForeign;
+        remainingForeignToSettle = 0;
+        
+        // Part of the Rial amount goes to unallocated
+        if (isRiyal) {
+          unallocatedRiyal += excessForeign;
+        } else {
+          const rateToUse = txRate || historicalExchangeRate || 1;
+          unallocatedRiyal += excessForeign * rateToUse;
+        }
+      } else {
+        settledAmountForeign += currentSettledForeign;
+        remainingForeignToSettle -= currentSettledForeign;
+      }
     }
   }
   
   // 5. Remaining balances
   const remainingAmountForeign = Math.max(0, salesAmountForeign - settledAmountForeign);
-  const remainingAmountHistoricalRiyal = remainingAmountForeign * historicalExchangeRate;
+  const remainingAmountHistoricalRiyal = missingHistoricalRate && remainingAmountForeign > 0
+    ? null
+    : remainingAmountForeign * historicalExchangeRate;
   
   // 6. Current rate reporting
   let currentRate = 1;
+  let missingCurrentRate = false;
   if (!isRiyal) {
     const engCode = mapCurrencyToEnglish(currency);
     const rateObj = currentExchangeRates.find(r => r.currency === engCode);
-    currentRate = rateObj ? rateObj.rateToRIYAL : 0;
+    if (rateObj && rateObj.rateToRIYAL > 0) {
+      currentRate = rateObj.rateToRIYAL;
+    } else {
+      currentRate = 0;
+      missingCurrentRate = true;
+    }
   }
   
-  const remainingAmountCurrentRiyal = remainingAmountForeign * currentRate;
+  const remainingAmountCurrentRiyal = missingCurrentRate && remainingAmountForeign > 0 
+    ? null 
+    : remainingAmountForeign * currentRate;
   
   // 7. Realized and Unrealized Gains/Losses
-  const settledSalesHistoricalRiyal = settledAmountForeign * historicalExchangeRate;
+  const settledSalesHistoricalRiyal = missingHistoricalRate && settledAmountForeign > 0
+    ? null
+    : settledAmountForeign * historicalExchangeRate;
   
   // Realized: Difference between actual received and historical cost of what was settled
-  const realizedGainLoss = isRiyal ? 0 : (actualReceivedRiyal - unallocatedRiyal) - settledSalesHistoricalRiyal;
+  const realizedGainLoss = isRiyal ? 0 : (
+    settledSalesHistoricalRiyal === null 
+      ? null 
+      : ((actualReceivedRiyal - unallocatedRiyal) - settledSalesHistoricalRiyal)
+  );
   
   // Unrealized: Difference between current day value of remaining and its historical value
-  const unrealizedGainLoss = isRiyal ? 0 : remainingAmountCurrentRiyal - remainingAmountHistoricalRiyal;
+  const unrealizedGainLoss = isRiyal ? 0 : (
+    (remainingAmountCurrentRiyal === null || remainingAmountHistoricalRiyal === null)
+      ? null 
+      : (remainingAmountCurrentRiyal - remainingAmountHistoricalRiyal)
+  );
   
   // 8. Settlement percentage
   const settlementPercent = salesAmountForeign > 0 
@@ -239,7 +325,8 @@ export const calculateProformaFinance = (
     settlementPercent,
     unallocatedRiyal,
     missingHistoricalRate,
-    missingSettlementRate
+    missingSettlementRate,
+    missingCurrentRate
   };
 };
 
@@ -253,16 +340,16 @@ export interface ProjectFinanceSummary {
   
   proformas: ProformaFinanceReport[];
   
-  totalSalesHistoricalRiyal: number;
+  totalSalesHistoricalRiyal: number | null;
   totalReceivedRiyal: number; // Sum of all actual received Rial (including unallocated)
   totalAllocatedReceivedRiyal: number;
-  totalSettledSalesHistoricalRiyal: number;
+  totalSettledSalesHistoricalRiyal: number | null;
   
-  totalRemainingHistoricalRiyal: number;
-  totalRemainingCurrentRiyal: number;
+  totalRemainingHistoricalRiyal: number | null;
+  totalRemainingCurrentRiyal: number | null;
   
-  totalRealizedGainLoss: number;
-  totalUnrealizedGainLoss: number;
+  totalRealizedGainLoss: number | null;
+  totalUnrealizedGainLoss: number | null;
   
   totalUnallocatedRiyal: number; // Sum of excess payments + unallocated project-level receipts
   
@@ -272,6 +359,7 @@ export interface ProjectFinanceSummary {
   currencyBalances: { [key: string]: number };
   
   hasIncompleteData: boolean;
+  hasMissingCurrentRate: boolean;
 }
 
 // Compute complete finance details for a project
@@ -295,37 +383,73 @@ export const calculateProjectFinance = (
     t.projectId === project.id && 
     t.type === 'دریافت' && 
     t.status !== 'پیش‌نویس' && 
-    t.status !== 'لغو شده'
+    t.status !== 'لغو شده' &&
+    t.status !== 'برگشت شده'
   );
   
   const unallocatedTx = projectReceipts.filter(t => !t.proformaId);
-  const directUnallocatedRiyal = unallocatedTx.reduce((sum, t) => sum + (t.amountRIYAL || 0), 0);
+  const directUnallocatedRiyal = unallocatedTx.reduce((sum, t) => sum + ((t.amountRIYAL || 0) * (t.reversalOfTransactionId ? -1 : 1)), 0);
   
   // 4. Sum up
-  let totalSalesHistoricalRiyal = 0;
+  let totalSalesHistoricalRiyal: number | null = 0;
   let totalAllocatedReceivedRiyal = 0;
-  let totalSettledSalesHistoricalRiyal = 0;
-  let totalRemainingHistoricalRiyal = 0;
-  let totalRemainingCurrentRiyal = 0;
-  let totalRealizedGainLoss = 0;
-  let totalUnrealizedGainLoss = 0;
+  let totalSettledSalesHistoricalRiyal: number | null = 0;
+  let totalRemainingHistoricalRiyal: number | null = 0;
+  let totalRemainingCurrentRiyal: number | null = 0;
+  let totalRealizedGainLoss: number | null = 0;
+  let totalUnrealizedGainLoss: number | null = 0;
   let totalProformaUnallocatedRiyal = 0;
   
   const currencyBalances: { [key: string]: number } = {};
   let hasIncompleteData = false;
+  let hasMissingCurrentRate = false;
   
   for (const rep of proformaReports) {
-    totalSalesHistoricalRiyal += rep.salesAmountHistoricalRiyal;
+    if (rep.salesAmountHistoricalRiyal === null) {
+      totalSalesHistoricalRiyal = null;
+    } else if (totalSalesHistoricalRiyal !== null) {
+      totalSalesHistoricalRiyal += rep.salesAmountHistoricalRiyal;
+    }
+    
     totalAllocatedReceivedRiyal += rep.actualReceivedRiyal;
-    totalSettledSalesHistoricalRiyal += rep.settledSalesHistoricalRiyal;
-    totalRemainingHistoricalRiyal += rep.remainingAmountHistoricalRiyal;
-    totalRemainingCurrentRiyal += rep.remainingAmountCurrentRiyal;
-    totalRealizedGainLoss += rep.realizedGainLoss;
-    totalUnrealizedGainLoss += rep.unrealizedGainLoss;
+    
+    if (rep.settledSalesHistoricalRiyal === null) {
+      totalSettledSalesHistoricalRiyal = null;
+    } else if (totalSettledSalesHistoricalRiyal !== null) {
+      totalSettledSalesHistoricalRiyal += rep.settledSalesHistoricalRiyal;
+    }
+    
+    if (rep.remainingAmountHistoricalRiyal === null) {
+      totalRemainingHistoricalRiyal = null;
+    } else if (totalRemainingHistoricalRiyal !== null) {
+      totalRemainingHistoricalRiyal += rep.remainingAmountHistoricalRiyal;
+    }
+    
+    if (rep.remainingAmountCurrentRiyal === null) {
+      totalRemainingCurrentRiyal = null;
+    } else if (totalRemainingCurrentRiyal !== null) {
+      totalRemainingCurrentRiyal += rep.remainingAmountCurrentRiyal;
+    }
+    
+    if (rep.realizedGainLoss === null) {
+      totalRealizedGainLoss = null;
+    } else if (totalRealizedGainLoss !== null) {
+      totalRealizedGainLoss += rep.realizedGainLoss;
+    }
+    
+    if (rep.unrealizedGainLoss === null) {
+      totalUnrealizedGainLoss = null;
+    } else if (totalUnrealizedGainLoss !== null) {
+      totalUnrealizedGainLoss += rep.unrealizedGainLoss;
+    }
+    
     totalProformaUnallocatedRiyal += rep.unallocatedRiyal;
     
     if (rep.missingHistoricalRate || rep.missingSettlementRate) {
       hasIncompleteData = true;
+    }
+    if (rep.missingCurrentRate) {
+      hasMissingCurrentRate = true;
     }
     
     if (rep.remainingAmountForeign > 0) {
@@ -337,7 +461,7 @@ export const calculateProjectFinance = (
   const totalReceivedRiyal = totalAllocatedReceivedRiyal + totalUnallocatedRiyal;
   
   // Overall settlement percent
-  const settlementPercent = totalSalesHistoricalRiyal > 0
+  const settlementPercent = totalSalesHistoricalRiyal !== null && totalSalesHistoricalRiyal > 0 && totalSettledSalesHistoricalRiyal !== null
     ? Math.min(100, Math.round((totalSettledSalesHistoricalRiyal / totalSalesHistoricalRiyal) * 10000) / 100)
     : 0;
     
@@ -360,7 +484,8 @@ export const calculateProjectFinance = (
     totalUnallocatedRiyal,
     settlementPercent,
     currencyBalances,
-    hasIncompleteData
+    hasIncompleteData,
+    hasMissingCurrentRate
   };
 };
 
@@ -369,9 +494,9 @@ export interface CompanyFinanceSummary {
   totalReceivedRiyal: number;
   totalSettledSalesHistoricalRiyal: number;
   totalRemainingHistoricalRiyal: number;
-  totalRemainingCurrentRiyal: number;
+  totalRemainingCurrentRiyal: number | null;
   totalRealizedGainLoss: number;
-  totalUnrealizedGainLoss: number;
+  totalUnrealizedGainLoss: number | null;
 }
 
 // Compute total summary for the whole company
@@ -381,24 +506,55 @@ export const calculateCompanyFinanceSummary = (
   allTransactions: Transaction[],
   currentExchangeRates: ExchangeRate[]
 ): CompanyFinanceSummary => {
-  let totalSalesHistoricalRiyal = 0;
+  let totalSalesHistoricalRiyal: number | null = 0;
   let totalReceivedRiyal = 0;
-  let totalSettledSalesHistoricalRiyal = 0;
-  let totalRemainingHistoricalRiyal = 0;
-  let totalRemainingCurrentRiyal = 0;
-  let totalRealizedGainLoss = 0;
-  let totalUnrealizedGainLoss = 0;
+  let totalSettledSalesHistoricalRiyal: number | null = 0;
+  let totalRemainingHistoricalRiyal: number | null = 0;
+  let totalRemainingCurrentRiyal: number | null = 0;
+  let totalRealizedGainLoss: number | null = 0;
+  let totalUnrealizedGainLoss: number | null = 0;
   
   // Sum up across all projects
   for (const proj of projects) {
     const summary = calculateProjectFinance(proj, allProformas, allTransactions, currentExchangeRates);
-    totalSalesHistoricalRiyal += summary.totalSalesHistoricalRiyal;
+    
+    if (summary.totalSalesHistoricalRiyal === null) {
+      totalSalesHistoricalRiyal = null;
+    } else if (totalSalesHistoricalRiyal !== null) {
+      totalSalesHistoricalRiyal += summary.totalSalesHistoricalRiyal;
+    }
+    
     totalReceivedRiyal += summary.totalReceivedRiyal;
-    totalSettledSalesHistoricalRiyal += summary.totalSettledSalesHistoricalRiyal;
-    totalRemainingHistoricalRiyal += summary.totalRemainingHistoricalRiyal;
-    totalRemainingCurrentRiyal += summary.totalRemainingCurrentRiyal;
-    totalRealizedGainLoss += summary.totalRealizedGainLoss;
-    totalUnrealizedGainLoss += summary.totalUnrealizedGainLoss;
+    
+    if (summary.totalSettledSalesHistoricalRiyal === null) {
+      totalSettledSalesHistoricalRiyal = null;
+    } else if (totalSettledSalesHistoricalRiyal !== null) {
+      totalSettledSalesHistoricalRiyal += summary.totalSettledSalesHistoricalRiyal;
+    }
+    
+    if (summary.totalRemainingHistoricalRiyal === null) {
+      totalRemainingHistoricalRiyal = null;
+    } else if (totalRemainingHistoricalRiyal !== null) {
+      totalRemainingHistoricalRiyal += summary.totalRemainingHistoricalRiyal;
+    }
+    
+    if (summary.totalRemainingCurrentRiyal === null) {
+      totalRemainingCurrentRiyal = null;
+    } else if (totalRemainingCurrentRiyal !== null) {
+      totalRemainingCurrentRiyal += summary.totalRemainingCurrentRiyal;
+    }
+    
+    if (summary.totalRealizedGainLoss === null) {
+      totalRealizedGainLoss = null;
+    } else if (totalRealizedGainLoss !== null) {
+      totalRealizedGainLoss += summary.totalRealizedGainLoss;
+    }
+    
+    if (summary.totalUnrealizedGainLoss === null) {
+      totalUnrealizedGainLoss = null;
+    } else if (totalUnrealizedGainLoss !== null) {
+      totalUnrealizedGainLoss += summary.totalUnrealizedGainLoss;
+    }
   }
   
   // Also include general (project-less) receipts in total received
@@ -406,9 +562,10 @@ export const calculateCompanyFinanceSummary = (
     !t.projectId && 
     t.type === 'دریافت' && 
     t.status !== 'پیش‌نویس' && 
-    t.status !== 'لغو شده'
+    t.status !== 'لغو شده' &&
+    t.status !== 'برگشت شده'
   );
-  const generalReceivedRiyal = generalReceipts.reduce((sum, t) => sum + (t.amountRIYAL || 0), 0);
+  const generalReceivedRiyal = generalReceipts.reduce((sum, t) => sum + ((t.amountRIYAL || 0) * (t.reversalOfTransactionId ? -1 : 1)), 0);
   totalReceivedRiyal += generalReceivedRiyal;
   
   return {

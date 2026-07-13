@@ -2428,6 +2428,9 @@ export default function SettingsView({
                       <option value="proforma_outcome_change">تغییر وضعیت نهایی پیش‌فاکتور</option>
                       <option value="project_status_change">تغییر وضعیت پروژه</option>
                       <option value="purchase_order_status_change">تغییر وضعیت سفارش خرید</option>
+                      <option value="packaging_delivery_created">ثبت بسته‌بندی و تحویل</option>
+                      <option value="supplier_inquiry_status_change">تغییر وضعیت استعلام تامین‌کننده</option>
+                      <option value="after_sales_service_status_change">تغییر وضعیت خدمات پس از فروش</option>
                     </select>
                   </div>
                 </div>
@@ -2459,7 +2462,10 @@ export default function SettingsView({
                         const fieldMap: Record<string, string> = {
                           proforma_outcome_change: 'newOutcome',
                           project_status_change: 'newStatus',
-                          purchase_order_status_change: 'newStatus'
+                          purchase_order_status_change: 'newStatus',
+                          packaging_delivery_created: 'action',
+                          supplier_inquiry_status_change: 'newStatus',
+                          after_sales_service_status_change: 'newStatus'
                         };
                         const conds = editingRule.conditions || [];
                         setEditingRule({
@@ -2488,10 +2494,28 @@ export default function SettingsView({
                         let fieldOptions: { value: string; label: string }[] = [];
                         let valueOptions: string[] = [];
 
-                        if (editingRule.triggerType === 'proforma_outcome_change') {
+                        if (editingRule.triggerType === 'packaging_delivery_created') {
+                          fieldOptions = [
+                            { value: 'action', label: 'عملیات' }
+                          ];
+                          valueOptions = ['ایجاد'];
+                        } else if (editingRule.triggerType === 'supplier_inquiry_status_change') {
+                          fieldOptions = [
+                            { value: 'newStatus', label: 'وضعیت جدید' },
+                            { value: 'oldStatus', label: 'وضعیت قبلی' }
+                          ];
+                          valueOptions = ['پیش‌نویس', 'ارسال شده', 'در انتظار پاسخ', 'پاسخ داده شده', 'لغو شده', 'برنده', 'بازنده'];
+                        } else if (editingRule.triggerType === 'after_sales_service_status_change') {
+                          fieldOptions = [
+                            { value: 'newStatus', label: 'وضعیت جدید' },
+                            { value: 'oldStatus', label: 'وضعیت قبلی' }
+                          ];
+                          valueOptions = ['در حال بررسی', 'در حال تعمیر/خدمات', 'تکمیل شده', 'تحویل داده شده'];
+                        } else if (editingRule.triggerType === 'proforma_outcome_change') {
                           fieldOptions = [
                             { value: 'newOutcome', label: 'وضعیت نهایی جدید پیش‌فاکتور' },
-                            { value: 'oldOutcome', label: 'وضعیت نهایی قبلی پیش‌فاکتور' }
+                            { value: 'oldOutcome', label: 'وضعیت نهایی قبلی پیش‌فاکتور' },
+                            { value: 'proformaAmount', label: 'مبلغ پیش‌فاکتور' }
                           ];
                           valueOptions = ['تأیید شده (برنده)', 'نیمه برنده', 'باخته', 'لغو شده', 'در حال بررسی', 'پیش‌نویس'];
                         } else if (editingRule.triggerType === 'project_status_change') {
@@ -2536,22 +2560,40 @@ export default function SettingsView({
                             >
                               <option value="equals">برابر باشد با</option>
                               <option value="not_equals">مخالف باشد با</option>
+                              <option value="greater_than">بزرگتر از</option>
+                              <option value="less_than">کوچکتر از</option>
                             </select>
 
-                            <select
-                              value={cond.value}
-                              onChange={(e) => {
-                                const updatedConds = [...editingRule.conditions];
-                                updatedConds[condIdx].value = e.target.value;
-                                setEditingRule({ ...editingRule, conditions: updatedConds });
-                              }}
-                              className="border border-slate-200 rounded-lg p-2 bg-white focus:outline-none focus:border-sky-500"
-                            >
-                              <option value="">-- انتخاب مقدار --</option>
-                              {valueOptions.map(val => (
-                                <option key={val} value={val}>{val}</option>
-                              ))}
-                            </select>
+                            
+                            {cond.field === 'proformaAmount' || valueOptions.length === 0 ? (
+                              <input
+                                type="number"
+                                value={cond.value}
+                                onChange={(e) => {
+                                  const updatedConds = [...editingRule.conditions];
+                                  updatedConds[condIdx].value = e.target.value;
+                                  setEditingRule({ ...editingRule, conditions: updatedConds });
+                                }}
+                                placeholder="مبلغ (ریال/ارز)"
+                                className="border border-slate-200 rounded-lg p-2 bg-white focus:outline-none focus:border-sky-500 font-mono text-left"
+                              />
+                            ) : (
+                              <select
+                                value={cond.value}
+                                onChange={(e) => {
+                                  const updatedConds = [...editingRule.conditions];
+                                  updatedConds[condIdx].value = e.target.value;
+                                  setEditingRule({ ...editingRule, conditions: updatedConds });
+                                }}
+                                className="border border-slate-200 rounded-lg p-2 bg-white focus:outline-none focus:border-sky-500"
+                              >
+                                <option value="">-- انتخاب مقدار --</option>
+                                {valueOptions.map(val => (
+                                  <option key={val} value={val}>{val}</option>
+                                ))}
+                              </select>
+                            )}
+
 
                             <button
                               type="button"
@@ -2864,7 +2906,10 @@ export default function SettingsView({
                       const triggerLabelMap: Record<string, string> = {
                         proforma_outcome_change: 'تغییر وضعیت نهایی پیش‌فاکتور',
                         project_status_change: 'تغییر وضعیت پروژه',
-                        purchase_order_status_change: 'تغییر وضعیت سفارش خرید'
+                        purchase_order_status_change: 'تغییر وضعیت سفارش خرید',
+                        packaging_delivery_created: 'ثبت بسته‌بندی و تحویل',
+                        supplier_inquiry_status_change: 'تغییر وضعیت استعلام تامین‌کننده',
+                        after_sales_service_status_change: 'تغییر وضعیت خدمات پس از فروش'
                       };
 
                       return (

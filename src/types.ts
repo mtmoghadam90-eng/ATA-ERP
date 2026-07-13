@@ -126,7 +126,8 @@ export interface Proforma {
   discountAmount: number;
   taxPercent: number; // e.g., 10% VAT
   taxAmount: number;
-  finalAmount: number; // (Total - Discount) + Tax
+  finalAmount: number;
+  extraCosts?: number; // (Total - Discount) + Tax
   notes: string;
   creatorId?: string;
   historicalExchangeRate?: number; // نرخ تسعیر تاریخی فروش
@@ -262,7 +263,7 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  relatedToType: 'مشتری' | 'پروژه' | 'پیش‌فاکتور' | 'سفارش خرید' | 'عمومی';
+  relatedToType: 'مشتری' | 'پروژه' | 'پیش‌فاکتور' | 'سفارش خرید' | 'عمومی' | 'خدمات پس از فروش' | 'بسته‌بندی و تحویل' | 'استعلام تامین‌کننده';
   relatedToId?: string;
   relatedToName?: string;
   priority: 'پایین' | 'متوسط' | 'بالا' | 'فوری';
@@ -453,15 +454,20 @@ export interface InquiryStep {
 
 export interface SupplierInquiryItem {
   id: string;
-  requestItemId: string; // The ID of the item needed from the project
+  requestItemId?: string; // The ID of the item needed from the project (optional)
   productName: string;
   quantity: number;
+  priceForeign?: number;
+  priceRIYAL?: number;
+  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';
+  deliveryTime?: string;
+  notes?: string;
 }
 
 export interface SupplierInquiry {
   id: string;
-  projectId: string;
-  projectName: string;
+  projectId?: string;
+  projectName?: string;
   items?: SupplierInquiryItem[]; // New field for multiple items
   proformaId?: string;
   proformaNumber?: string;
@@ -568,10 +574,10 @@ export interface WorkflowRule {
   id: string;
   name: string;
   active: boolean;
-  triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change';
+  triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change' | 'packaging_delivery_created' | 'supplier_inquiry_status_change' | 'after_sales_service_status_change';
   conditions: {
     field: string; // e.g. 'newOutcome', 'newStatus'
-    operator: 'equals' | 'not_equals';
+    operator: 'equals' | 'not_equals' | 'greater_than' | 'less_than';
     value: string;
   }[];
   actions: {
