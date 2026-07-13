@@ -424,13 +424,26 @@ export function useERPStore() {
 
   // --- Customers CRUD ---
   const addCustomer = (customer: Omit<Customer, 'id' | 'createdAt'>) => {
+    const newId = `cust-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newCustomer: Customer = {
       ...customer,
-      id: `cust-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: newId,
       createdAt: new Date().toISOString()
     };
     setCustomers(prev => {
-      const updated = [newCustomer, ...prev];
+      let updated = prev.map(c => {
+        if (newCustomer.linkedCustomerIds?.includes(c.id)) {
+          const currentLinks = c.linkedCustomerIds || [];
+          if (!currentLinks.includes(newId)) {
+            return {
+              ...c,
+              linkedCustomerIds: [...currentLinks, newId]
+            };
+          }
+        }
+        return c;
+      });
+      updated = [newCustomer, ...updated];
       saveToServer('erp_customers', updated);
       logAction('CREATE', 'مشتریان', newCustomer.id, `ایجاد مشتری جدید: ${newCustomer.companyName || `${newCustomer.firstName || ''} ${newCustomer.lastName || ''}`.trim()}`, undefined, newCustomer);
       return updated;
@@ -516,6 +529,7 @@ export function useERPStore() {
       notes?: string;
       size?: string;
       measurementRange?: string;
+      brand?: string;
       amt?: number;
       type?: string;
       dateVal?: string;
@@ -541,6 +555,7 @@ export function useERPStore() {
         const supplyType = item.supplyType || 'INVENTORY';
         const size = item.size || "";
         const mRange = item.measurementRange || "";
+        const brand = item.brand ? String(item.brand).trim() : "";
 
         // Case 1: Code is empty but name and category are provided -> Create new product
         if (!code && name && category) {
@@ -564,7 +579,7 @@ export function useERPStore() {
             size: size,
             measurementRange: mRange,
             images: [],
-            brand: "",
+            brand: brand,
             modelNumber: "N/A",
             unit: "عدد",
             basePriceRIYAL: 0,
@@ -638,7 +653,7 @@ export function useERPStore() {
               size: size,
               measurementRange: mRange,
               images: [],
-              brand: "",
+              brand: brand,
               modelNumber: "N/A",
               unit: "عدد",
               basePriceRIYAL: 0,
@@ -1046,8 +1061,15 @@ export function useERPStore() {
       ? (projects.find(p => p.id === proforma.projectId)?.code || 'ATA')
       : 'ATA';
     
+    let formatStr = settings.documentFormats.proformaFormat || 'QT-{PROJECT}-{SEQ:2}';
+    if (proforma.proformaType === 'TECHNICAL') {
+      formatStr = settings.documentFormats.proformaTechnicalFormat || 'QT-TECH-{PROJECT}-{SEQ:2}';
+    } else if (proforma.proformaType === 'AFTER_SALES') {
+      formatStr = settings.documentFormats.proformaAfterSalesFormat || 'QT-SERV-{PROJECT}-{SEQ:2}';
+    }
+
     const computedNumber = formatERPNumber(
-      settings.documentFormats.proformaFormat || 'QT-{PROJECT}-{SEQ:2}',
+      formatStr,
       {
         seq: seqNum,
         projectCode,

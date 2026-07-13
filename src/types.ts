@@ -95,7 +95,7 @@ export interface ProformaItem {
   quantity: number;
   unitPriceRIYAL: number;
   totalPriceRIYAL: number;
-  supplyMethod?: 'INVENTORY' | 'ORDER';
+  supplyMethod?: 'INVENTORY' | 'ORDER' | 'NONE';
   status?: 'جاری' | 'برنده' | 'بازنده';
   lossReason?: string;
   techSpecs?: string;
@@ -105,6 +105,7 @@ export interface ProformaItem {
 export interface Proforma {
   id: string;
   proformaNumber: string; // Auto-generated based on template
+  proformaType?: 'FINANCIAL' | 'TECHNICAL' | 'AFTER_SALES';
   customerId: string;
   customerName: string;
   contactCustomerId?: string; // مخاطب انتخاب شده (مشتری حقیقی مرتبط)
@@ -190,7 +191,15 @@ export interface Project {
   estimatedValueRIYAL?: number; // Optional/legacy
   probabilityPercent?: number; // Optional/legacy
   status: 'جدید' | 'در حال مذاکره' | 'ارائه پیش‌فاکتور' | 'برنده (موفق)' | 'باخته' | 'لغو شده' | 'نیمه برنده';
-  itemsNeeded?: { productId: string; name: string; quantity: number, supplyMethod?: 'INVENTORY' | 'ORDER' }[];
+  itemsNeeded?: {
+    productId: string; // can be 'generic' if not matching a specific warehouse product
+    name: string;
+    quantity: number;
+    supplyMethod?: 'INVENTORY' | 'ORDER' | 'NONE';
+    category?: 'FLOW' | 'TEMPERATURE' | 'PRESSURE' | 'LEVEL';
+    equipmentType?: string;
+    size?: string;
+  }[];
   description: string;
   customValues?: Record<string, any>;
   lossReason?: string;
@@ -282,6 +291,8 @@ export interface DocumentFormat {
   projectFormat: string; // ATA-{YYYY}-{SEQ:3}
   proformaPrefix: string;
   proformaFormat: string; // QT-{PROJECT}-{SEQ:2}
+  proformaTechnicalFormat?: string; // e.g. QT-TECH-{PROJECT}-{SEQ:2}
+  proformaAfterSalesFormat?: string; // e.g. QT-SERV-{PROJECT}-{SEQ:2}
   poPrefix: string;
   poFormat: string; // PO-{PROJECT}-{SEQ:3}
   transactionFormat?: string; // TR-{TYPE}-{YYYY}{MM}-{SEQ:3}
@@ -314,6 +325,7 @@ export interface ProformaTemplate {
 }
 
 export interface ERPSettings {
+  showProductBrandInDocuments?: boolean;
   customFields: CustomField[];
   proformaTemplates: ProformaTemplate[];
   activeTemplateId: string;
@@ -342,6 +354,7 @@ export interface ERPSettings {
     shippingMethods?: string[];
     packageTypes?: string[];
     returnReasons?: string[];
+    equipmentTypes?: string[];
   };
   lossReasons: string[];
   activityCategories: { id: string; name: string; module: string; responsibleUserId?: string }[];

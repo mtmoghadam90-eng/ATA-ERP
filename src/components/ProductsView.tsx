@@ -70,6 +70,7 @@ export default function ProductsView({
   // Form states (Only Category, Equipment Type, and Technical Specs are managed in UI)
   const [displayName, setDisplayName] = useState('');
   const [category, setCategory] = useState('');
+  const [brand, setBrand] = useState('');
   const [description, setDescription] = useState('');
   const [size, setSize] = useState('');
   const [measurementRange, setMeasurementRange] = useState('');
@@ -93,6 +94,7 @@ export default function ProductsView({
     setEditingProduct(null);
     setDisplayName('');
     setCategory(categories[0] || 'ابزار دقیق - فشار');
+    setBrand('');
     setDescription('');
     setSize('');
     setMeasurementRange('');
@@ -108,6 +110,7 @@ export default function ProductsView({
     setEditingProduct(prod);
     setDisplayName(prod.displayName);
     setCategory(prod.category);
+    setBrand(prod.brand || '');
     setDescription(prod.description);
     setSize(prod.size || '');
     setMeasurementRange(prod.measurementRange || '');
@@ -128,6 +131,7 @@ export default function ProductsView({
       { header: "کد کالا", key: "code", width: 15 },
       { header: "نام تجهیز", key: "name", width: 25 },
       { header: "دسته بندی", key: "category", width: 20 },
+      { header: "برند", key: "brand", width: 15 },
       { header: "نوع تامین", key: "supplyType", width: 15 },
       { header: "تعداد تغییر / موجودی اولیه", key: "amount", width: 25 },
       { header: "نوع تغییر", key: "type", width: 15 },
@@ -139,12 +143,12 @@ export default function ProductsView({
 
     // Add some sample rows
     worksheet.addRow({
-      code: "EQ-12345", name: "پرشر ترانسمیتر", category: categories.length > 0 ? categories[0] : "ابزار دقیق - فشار", 
+      code: "EQ-12345", name: "پرشر ترانسمیتر", category: categories.length > 0 ? categories[0] : "ابزار دقیق - فشار", brand: "WIKA",
       supplyType: "INVENTORY", amount: 10, type: "IN", date: "1403/05/12", 
       size: "2 inch", mRange: "0-10 bar", notes: "خرید جدید"
     });
     worksheet.addRow({
-      code: "EQ-67890", name: "", category: "", 
+      code: "EQ-67890", name: "", category: "", brand: "",
       supplyType: "", amount: 5, type: "OUT", date: "", 
       size: "", mRange: "", notes: "مصرف پروژه"
     });
@@ -164,15 +168,15 @@ export default function ProductsView({
         formulae: [catList]
       };
       
-      // Supply Type Dropdown (Column D)
-      worksheet.getCell(`D${i}`).dataValidation = {
+      // Supply Type Dropdown (Column E)
+      worksheet.getCell(`E${i}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: ['"INVENTORY,ORDER"']
       };
 
-      // Change Type Dropdown (Column F)
-      worksheet.getCell(`F${i}`).dataValidation = {
+      // Change Type Dropdown (Column G)
+      worksheet.getCell(`G${i}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: ['"IN,OUT"']
@@ -225,6 +229,7 @@ export default function ProductsView({
           
           const name = row["نام تجهیز"];
           const category = row["دسته بندی"];
+          const brand = row["برند"] || "";
           const supplyType = (row["نوع تامین"] === 'ORDER' ? 'ORDER' : 'INVENTORY') as 'INVENTORY' | 'ORDER';
           const size = row["سایز"] || "";
           const mRange = row["رنج اندازه گیری"] || "";
@@ -233,6 +238,7 @@ export default function ProductsView({
             code,
             name,
             category,
+            brand,
             supplyType,
             notes,
             size,
@@ -276,6 +282,7 @@ export default function ProductsView({
         displayName,
         name: displayName, // Synchronize name with displayName
         category,
+        brand,
         description,
         size,
         measurementRange,
@@ -288,13 +295,13 @@ export default function ProductsView({
         displayName,
         name: displayName,
         category,
+        brand,
         description,
         size,
         measurementRange,
         images,
         supplyType,
         code: "EQ-" + Math.floor(10000 + Math.random() * 90000),
-        brand: "",
         modelNumber: "N/A",
         unit: "عدد",
         basePriceRIYAL: 0,
@@ -426,6 +433,11 @@ export default function ProductsView({
                           <div className="font-bold text-slate-800 text-sm leading-snug">{p.displayName}</div>
                           
                           <div className="flex flex-wrap gap-1.5 mt-1 text-[10px]">
+                            {p.brand && (
+                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md font-medium">
+                                برند: {p.brand}
+                              </span>
+                            )}
                             {p.size && (
                               <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-medium">
                                 سایز: {p.size}
@@ -632,6 +644,18 @@ export default function ProductsView({
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="مثال: ترانسمیتر اختلاف فشار (DP Transmitter)"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right font-medium"
+                  />
+                </div>
+
+                {/* Brand */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">برند (اختیاری)</label>
+                  <input
+                    type="text"
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    placeholder="مثال: WIKA, Rosemount, Siemens"
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right font-medium"
                   />
                 </div>

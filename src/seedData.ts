@@ -516,6 +516,7 @@ export const SEED_TASKS: Task[] = [
 
 // Default System Settings
 export const DEFAULT_SETTINGS: ERPSettings = {
+  showProductBrandInDocuments: false,
   customFields: [
     { id: 'cf-1', module: 'customers', name: 'رتبه پیمانکاری', type: 'text' },
     { id: 'cf-2', module: 'products', name: 'دمای کاری حداکثر (C)', type: 'number' }
@@ -550,6 +551,8 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     projectFormat: 'ATA-{YYYY}-{SEQ:3}',
     proformaPrefix: 'QT-',
     proformaFormat: 'QT-{PROJECT}-{SEQ:2}',
+    proformaTechnicalFormat: 'QT-TECH-{PROJECT}-{SEQ:2}',
+    proformaAfterSalesFormat: 'QT-SERV-{PROJECT}-{SEQ:2}',
     poPrefix: 'PO-',
     poFormat: 'PO-{PROJECT}-{SEQ:3}',
     transactionFormat: 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}',
@@ -578,7 +581,23 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     supplierInquiryActionTypes: ['تماس تلفنی پیگیری قیمت', 'مکاتبه از طریق ایمیل', 'ارسال مجدد مشخصات فنی', 'مذاکره حضوری / آنلاین', 'دریافت پروپوزال فنی/مالی', 'سایر'],
     shippingMethods: ['باربری', 'پیک شهری', 'تیپاکس', 'پست پیشتاز', 'تحویل حضوری', 'هواپیمایی', 'راننده شرکت'],
     packageTypes: ['کارتن', 'جعبه چوبی', 'پالت', 'کیسه', 'صندوق فلزی', 'فله'],
-    returnReasons: ['خرابی قطعه', 'مغایرت با درخواست', 'اشکال در نصب', 'تعمیر و نگهداری دوره‌ای', 'ارتقا سیستم', 'سایر']
+    returnReasons: ['خرابی قطعه', 'مغایرت با درخواست', 'اشکال در نصب', 'تعمیر و نگهداری دوره‌ای', 'ارتقا سیستم', 'سایر'],
+    equipmentTypes: [
+      'فلومتر کوریولیس',
+      'فلومتر التراسونیک',
+      'فلومتر الکترومغناطیسی',
+      'فلومتر توربینی',
+      'ترانسمیتر فشار',
+      'ترانسمیتر اختلاف فشار',
+      'ترانسمیتر دما',
+      'ترانسمیتر سطح (راداری)',
+      'ترانسمیتر سطح (التراسونیک)',
+      'سوئیچ سطح',
+      'گیج فشار',
+      'گیج دما',
+      'شیر کنترل (کنترل ولو)',
+      'شیر اطمینان (سیفتی ولو)'
+    ]
   },
   lossReasons: ['قیمت بالا و عدم رقابت', 'زمان تحویل طولانی', 'عدم انطباق مدارک فنی', 'تغییر نیاز مشتری', 'انصراف مشتری از کل پروژه', 'برنده شدن رقیب با برند ارزان‌تر'],
   activityCategories: [

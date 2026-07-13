@@ -1123,18 +1123,6 @@ export default function CustomersView({
                       </select>
                     </div>
 
-                    {/* شخص کلیدی */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">شخص کلیدی</label>
-                      <input
-                        type="text"
-                        value={keyPerson}
-                        onChange={(e) => setKeyPerson(e.target.value)}
-                        placeholder="مثال: دکتر علیرضا ناصری"
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
-                      />
-                    </div>
-
                     {/* استان */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-600">استان</label>

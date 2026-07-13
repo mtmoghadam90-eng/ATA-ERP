@@ -21,6 +21,7 @@ import {
 import { 
   Project, 
   Proforma, 
+  Product,
   PackagingDelivery, 
   PackingItem, 
   DeliveryChecklistItem,
@@ -34,6 +35,7 @@ import { uploadFile } from '../imageUtils';
 interface PackagingDeliveryViewProps {
   projects: Project[];
   proformas: Proforma[];
+  products: Product[];
   packagingDeliveries: PackagingDelivery[];
   addPackagingDelivery: (delivery: Omit<PackagingDelivery, 'id' | 'createdAt' | 'packingListNumber'>) => any;
   updatePackagingDelivery: (delivery: PackagingDelivery) => void;
@@ -45,6 +47,7 @@ interface PackagingDeliveryViewProps {
 export default function PackagingDeliveryView({
   projects,
   proformas,
+  products,
   packagingDeliveries,
   addPackagingDelivery,
   updatePackagingDelivery,
@@ -82,6 +85,13 @@ export default function PackagingDeliveryView({
 
   // Selected Packing List Detail Modal
   const [selectedDelivery, setSelectedDelivery] = useState<PackagingDelivery | null>(null);
+  const [overrideShowBrand, setOverrideShowBrand] = useState(false);
+
+  React.useEffect(() => {
+    if (selectedDelivery) {
+      setOverrideShowBrand(!!settings.showProductBrandInDocuments);
+    }
+  }, [selectedDelivery, settings.showProductBrandInDocuments]);
 
   // Delete Modal State
   const [deleteDeliveryId, setDeleteDeliveryId] = useState<string | null>(null);
@@ -123,7 +133,7 @@ export default function PackagingDeliveryView({
       const wonItems = getWonItemsOfProforma(prof);
       const defaultPackingItems: PackingItem[] = wonItems.map((item, idx) => ({
         id: `pack-item-auto-${idx}-${Date.now()}`,
-        itemOrDocName: item.brand ? `${item.productName} (${item.brand})` : item.productName,
+        itemOrDocName: item.productName,
         productId: item.productId,
         quantity: item.quantity,
         packageType: 'کارتن',
@@ -232,16 +242,21 @@ export default function PackagingDeliveryView({
     }, {} as Record<string, typeof delivery.items>);
 
     const itemsTables = Object.entries(itemsByBox).map(([box, items], boxIdx) => {
-      const itemsRows = items.map((item, index) => `
+      const itemsRows = items.map((item, index) => {
+        const prod = item.productId ? products.find(p => p.id === item.productId) : undefined;
+        const brandStr = overrideShowBrand && prod?.brand ? ` (${prod.brand})` : '';
+        const displayedName = `${item.itemOrDocName}${brandStr}`;
+        return `
         <tr style="border-bottom: 1px solid #e2e8f0;">
           <td style="padding: 12px; text-align: center; font-family: monospace;">${index + 1}</td>
-          <td style="padding: 12px; font-weight: bold; color: #1e293b;">${item.itemOrDocName}</td>
+          <td style="padding: 12px; font-weight: bold; color: #1e293b;">${displayedName}</td>
           <td style="padding: 12px; text-align: center; font-family: monospace; font-weight: bold;">${item.quantity}</td>
           <td style="padding: 12px; text-align: center;">${item.packageType}</td>
           <td style="padding: 12px; text-align: left; font-family: monospace;" dir="ltr">${item.dimensions}</td>
           <td style="padding: 12px; text-align: center; font-family: monospace;">${item.weight} Kg</td>
         </tr>
-      `).join('');
+        `;
+      }).join('');
 
       return `
         <div style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
@@ -1350,7 +1365,15 @@ export default function PackagingDeliveryView({
                         {(items as any[]).map((item, idx) => (
                           <tr key={item.id} className="hover:bg-slate-50/50">
                             <td className="p-3 text-slate-400 font-mono font-semibold">{idx + 1}</td>
-                            <td className="p-3 font-bold text-slate-800">{item.itemOrDocName}</td>
+                            <td className="p-3 font-bold text-slate-800">
+                              {item.itemOrDocName}
+                              {overrideShowBrand && (() => {
+                                const prod = item.productId ? products.find(p => p.id === item.productId) : undefined;
+                                return prod?.brand ? (
+                                  <span className="text-xs text-indigo-600 font-semibold mr-1">({prod.brand})</span>
+                                ) : null;
+                              })()}
+                            </td>
                             <td className="p-3 font-extrabold text-slate-700 text-center font-mono">{item.quantity}</td>
                             <td className="p-3 font-medium text-slate-600">{item.packageType}</td>
                             <td className="p-3 font-mono text-left text-slate-600" dir="ltr">{item.dimensions}</td>
@@ -1420,24 +1443,37 @@ export default function PackagingDeliveryView({
             </div>
 
             {/* Modal Footer with print trigger */}
-            <div className="flex gap-2 justify-end px-6 py-4 border-t border-slate-150 bg-slate-50/50 no-print">
-              <button
-                type="button"
-                onClick={() => {
-                  downloadPackagingDeliveryHTML(selectedDelivery);
-                }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm"
-              >
-                <Printer size={15} />
-                خروجی فایل چاپی مستقل (دانلود HTML)
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedDelivery(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-2.5 rounded-xl transition"
-              >
-                بستن پنجره
-              </button>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between px-6 py-4 border-t border-slate-150 bg-slate-50/50 no-print">
+              {/* Instant Brand display toggle */}
+              <label className="flex items-center gap-2 text-xs text-slate-600 bg-white px-3 py-2 rounded-xl border border-slate-150 cursor-pointer select-none hover:bg-slate-50 transition w-fit">
+                <input
+                  type="checkbox"
+                  checked={overrideShowBrand}
+                  onChange={(e) => setOverrideShowBrand(e.target.checked)}
+                  className="w-3.5 h-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                />
+                <span>نمایش برند کالا در این پکینگ لیست</span>
+              </label>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    downloadPackagingDeliveryHTML(selectedDelivery);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm"
+                >
+                  <Printer size={15} />
+                  خروجی فایل چاپی مستقل (دانلود HTML)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDelivery(null)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-2.5 rounded-xl transition"
+                >
+                  بستن پنجره
+                </button>
+              </div>
             </div>
           </div>
         </div>

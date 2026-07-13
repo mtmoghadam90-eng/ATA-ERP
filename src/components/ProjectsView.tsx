@@ -37,6 +37,7 @@ import CustomFieldsDetailView from './CustomFieldsDetailView';
 import { exportToCSV } from '../excelUtils';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
+import { SearchableSelect } from './SearchableSelect';
 import { compressImage } from '../imageUtils';
 
 interface ProjectsViewProps {
@@ -158,7 +159,15 @@ export default function ProjectsView({
   const [expectedCloseDate, setExpectedCloseDate] = useState('');
   const [status, setStatus] = useState<Project['status']>('جدید');
   const [description, setDescription] = useState('');
-  const [itemsNeeded, setItemsNeeded] = useState<{ productId: string; name: string; quantity: number, supplyMethod?: 'INVENTORY' | 'ORDER' }[]>([]);
+  const [itemsNeeded, setItemsNeeded] = useState<{
+    productId: string;
+    name: string;
+    quantity: number;
+    supplyMethod?: 'INVENTORY' | 'ORDER' | 'NONE';
+    category?: 'FLOW' | 'TEMPERATURE' | 'PRESSURE' | 'LEVEL';
+    equipmentType?: string;
+    size?: string;
+  }[]>([]);
   const [lossReason, setLossReason] = useState('');
 
   // Quick Customer Creation States
@@ -223,15 +232,17 @@ export default function ProjectsView({
 
   // Items lines management helpers
   const handleAddItemLine = () => {
-    if (products.length === 0) return;
-    const defaultProduct = products[0];
+    // Default to a generic specification line, as requested by user to easily handle unknown specific items
     setItemsNeeded([
       ...itemsNeeded,
       {
-        productId: defaultProduct.id,
-        name: defaultProduct.displayName,
+        productId: 'generic',
+        name: 'فلو - تجهیز درخواستی',
         quantity: 1,
-        supplyMethod: defaultProduct.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY'
+        supplyMethod: 'ORDER',
+        category: 'FLOW',
+        equipmentType: '',
+        size: ''
       }
     ]);
   };
@@ -241,14 +252,92 @@ export default function ProjectsView({
   };
 
   const handleItemProductChange = (index: number, prodId: string) => {
+    if (prodId === 'generic') {
+      setItemsNeeded(
+        itemsNeeded.map((item, i) =>
+          i === index
+            ? {
+                ...item,
+                productId: 'generic',
+                name: 'فلو - تجهیز درخواستی',
+                supplyMethod: 'ORDER',
+                category: 'FLOW',
+                equipmentType: '',
+                size: ''
+              }
+            : item
+        )
+      );
+      return;
+    }
     const selectedProd = products.find(p => p.id === prodId);
     if (!selectedProd) return;
     setItemsNeeded(
       itemsNeeded.map((item, i) =>
         i === index
-          ? { ...item, productId: prodId, name: selectedProd.displayName, supplyMethod: selectedProd.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY' }
+          ? {
+              ...item,
+              productId: prodId,
+              name: selectedProd.displayName,
+              supplyMethod: selectedProd.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY',
+              category: undefined,
+              equipmentType: undefined,
+              size: undefined
+            }
           : item
       )
+    );
+  };
+
+  const handleItemCategoryChange = (index: number, cat: 'FLOW' | 'TEMPERATURE' | 'PRESSURE' | 'LEVEL') => {
+    setItemsNeeded(
+      itemsNeeded.map((item, i) => {
+        if (i !== index) return item;
+        const eqType = item.equipmentType || '';
+        const sizeStr = item.size ? ` (سایز: ${item.size})` : '';
+        const catLabel = cat === 'FLOW' ? 'فلو' : cat === 'TEMPERATURE' ? 'دما' : cat === 'PRESSURE' ? 'فشار' : 'سطح';
+        const updatedName = `${catLabel} - ${eqType || 'تجهیز درخواستی'}${sizeStr}`;
+        return {
+          ...item,
+          category: cat,
+          name: updatedName
+        };
+      })
+    );
+  };
+
+  const handleItemEquipmentTypeChange = (index: number, eqType: string) => {
+    setItemsNeeded(
+      itemsNeeded.map((item, i) => {
+        if (i !== index) return item;
+        const cat = item.category || 'FLOW';
+        const sizeStr = item.size ? ` (سایز: ${item.size})` : '';
+        const catLabel = cat === 'FLOW' ? 'فلو' : cat === 'TEMPERATURE' ? 'دما' : cat === 'PRESSURE' ? 'فشار' : 'سطح';
+        const updatedName = `${catLabel} - ${eqType || 'تجهیز درخواستی'}${sizeStr}`;
+        return {
+          ...item,
+          equipmentType: eqType,
+          name: updatedName
+        };
+      })
+    );
+  };
+
+  const handleItemSizeChange = (index: number, sz: string) => {
+    setItemsNeeded(
+      itemsNeeded.map((item, i) => {
+        if (i !== index) return item;
+        const cat = item.category || 'FLOW';
+        const eqType = item.equipmentType || '';
+        const sizeStr = sz ? ` (سایز: ${sz})` : '';
+        const catLabel = cat === 'FLOW' ? 'فلو' : cat === 'TEMPERATURE' ? 'دما' : cat === 'PRESSURE' ? 'فشار' : 'سطح';
+        const updatedName = `${catLabel} - ${eqType || 'تجهیز درخواستی'}${sizeStr}`;
+        return {
+          ...item,
+          size: sz,
+          name: updatedName
+        };
+      })
     );
   };
 
@@ -504,7 +593,7 @@ export default function ProjectsView({
       p.agreedDeliveryDate || '',
       p.closingDate || '',
       p.expectedCloseDate || '',
-      p.itemsNeeded?.map(item => `${item.name} (${item.quantity} عدد - ${item.supplyMethod === 'ORDER' ? 'سفارش' : 'انبار'})`).join(' - ') || '',
+      p.itemsNeeded?.map(item => `${item.name} (${item.quantity} عدد - ${item.supplyMethod === 'ORDER' ? 'سفارش' : item.supplyMethod === 'NONE' ? 'بدون نیاز به تامین' : 'انبار'})`).join(' - ') || '',
       p.description
     ]);
 
@@ -768,7 +857,7 @@ export default function ProjectsView({
                         <span className="text-[9px] font-extrabold text-slate-500">اقلام درخواستی:</span>
                         {p.itemsNeeded.map((item, i) => (
                           <span key={i} className="text-[9px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">
-                            {item.name} ({item.quantity} عدد - {item.supplyMethod === 'ORDER' ? 'سفارشی' : 'انباری'})
+                            {item.name} ({item.quantity} عدد - {item.supplyMethod === 'ORDER' ? 'سفارشی' : item.supplyMethod === 'NONE' ? 'بدون نیاز به تامین' : 'انباری'})
                           </span>
                         ))}
                       </div>
@@ -948,17 +1037,16 @@ export default function ProjectsView({
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">نام مشتری / کارفرما *</label>
                     <div className="flex gap-1.5 items-center">
-                      <select
-                        value={customerId}
-                        onChange={(e) => setCustomerId(e.target.value)}
-                        required
-                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                      >
-                        <option value="">-- انتخاب مشتری --</option>
-                        {customers.map(c => (
-                          <option key={c.id} value={c.id}>{c.companyName}</option>
-                        ))}
-                      </select>
+                    <SearchableSelect
+                      value={customerId}
+                      onChange={(val) => setCustomerId(val)}
+                      required
+                      options={[
+                        { value: '', label: '-- انتخاب مشتری --' },
+                        ...customers.map(c => ({ value: c.id, label: c.companyName }))
+                      ]}
+                      placeholder="-- انتخاب مشتری --"
+                    />
                       {addCustomer && (
                         <button
                           type="button"
@@ -979,16 +1067,15 @@ export default function ProjectsView({
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">مصرف‌کننده نهایی</label>
                     <div className="flex gap-1.5 items-center">
-                      <select
-                        value={endUser}
-                        onChange={(e) => setEndUser(e.target.value)}
-                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                      >
-                        <option value="">-- انتخاب مصرف‌کننده (مشتری) --</option>
-                        {customers.map(c => (
-                          <option key={c.id} value={c.id}>{c.companyName}</option>
-                        ))}
-                      </select>
+                    <SearchableSelect
+                      value={endUser}
+                      onChange={(val) => setEndUser(val)}
+                      options={[
+                        { value: '', label: '-- انتخاب مصرف‌کننده (مشتری) --' },
+                        ...customers.map(c => ({ value: c.id, label: c.companyName }))
+                      ]}
+                      placeholder="-- انتخاب مصرف‌کننده (مشتری) --"
+                    />
                       {addCustomer && (
                         <button
                           type="button"
@@ -1318,40 +1405,151 @@ export default function ProjectsView({
                   </div>
 
                   {itemsNeeded.length > 0 ? (
-                    <div className="space-y-2">
-                      {itemsNeeded.map((item, index) => (
-                        <div key={index} className="flex gap-2 items-center bg-slate-50 p-2 rounded-lg border border-slate-150">
-                          <div className="flex-1 flex gap-1.5 items-center">
-                            <select
-                              value={item.productId}
-                              onChange={(e) => handleItemProductChange(index, e.target.value)}
-                              className="flex-1 border border-slate-200 rounded px-2 py-1 text-xs bg-white text-right min-w-0"
-                            >
-                              {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.code} - {p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}</option>
-                              ))}
-                            </select>
+                    <div className="space-y-3">
+                      {itemsNeeded.map((item, index) => {
+                        const isGeneric = item.productId === 'generic';
+                        return (
+                          <div key={index} className="flex flex-col gap-2.5 bg-slate-50/50 p-3 rounded-xl border border-slate-200/80 relative">
+                            {/* Header Toggle Row */}
+                            <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
+                              <span className="text-[10px] font-extrabold text-slate-500">ردیف {index + 1}</span>
+                              
+                              <div className="flex bg-slate-150 p-0.5 rounded-lg border border-slate-200">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleItemProductChange(index, 'generic');
+                                  }}
+                                  className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition ${isGeneric ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                                >
+                                  مشخصات کلی (بدون مدل)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const firstProd = products[0];
+                                    if (firstProd) {
+                                      handleItemProductChange(index, firstProd.id);
+                                    }
+                                  }}
+                                  className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition ${!isGeneric ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                                >
+                                  کالای مشخص انبار
+                                </button>
+                              </div>
+                            </div>
 
+                            {/* Row body */}
+                            <div className="grid grid-cols-12 gap-2 items-end">
+                              {isGeneric ? (
+                                <>
+                                  {/* Category selection */}
+                                  <div className="col-span-3 space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 block">دسته کالا *</label>
+                                    <select
+                                      value={item.category || 'FLOW'}
+                                      onChange={(e) => handleItemCategoryChange(index, e.target.value as any)}
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white text-right outline-none focus:ring-1 focus:ring-sky-500 font-bold text-slate-700"
+                                    >
+                                      <option value="FLOW">فلو (جریان)</option>
+                                      <option value="TEMPERATURE">دما</option>
+                                      <option value="PRESSURE">فشار</option>
+                                      <option value="LEVEL">سطح (لول)</option>
+                                    </select>
+                                  </div>
+
+                                  {/* Equipment Type select */}
+                                  <div className="col-span-5 space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 block">نوع تجهیز *</label>
+                                    <select
+                                      value={item.equipmentType || ''}
+                                      onChange={(e) => handleItemEquipmentTypeChange(index, e.target.value)}
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white text-right outline-none focus:ring-1 focus:ring-sky-500 font-bold text-slate-700"
+                                      required
+                                    >
+                                      <option value="">-- انتخاب تجهیز --</option>
+                                      {(settings?.dropdownItems?.equipmentTypes || [
+                                        'فلومتر کوریولیس',
+                                        'فلومتر التراسونیک',
+                                        'فلومتر الکترومغناطیسی',
+                                        'فلومتر توربینی',
+                                        'ترانسمیتر فشار',
+                                        'ترانسمیتر اختلاف فشار',
+                                        'ترانسمیتر دما',
+                                        'ترانسمیتر سطح (راداری)',
+                                        'ترانسمیتر سطح (التراسونیک)',
+                                        'سوئیچ سطح',
+                                        'گیج فشار',
+                                        'گیج دما',
+                                        'شیر کنترل (کنترل ولو)',
+                                        'شیر اطمینان (سیفتی ولو)'
+                                      ]).map((eq, eqIdx) => (
+                                        <option key={eqIdx} value={eq}>{eq}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  {/* Size input */}
+                                  <div className="col-span-2 space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 block">سایز (در صورت وجود)</label>
+                                    <input
+                                      type="text"
+                                      value={item.size || ''}
+                                      onChange={(e) => handleItemSizeChange(index, e.target.value)}
+                                      placeholder="مثال: 2 اینچ"
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:ring-1 focus:ring-sky-500 font-mono text-slate-700"
+                                    />
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="col-span-10 space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 block">انتخاب کالا از انبار *</label>
+                                  <SearchableSelect
+                                    value={item.productId}
+                                    onChange={(val) => handleItemProductChange(index, val)}
+                                    options={products.map(p => {
+                                      const details = [p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ');
+                                      const detailsText = details ? ` (${details})` : '';
+                                      const stockText = p.stockLevel !== undefined && p.stockLevel > 0 ? ` [موجودی: ${p.stockLevel} ${p.unit || 'عدد'}]` : '';
+                                      return {
+                                        value: p.id,
+                                        label: `${p.code} - ${p.displayName}${detailsText}${stockText}`
+                                      };
+                                    })}
+                                    placeholder="-- انتخاب کالا --"
+                                    className="text-xs"
+                                  />
+                                </div>
+                              )}
+
+                              {/* Quantity */}
+                              <div className="col-span-1 space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 block text-center">تعداد</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={item.quantity}
+                                  onChange={(e) => handleItemQuantityChange(index, Number(e.target.value))}
+                                  placeholder="تعداد"
+                                  className="w-full border border-slate-200 rounded-lg px-1.5 py-1 text-xs text-center font-mono outline-none focus:ring-1 focus:ring-sky-500 text-slate-700"
+                                />
+                              </div>
+
+                              {/* Delete button */}
+                              <div className="col-span-1 flex justify-end pb-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItemLine(index)}
+                                  className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition"
+                                  title="حذف ردیف"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <div className="w-24">
-                            <input
-                              type="number"
-                              min={1}
-                              value={item.quantity}
-                              onChange={(e) => handleItemQuantityChange(index, Number(e.target.value))}
-                              placeholder="تعداد"
-                              className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-center font-mono"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItemLine(index)}
-                            className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-slate-400 text-[11px] text-center bg-slate-50 py-3 rounded-lg border border-dashed border-slate-200">

@@ -28,6 +28,7 @@ import { getTodayShamsi, addDaysToShamsi } from '../dateUtils';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import { getProformaOutcomeStatus } from '../useERPStore';
 import ConfirmModal from './ConfirmModal';
+import { SearchableSelect } from './SearchableSelect';
 import QuickAddModal from './QuickAddModal';
 interface ProformasViewProps {
   proformas: Proforma[];
@@ -77,6 +78,7 @@ export default function ProformasView({
   const [editingProforma, setEditingProforma] = useState<Proforma | null>(null);
   const [showPrintView, setShowPrintView] = useState(false);
   const [selectedProforma, setSelectedProforma] = useState<Proforma | null>(null);
+  const [overrideShowBrand, setOverrideShowBrand] = useState(false);
   // Status change helper state
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusTargetId, setStatusTargetId] = useState<string>('');
@@ -157,6 +159,7 @@ export default function ProformasView({
     setShowBulkModal(false);
   };
   // Form states for creating/editing proforma
+  const [proformaType, setProformaType] = useState<Proforma['proformaType']>('FINANCIAL');
   const [customerId, setCustomerId] = useState('');
   const [contactCustomerId, setContactCustomerId] = useState('');
   const [contactPrefix, setContactPrefix] = useState('');
@@ -206,6 +209,7 @@ export default function ProformasView({
       setContactPrefix('');
     }
     setProjectId('');
+    setProformaType('FINANCIAL');
     setIssueDate(getTodayShamsi());
     setExpiryDate(addDaysToShamsi(getTodayShamsi(), 30));
     setDeliveryDate('۳ هفته کاری پس از پیش پرداخت');
@@ -229,6 +233,7 @@ export default function ProformasView({
   // Open Edit Modal
   const handleOpenEdit = (pf: Proforma) => {
     setEditingProforma(pf);
+    setProformaType(pf.proformaType || 'FINANCIAL');
     setCustomerId(pf.customerId);
     setContactCustomerId(pf.contactCustomerId || '');
     setContactPrefix(pf.contactPrefix || '');
@@ -285,12 +290,21 @@ export default function ProformasView({
     const rateObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
     const rate = rateObj ? rateObj.rateToRIYAL : 1;
     const basePriceInSelectedCurrency = currency === 'ریال' ? firstProd.basePriceRIYAL : (firstProd.basePriceRIYAL / rate);
+    
+    let qty = 1;
+    if (firstProd.supplyType !== 'ORDER' && firstProd.stockLevel !== undefined) {
+      if (qty > firstProd.stockLevel) {
+        alert(`موجودی کالای پیش‌فرض (${firstProd.displayName}) در انبار (${firstProd.stockLevel} ${firstProd.unit || 'عدد'}) است.`);
+        qty = firstProd.stockLevel;
+      }
+    }
+
     setItems([...items, {
       productId: firstProd.id,
       productName: firstProd.displayName,
       productCode: firstProd.code,
       brand: firstProd.brand,
-      quantity: 1,
+      quantity: qty,
       unitPriceRIYAL: Math.round(basePriceInSelectedCurrency * 100) / 100,
       techSpecs: '',
       selectedImage: firstProd.images && firstProd.images.length > 0 ? firstProd.images[0] : undefined
@@ -311,13 +325,22 @@ export default function ProformasView({
     const rate = rateObj ? rateObj.rateToRIYAL : 1;
     const basePriceInSelectedCurrency = currency === 'ریال' ? prod.basePriceRIYAL : (prod.basePriceRIYAL / rate);
     const newItems = [...items];
+    
+    let currentQty = newItems[index].quantity;
+    if (prod.supplyType !== 'ORDER' && prod.stockLevel !== undefined) {
+      if (currentQty > prod.stockLevel) {
+        alert(`موجودی کالا در انبار (${prod.stockLevel} ${prod.unit || 'عدد'}) کمتر از تعداد درخواستی است. لطفاً برای مابقی نیاز، یک ردیف جداگانه (به صورت سفارشی) ثبت کنید.`);
+        currentQty = prod.stockLevel;
+      }
+    }
+
     newItems[index] = {
       productId: prodId,
       productName: prod.displayName,
       productCode: prod.code,
       brand: prod.brand,
       supplyMethod: prod.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY',
-      quantity: newItems[index].quantity,
+      quantity: currentQty,
       unitPriceRIYAL: Math.round(basePriceInSelectedCurrency * 100) / 100,
       techSpecs: newItems[index].techSpecs || '',
       selectedImage: prod.images && prod.images.length > 0 ? prod.images[0] : undefined
@@ -330,6 +353,16 @@ export default function ProformasView({
     let sanitizedVal = value;
     if (field === 'quantity' || field === 'unitPriceRIYAL') {
       sanitizedVal = Math.max(0, Number(value));
+      
+      if (field === 'quantity' && newItems[index].productId) {
+        const prod = products.find(p => p.id === newItems[index].productId);
+        if (prod && newItems[index].supplyMethod !== 'ORDER' && prod.stockLevel !== undefined) {
+          if (sanitizedVal > prod.stockLevel) {
+            alert(`موجودی کالا در انبار (${prod.stockLevel} ${prod.unit || 'عدد'}) کمتر از تعداد درخواستی است. لطفاً برای مابقی نیاز، یک ردیف جداگانه (به صورت سفارشی) ثبت کنید.`);
+            sanitizedVal = prod.stockLevel;
+          }
+        }
+      }
     }
     newItems[index] = {
       ...newItems[index],
@@ -364,6 +397,7 @@ export default function ProformasView({
     if (editingProforma) {
       updateProforma({
         ...editingProforma,
+        proformaType,
         customerId,
         customerName,
         contactCustomerId: isLegal ? contactCustomerId : undefined,
@@ -388,6 +422,7 @@ export default function ProformasView({
       setEditingProforma(null);
     } else {
       addProforma({
+        proformaType,
         customerId,
         customerName,
         contactCustomerId: isLegal ? contactCustomerId : undefined,
@@ -427,6 +462,7 @@ export default function ProformasView({
   // Open Preview layout
   const handleOpenPrint = (pf: Proforma) => {
     setSelectedProforma(pf);
+    setOverrideShowBrand(!!settings.showProductBrandInDocuments);
     setShowPrintView(true);
   };
   const handleCopyProforma = (pf: Proforma) => {
@@ -437,6 +473,7 @@ export default function ProformasView({
       lossReason: undefined
     }));
     addProforma({
+      proformaType: pf.proformaType || 'FINANCIAL',
       customerId: pf.customerId,
       customerName: pf.customerName,
       contactCustomerId: pf.contactCustomerId,
@@ -558,7 +595,7 @@ export default function ProformasView({
             ${imgToRender ? `
               <img src="${imgToRender}" alt="${item.productName}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; flex-shrink: 0;" referrerPolicy="no-referrer" />
             ` : ''}
-            <div style="font-weight: bold; color: #1e293b;">${item.productName}</div>
+            <div style="font-weight: bold; color: #1e293b;">${item.productName}${overrideShowBrand && item.brand ? ` (${item.brand})` : ''}</div>
           </div>
         </td>
         <td style="padding: 12px; font-size: 11px; color: #475569; white-space: pre-line; line-height: 1.4; text-align: left; direction: ltr;">
@@ -566,8 +603,10 @@ export default function ProformasView({
         </td>
         <td style="padding: 12px; text-align: center; font-family: monospace;">${item.quantity}</td>
         <td style="padding: 12px; text-align: center;">${prod?.unit || 'عدد'}</td>
+        ${pf.proformaType !== 'TECHNICAL' ? `
         <td style="padding: 12px; text-align: left; font-family: monospace;">${item.unitPriceRIYAL.toLocaleString('fa-IR')}</td>
         <td style="padding: 12px; text-align: left; font-family: monospace;">${item.totalPriceRIYAL.toLocaleString('fa-IR')}</td>
+        ` : ''}
       </tr>
       `;
     }).join('');
@@ -893,8 +932,10 @@ export default function ProformasView({
                         <th style="text-align: left;">توضیحات فنی</th>
                         <th style="text-align: center; width: 70px;">تعداد</th>
                         <th style="text-align: center; width: 70px;">واحد</th>
+                        ${pf.proformaType !== 'TECHNICAL' ? `
                         <th style="text-align: left;">بهای واحد (${targetCurrency})</th>
                         <th style="text-align: left;">بهای کل (${targetCurrency})</th>
+                        ` : ''}
                     </tr>
                 </thead>
                 <tbody>
@@ -903,12 +944,13 @@ export default function ProformasView({
             </table>
         </div>
         <!-- Financial Calculations -->
-        <div class="financial-grid">
-            <div class="notes-card">
+        <div class="${pf.proformaType === 'TECHNICAL' ? '' : 'financial-grid'}">
+            <div class="notes-card" style="${pf.proformaType === 'TECHNICAL' ? 'width: 100%;' : ''}">
                 <div style="font-weight: bold; color: #334155; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">توضیحات و شرایط فروش</div>
                 <div style="font-weight: bold; margin-bottom: 8px; font-size: 11px; color: #0284c7;">📅 زمان تحویل: ${pf.deliveryDate || 'فوری'}</div>
                 <div style="white-space: pre-line; line-height: 1.6; font-size: 12px;">${pf.notes}</div>
             </div>
+            ${pf.proformaType !== 'TECHNICAL' ? `
             <div class="totals-card">
                 <div class="totals-row">
                     <span style="color: #64748b;">جمع ناخالص ردیف‌ها:</span>
@@ -935,6 +977,7 @@ export default function ProformasView({
                     `}
                 </div>
             </div>
+            ` : ''}
         </div>
         <!-- Signatures -->
         ${template.showSignatures ? `
@@ -1039,7 +1082,7 @@ export default function ProformasView({
           <div className="bg-white text-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl p-6 md:p-10 flex flex-col justify-between h-fit min-h-screen text-right animate-scale-in">
             {/* Action Bar (Print / Close) */}
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pb-6 mb-6 border-b border-slate-200 print:hidden">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button 
                   onClick={() => downloadProformaHTML(selectedProforma)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-600/10"
@@ -1048,6 +1091,17 @@ export default function ProformasView({
                   <FileSpreadsheet size={16} />
                   خروجی فایل چاپی مستقل (دانلود HTML)
                 </button>
+
+                {/* Instant Brand display toggle */}
+                <label className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-150 cursor-pointer select-none hover:bg-slate-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={overrideShowBrand}
+                    onChange={(e) => setOverrideShowBrand(e.target.checked)}
+                    className="w-3.5 h-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <span>نمایش برند کالا در این پیش‌فاکتور</span>
+                </label>
               </div>
               <button 
                 onClick={() => setShowPrintView(false)}
@@ -1130,8 +1184,12 @@ export default function ProformasView({
                       <th className="p-3 text-left">توضیحات فنی</th>
                       <th className="p-3 text-center">تعداد</th>
                       <th className="p-3 text-center">واحد</th>
-                      <th className="p-3 text-left">بهای واحد ({selectedProforma.currency || 'ریال'})</th>
-                      <th className="p-3 text-left">بهای کل ({selectedProforma.currency || 'ریال'})</th>
+                      {selectedProforma.proformaType !== 'TECHNICAL' && (
+                        <>
+                          <th className="p-3 text-left">بهای واحد ({selectedProforma.currency || 'ریال'})</th>
+                          <th className="p-3 text-left">بهای کل ({selectedProforma.currency || 'ریال'})</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1153,7 +1211,12 @@ export default function ProformasView({
                                   referrerPolicy="no-referrer"
                                 />
                               )}
-                              <div className="font-bold text-slate-800">{item.productName}</div>
+                              <div className="font-bold text-slate-800">
+                                {item.productName}
+                                {overrideShowBrand && item.brand && (
+                                  <span className="text-xs text-indigo-600 font-semibold mr-1">({item.brand})</span>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="p-3 text-slate-600 whitespace-pre-line leading-relaxed text-left [direction:ltr] text-[11px]">
@@ -1161,8 +1224,12 @@ export default function ProformasView({
                           </td>
                           <td className="p-3 text-center font-mono">{item.quantity}</td>
                           <td className="p-3 text-center">{prod?.unit || 'عدد'}</td>
-                          <td className="p-3 text-left font-mono">{item.unitPriceRIYAL.toLocaleString()}</td>
-                          <td className="p-3 text-left font-mono">{item.totalPriceRIYAL.toLocaleString()}</td>
+                          {selectedProforma.proformaType !== 'TECHNICAL' && (
+                            <>
+                              <td className="p-3 text-left font-mono">{item.unitPriceRIYAL.toLocaleString()}</td>
+                              <td className="p-3 text-left font-mono">{item.totalPriceRIYAL.toLocaleString()}</td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
@@ -1170,45 +1237,47 @@ export default function ProformasView({
                 </table>
               </div>
               {/* Financial Calculation Totals */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className={selectedProforma.proformaType === 'TECHNICAL' ? "grid grid-cols-1" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
                 <div className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-150 text-slate-600 space-y-2">
                   <p className="font-bold text-slate-700 border-b border-slate-200 pb-1.5">توضیحات و شرایط فروش</p>
                   <p className="font-bold text-sky-600">📅 زمان تحویل: {selectedProforma.deliveryDate || 'فوری'}</p>
                   <p className="whitespace-pre-line leading-relaxed text-[11px]">{selectedProforma.notes}</p>
                 </div>
-                <div className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-150 divide-y divide-slate-200 space-y-2">
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-slate-500">جمع ناخالص ردیف‌ها:</span>
-                    <span className="font-mono font-bold">{formatCurrency(selectedProforma.totalAmount, selectedProforma.currency)}</span>
+                {selectedProforma.proformaType !== 'TECHNICAL' && (
+                  <div className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-150 divide-y divide-slate-200 space-y-2">
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-500">جمع ناخالص ردیف‌ها:</span>
+                      <span className="font-mono font-bold">{formatCurrency(selectedProforma.totalAmount, selectedProforma.currency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-500">تخفیف کلی ({selectedProforma.discountPercent}%):</span>
+                      <span className="font-mono text-red-600 font-semibold">-{formatCurrency(selectedProforma.discountAmount, selectedProforma.currency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-500">مالیات بر ارزش افزوده ({selectedProforma.taxPercent}%):</span>
+                      <span className="font-mono text-slate-700">+{formatCurrency(selectedProforma.taxAmount, selectedProforma.currency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 text-sm font-bold border-t-2" style={{ color: activeTemplate.titleColor }}>
+                      <span>مبلغ قابل پرداخت نهایی:</span>
+                      <span className="font-mono">{formatCurrency(selectedProforma.finalAmount, selectedProforma.currency)}</span>
+                    </div>
+                    <div className="text-left pt-2 font-semibold text-slate-500 text-[10px]">
+                      {(() => {
+                        const cur = selectedProforma.currency || 'ریال';
+                        if (cur !== 'ریال') {
+                          const engCurrency = mapPersianCurrencyToEnglish(cur);
+                          const rateObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
+                          const rate = rateObj ? rateObj.rateToRIYAL : 1;
+                          const riyalVal = selectedProforma.finalAmount * rate;
+                          const tomanVal = Math.round(riyalVal / 10);
+                          return `نرخ تسعیر روز ${cur}: ${rate.toLocaleString('fa-IR')} ریال | معادل: ${riyalVal.toLocaleString('fa-IR')} ریال (${tomanVal.toLocaleString('fa-IR')} تومان)`;
+                        } else {
+                          return `معادل ریالی نهایی: ${formatToman(selectedProforma.finalAmount)}`;
+                        }
+                      })()}
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-slate-500">تخفیف کلی ({selectedProforma.discountPercent}%):</span>
-                    <span className="font-mono text-red-600 font-semibold">-{formatCurrency(selectedProforma.discountAmount, selectedProforma.currency)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-slate-500">مالیات بر ارزش افزوده ({selectedProforma.taxPercent}%):</span>
-                    <span className="font-mono text-slate-700">+{formatCurrency(selectedProforma.taxAmount, selectedProforma.currency)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 text-sm font-bold border-t-2" style={{ color: activeTemplate.titleColor }}>
-                    <span>مبلغ قابل پرداخت نهایی:</span>
-                    <span className="font-mono">{formatCurrency(selectedProforma.finalAmount, selectedProforma.currency)}</span>
-                  </div>
-                  <div className="text-left pt-2 font-semibold text-slate-500 text-[10px]">
-                    {(() => {
-                      const cur = selectedProforma.currency || 'ریال';
-                      if (cur !== 'ریال') {
-                        const engCurrency = mapPersianCurrencyToEnglish(cur);
-                        const rateObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
-                        const rate = rateObj ? rateObj.rateToRIYAL : 1;
-                        const riyalVal = selectedProforma.finalAmount * rate;
-                        const tomanVal = Math.round(riyalVal / 10);
-                        return `نرخ تسعیر روز ${cur}: ${rate.toLocaleString('fa-IR')} ریال | معادل: ${riyalVal.toLocaleString('fa-IR')} ریال (${tomanVal.toLocaleString('fa-IR')} تومان)`;
-                      } else {
-                        return `معادل ریالی نهایی: ${formatToman(selectedProforma.finalAmount)}`;
-                      }
-                    })()}
-                  </div>
-                </div>
+                )}
               </div>
               {/* Signatures */}
               {activeTemplate.showSignatures && (() => {
@@ -1462,27 +1531,35 @@ export default function ProformasView({
                           {/* Status Badge */}
                           <td className="p-4 text-center">
                             <div className="flex flex-col items-center gap-1">
-                              <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] border ${getStatusColor(pf.status)}`}>
-                                {pf.status}
-                              </span>
-                              {pf.lossReason && (
-                                <span className="text-[9px] text-red-500 max-w-xs font-bold bg-red-50 px-1 py-0.5 rounded border border-red-100" title="علت باخت">
-                                  علت: {pf.lossReason}
+                              {pf.status === 'پیش‌نویس' ? (
+                                <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-100 text-slate-700 border-slate-200">
+                                  پیش‌نویس
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-sky-50 text-sky-700 border-sky-200">
+                                  ارسال شده برای کارفرما
                                 </span>
                               )}
                             </div>
                           </td>
                           {/* Computed Status Badge */}
                           <td className="p-4 text-center">
-                            {(() => {
-                               const outcome = getProformaOutcomeStatus(pf);
-                               if (outcome === 'لغو شده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-200 text-slate-700 border-slate-300 shadow-sm">لغو شده</span>;
-                               if (outcome === 'تأیید شده (برنده)') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-500/10">برنده</span>;
-                               if (outcome === 'باخته') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-red-50 text-red-700 border-red-200 shadow-sm shadow-red-500/10">بازنده</span>;
-                               if (outcome === 'نیمه برنده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-teal-50 text-teal-700 border-teal-200 shadow-sm shadow-teal-500/10">نیمه برنده</span>;
-                               if (outcome === 'پیش‌نویس') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-100 text-slate-600 border-slate-200">پیش‌نویس</span>;
-                               return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-sky-50 text-sky-700 border-sky-200">جاری</span>;
-                            })()}
+                            <div className="flex flex-col items-center gap-1">
+                              {(() => {
+                                 const outcome = getProformaOutcomeStatus(pf);
+                                 if (outcome === 'لغو شده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-200 text-slate-700 border-slate-300 shadow-sm">لغو شده</span>;
+                                 if (outcome === 'تأیید شده (برنده)') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-500/10">برنده</span>;
+                                 if (outcome === 'باخته') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-red-50 text-red-700 border-red-200 shadow-sm shadow-red-500/10">بازنده</span>;
+                                 if (outcome === 'نیمه برنده') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-teal-50 text-teal-700 border-teal-200 shadow-sm shadow-teal-500/10">نیمه برنده</span>;
+                                 if (outcome === 'پیش‌نویس') return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-slate-100 text-slate-600 border-slate-200">پیش‌نویس</span>;
+                                 return <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-sky-50 text-sky-700 border-sky-200">جاری</span>;
+                              })()}
+                              {pf.lossReason && (
+                                <span className="text-[9px] text-red-500 max-w-xs font-bold bg-red-50 px-1 py-0.5 rounded border border-red-100" title="علت باخت">
+                                  علت: {pf.lossReason}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           {/* Actions */}
                           <td className="p-4">
@@ -1728,16 +1805,62 @@ export default function ProformasView({
               </button>
             </div>
             <form onSubmit={handleSaveProforma} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+              {/* Proforma Type Selection */}
+              <div className="bg-slate-100 p-1.5 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProformaType('FINANCIAL');
+                  }}
+                  className={`py-2.5 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${
+                    proformaType === 'FINANCIAL' || !proformaType
+                      ? 'bg-white text-sky-700 shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className="text-sm">💰</span>
+                  پیش‌فاکتور مالی
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProformaType('TECHNICAL');
+                  }}
+                  className={`py-2.5 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${
+                    proformaType === 'TECHNICAL'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className="text-sm">⚙️</span>
+                  پیش‌فاکتور فنی
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProformaType('AFTER_SALES');
+                  }}
+                  className={`py-2.5 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${
+                    proformaType === 'AFTER_SALES'
+                      ? 'bg-white text-emerald-700 shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className="text-sm">🔧</span>
+                  خدمات پس از فروش
+                </button>
+              </div>
+
               {/* Header Info */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {/* Project Select */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">مرتبط با پروژه مادری (کد پروژه) *</label>
-                  <div className="flex gap-1.5 items-center">
-                    <select
+                <div className="space-y-1.5 w-full min-w-0">
+                  <label className="text-xs font-semibold text-slate-500">کد پروژه مادری *</label>
+                  <div className="flex gap-1.5 items-center w-full min-w-0">
+                    <SearchableSelect
                       value={projectId}
-                      onChange={(e) => {
-                        const projId = e.target.value;
+                      onChange={(val) => {
+                        const projId = val;
                         setProjectId(projId);
                         if (projId) {
                           const proj = projects.find(p => p.id === projId);
@@ -1746,29 +1869,40 @@ export default function ProformasView({
                               setCustomerId(proj.customerId);
                             }
                             if (proj.itemsNeeded && proj.itemsNeeded.length > 0) {
+                              let hasTruncated = false;
                               const newItems = proj.itemsNeeded.map(item => {
                                 const prod = products.find(p => p.id === item.productId);
+                                let qty = item.quantity;
+                                if (prod && prod.supplyType !== 'ORDER' && prod.stockLevel !== undefined) {
+                                  if (qty > prod.stockLevel) {
+                                    qty = prod.stockLevel;
+                                    hasTruncated = true;
+                                  }
+                                }
                                 return {
-                                  productId: item.productId,
+                                  productId: item.productId === 'generic' ? '' : item.productId,
                                   productName: prod?.displayName || item.name,
                                   productCode: prod?.code || '',
                                   brand: prod?.brand || '',
-                                  quantity: item.quantity,
+                                  quantity: qty,
                                   unitPriceRIYAL: prod?.basePriceRIYAL || 0
                                 };
                               });
                               setItems(newItems);
+                              if (hasTruncated) {
+                                alert('تعداد برخی از اقلام پروژه از موجودی انبار بیشتر بود و با موجودی فعلی جایگزین شدند. لطفاً برای مابقی نیاز، ردیف مجزا به صورت سفارشی ثبت کنید.');
+                              }
                             }
                           }
                         }
                       }}
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-bold text-sky-700 border-sky-300"
-                    >
-                      <option value="">بدون پروژه (خرید مستقیم)</option>
-                      {projects.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: 'بدون پروژه (خرید مستقیم)' },
+                        ...projects.map(p => ({ value: p.id, label: `${p.name} (${p.code})` }))
+                      ]}
+                      placeholder="بدون پروژه (خرید مستقیم)"
+                      className="font-bold text-sky-700 border-sky-300"
+                    />
                     {addProject && (
                       <button
                         type="button"
@@ -1782,13 +1916,13 @@ export default function ProformasView({
                   </div>
                 </div>
                 {/* Customer Select */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 w-full min-w-0">
                   <label className="text-xs font-semibold text-slate-500">انتخاب خریدار / کارفرما *</label>
-                  <div className="flex gap-1.5 items-center">
-                    <select
+                  <div className="flex gap-1.5 items-center w-full min-w-0">
+                    <SearchableSelect
                       value={customerId}
-                      onChange={(e) => {
-                        const newCustId = e.target.value;
+                      onChange={(val) => {
+                        const newCustId = val;
                         setCustomerId(newCustId);
                         // Reset contact choice on customer change
                         setContactCustomerId('');
@@ -1807,13 +1941,12 @@ export default function ProformasView({
                         }
                       }}
                       required
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                    >
-                      <option value="">-- انتخاب مشتری --</option>
-                      {customers.map(c => (
-                        <option key={c.id} value={c.id}>{c.companyName}</option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: '-- انتخاب مشتری --' },
+                        ...customers.map(c => ({ value: c.id, label: c.companyName }))
+                      ]}
+                      placeholder="-- انتخاب مشتری --"
+                    />
                     {addCustomer && (
                       <button
                         type="button"
@@ -1858,13 +1991,13 @@ export default function ProformasView({
                   if (!isLegalCustomer) return null;
                   return (
                     <>
-                      <div className="space-y-1.5 animate-fade-in">
+                      <div className="space-y-1.5 animate-fade-in w-full min-w-0">
                         <label className="text-xs font-semibold text-slate-500">مخاطب *</label>
-                        <div className="flex gap-1.5 items-center">
-                          <select
+                        <div className="flex gap-1.5 items-center w-full min-w-0">
+                          <SearchableSelect
                             value={contactCustomerId}
-                            onChange={(e) => {
-                              const newContactId = e.target.value;
+                            onChange={(val) => {
+                              const newContactId = val;
                               setContactCustomerId(newContactId);
                               // Auto set prefix for Contact Customer
                               const selectedContact = customers.find(c => c.id === newContactId);
@@ -1877,19 +2010,19 @@ export default function ProformasView({
                                   setContactPrefix('');
                                 }
                               } else {
-                                setContactPrefix('');
+                                  setContactPrefix('');
                               }
                             }}
                             required
-                            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                          >
-                            <option value="">-- انتخاب مخاطب --</option>
-                            {filteredContacts.map(c => (
-                              <option key={c.id} value={c.id}>
-                                {`${c.firstName || ''} ${c.lastName || ''}`.trim() || c.companyName}
-                              </option>
-                            ))}
-                          </select>
+                            options={[
+                              { value: '', label: '-- انتخاب مخاطب --' },
+                              ...filteredContacts.map(c => ({
+                                value: c.id,
+                                label: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.companyName
+                              }))
+                            ]}
+                            placeholder="-- انتخاب مخاطب --"
+                          />
                           {addCustomer && (
                             <button
                               type="button"
@@ -1936,7 +2069,7 @@ export default function ProformasView({
                     onChange={(val) => setExpiryDate(val)}
                   />
                 </div>
-                <div className="space-y-1.5" id="proforma-delivery-date-picker-wrapper">
+                <div className="space-y-1.5 sm:col-span-2 lg:col-span-2" id="proforma-delivery-date-picker-wrapper">
                   <label className="text-xs font-semibold text-slate-500">مدت و زمان تحویل کالا (تعهد تحویل) *</label>
                   <input
                     type="text"
@@ -1992,33 +2125,120 @@ export default function ProformasView({
                 </div>
                 {/* Grid headers */}
                 <div className="hidden md:grid grid-cols-12 gap-3 px-3 py-1 text-slate-400 font-bold text-[10px]">
-                  <div className="col-span-5">انتخاب کالا</div>
+                  <div className={proformaType === 'TECHNICAL' ? "col-span-9" : "col-span-5"}>انتخاب کالا</div>
                   <div className="col-span-2 text-center">تعداد</div>
-                  <div className="col-span-2 text-left">بهای واحد ({currency})</div>
-                  <div className="col-span-2 text-left">بهای کل ردیف ({currency})</div>
+                  {proformaType !== 'TECHNICAL' && (
+                    <>
+                      <div className="col-span-2 text-left">بهای واحد ({currency})</div>
+                      <div className="col-span-2 text-left">بهای کل ردیف ({currency})</div>
+                    </>
+                  )}
                   <div className="col-span-1 text-center">حذف</div>
                 </div>
                 {/* Items rows */}
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pl-1">
                   {items.map((item, idx) => (
                     <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-150 space-y-3">
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                      <div className="grid grid-cols-2 md:grid-cols-12 gap-3 items-center">
                         {/* Product Selector */}
-                        <div className="col-span-5">
-                          <div className="flex flex-col gap-2">
-                          <div className="flex gap-1 items-center">
-                            <select
-                              value={item.productId}
-                              onChange={(e) => handleItemProductChange(idx, e.target.value)}
-                              className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white text-right min-w-0"
+                        <div className={proformaType === 'TECHNICAL' ? "col-span-2 md:col-span-9 w-full min-w-0" : "col-span-2 md:col-span-5 w-full min-w-0"}>
+                          <div className="flex flex-col gap-2 w-full min-w-0">
+                          <div className="flex gap-1.5 items-center w-full min-w-0">
+                            {!item.productId ? (
+                              <div className="flex-1 flex flex-col gap-1.5 w-full min-w-0">
+                                <input
+                                  type="text"
+                                  required
+                                  value={item.productName}
+                                  onChange={(e) => {
+                                    const newItems = [...items];
+                                    newItems[idx].productName = e.target.value;
+                                    setItems(newItems);
+                                  }}
+                                  placeholder="نام کالا یا عنوان خدمات دستی..."
+                                  className="w-full border border-sky-200 focus:border-sky-500 rounded-lg px-2 py-1.5 text-xs bg-white text-right"
+                                />
+                                <div className="grid grid-cols-2 gap-2 w-full">
+                                  <input
+                                    type="text"
+                                    value={item.productCode || ''}
+                                    onChange={(e) => {
+                                      const newItems = [...items];
+                                      newItems[idx].productCode = e.target.value;
+                                      setItems(newItems);
+                                    }}
+                                    placeholder="کد کالا/خدمات (اختیاری)"
+                                    className="w-full border border-slate-200 rounded-lg px-2 py-1 text-[10px] bg-white text-right font-mono"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={item.brand || ''}
+                                    onChange={(e) => {
+                                      const newItems = [...items];
+                                      newItems[idx].brand = e.target.value;
+                                      setItems(newItems);
+                                    }}
+                                    placeholder="برند (اختیاری)"
+                                    className="w-full border border-slate-200 rounded-lg px-2 py-1 text-[10px] bg-white text-right"
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <SearchableSelect
+                                value={item.productId}
+                                onChange={(val) => handleItemProductChange(idx, val)}
+                                options={[
+                                  { value: '', label: '-- انتخاب کالا --' },
+                                  ...products.map(p => {
+                                    const stockText = (p.supplyType === 'INVENTORY' || !p.supplyType) ? ` | موجودی: ${p.stockLevel || 0}` : '';
+                                    const details = [p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ');
+                                    const detailsText = details ? ` (${details})` : '';
+                                    return {
+                                      value: p.id,
+                                      label: `${p.displayName}${detailsText}${stockText}`
+                                    };
+                                  })
+                                ]}
+                                placeholder="-- انتخاب کالا --"
+                                className="text-xs"
+                              />
+                            )}
+
+                            {/* Toggle between select and manual write */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newItems = [...items];
+                                if (item.productId) {
+                                  // Switch to Manual
+                                  newItems[idx].productId = '';
+                                  newItems[idx].productName = '';
+                                  newItems[idx].productCode = '';
+                                  newItems[idx].brand = '';
+                                } else {
+                                  // Switch to Select from List
+                                  const firstP = products[0];
+                                  if (firstP) {
+                                    newItems[idx].productId = firstP.id;
+                                    newItems[idx].productName = firstP.displayName;
+                                    newItems[idx].productCode = firstP.code;
+                                    newItems[idx].brand = firstP.brand;
+                                    const engCurrency = mapPersianCurrencyToEnglish(currency || 'ریال');
+                                    const rateObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
+                                    const rate = rateObj ? rateObj.rateToRIYAL : 1;
+                                    const basePrice = currency === 'ریال' ? firstP.basePriceRIYAL : (firstP.basePriceRIYAL / rate);
+                                    newItems[idx].unitPriceRIYAL = Math.round(basePrice * 100) / 100;
+                                  }
+                                }
+                                setItems(newItems);
+                              }}
+                              className="px-2 py-1.5 text-[10px] text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-150 rounded-lg font-bold shrink-0 transition"
+                              title={item.productId ? "ثبت دستی نام کالا/خدمات" : "انتخاب کالا از کاتالوگ انبار"}
                             >
-                              <option value="">-- انتخاب کالا --</option>
-                              {products.map(p => {
-                                 let stockText = (p.supplyType === 'INVENTORY' || !p.supplyType) ? ` | موجودی: ${p.stockLevel || 0}` : '';
-                                 return <option key={p.id} value={p.id}>{p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}{stockText}</option>
-                              })}
-                            </select>
-                            {addProduct && (
+                              {item.productId ? "✍️ ثبت دستی" : "📋 لیست کالا"}
+                            </button>
+
+                            {item.productId && addProduct && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -2033,37 +2253,46 @@ export default function ProformasView({
                             )}
                           </div>
                         
-                        {/* Additional row for item config */}
-                        <div className="flex gap-3 mt-1 pt-1 border-t border-slate-100/50 w-full">
-                           <div className="flex items-center gap-2">
-                             <label className="text-[10px] text-slate-500">منبع تامین:</label>
-                             
-                                {(() => {
-                                  const selectedProd = products.find(p => p.id === item.productId);
-                                  const isOrderOnly = selectedProd?.supplyType === 'ORDER';
-                                  return (
-                                    <select
-                                      value={item.supplyMethod || 'INVENTORY'}
-                                      onChange={(e) => {
-                                        const newItems = [...items];
-                                        newItems[idx].supplyMethod = e.target.value as any;
-                                        setItems(newItems);
-                                      }}
-                                      className="border border-slate-200 rounded-md px-1.5 py-1 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    >
-                                      {!isOrderOnly && <option value="INVENTORY">از انبار</option>}
-                                      <option value="ORDER">سفارش خارجی (قابل سفارش)</option>
-                                    </select>
-                                  );
-                                })()}
+                          {/* Additional row for item config */}
+                          <div className="flex gap-3 mt-1 pt-1 border-t border-slate-100/50 w-full">
+                             <div className="flex items-center gap-2">
+                               <label className="text-[10px] text-slate-500">منبع تامین:</label>
+                               
+                                  {(() => {
+                                    const selectedProd = products.find(p => p.id === item.productId);
+                                    const isOrderOnly = selectedProd?.supplyType === 'ORDER';
+                                    return (
+                                      <select
+                                        value={item.supplyMethod || 'INVENTORY'}
+                                        onChange={(e) => {
+                                          const newItems = [...items];
+                                          newItems[idx].supplyMethod = e.target.value as any;
+                                          if (e.target.value !== 'ORDER') {
+                                            const prod = products.find(p => p.id === item.productId);
+                                            if (prod && prod.stockLevel !== undefined && newItems[idx].quantity > prod.stockLevel) {
+                                              alert(`موجودی کالا در انبار (${prod.stockLevel} ${prod.unit || 'عدد'}) کمتر از تعداد درخواستی است.`);
+                                              newItems[idx].quantity = prod.stockLevel;
+                                            }
+                                          }
+                                          setItems(newItems);
+                                        }}
+                                        className="border border-slate-200 rounded-md px-1.5 py-1 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                      >
+                                        {!isOrderOnly && <option value="INVENTORY">از انبار</option>}
+                                        <option value="ORDER">سفارش خارجی (قابل سفارش)</option>
+                                        <option value="NONE">بدون نیاز به تامین (خدمات پس از فروش)</option>
+                                      </select>
+                                    );
+                                  })()}
 
-                           </div>
-                        </div>
+                             </div>
+                          </div>
 
                           </div>
                         </div>
                         {/* Quantity */}
-                        <div className="col-span-2 flex items-center justify-center gap-1">
+                        <div className="col-span-1 md:col-span-2 flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-slate-400 md:hidden block">تعداد *</label>
                           <input
                             type="number"
                             min={1}
@@ -2073,29 +2302,39 @@ export default function ProformasView({
                             className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center bg-white"
                           />
                         </div>
-                        {/* Unit Price */}
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            required
-                            value={item.unitPriceRIYAL}
-                            onChange={(e) => handleItemFieldChange(idx, 'unitPriceRIYAL', Number(e.target.value))}
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-left bg-white"
-                          />
-                        </div>
-                        {/* Total price for line */}
-                        <div className="col-span-2 text-left font-mono font-bold text-xs text-slate-700 px-2">
-                          {(item.quantity * item.unitPriceRIYAL).toLocaleString()} {currency}
-                        </div>
+                        {proformaType !== 'TECHNICAL' && (
+                          <>
+                            {/* Unit Price */}
+                            <div className="col-span-1 md:col-span-2 flex flex-col gap-1">
+                              <label className="text-[10px] font-bold text-slate-400 md:hidden block">بهای واحد ({currency}) *</label>
+                              <input
+                                type="number"
+                                required
+                                value={item.unitPriceRIYAL}
+                                onChange={(e) => handleItemFieldChange(idx, 'unitPriceRIYAL', Number(e.target.value))}
+                                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-left bg-white"
+                              />
+                            </div>
+                            {/* Total price for line */}
+                            <div className="col-span-1 md:col-span-2 flex flex-col justify-center text-left px-2">
+                              <label className="text-[10px] font-bold text-slate-400 md:hidden block text-right">بهای کل ردیف</label>
+                              <div className="font-mono font-bold text-xs text-slate-700 py-1.5 text-left md:text-left">
+                                {(item.quantity * item.unitPriceRIYAL).toLocaleString()} {currency}
+                              </div>
+                            </div>
+                          </>
+                        )}
                         {/* Remove item line button */}
-                        <div className="col-span-1 text-center">
+                        <div className="col-span-1 md:col-span-1 flex flex-col justify-end md:justify-center items-center">
+                          <label className="text-[10px] font-bold text-slate-400 md:hidden block select-none">&nbsp;</label>
                           <button
                             type="button"
                             onClick={() => handleRemoveItemLine(idx)}
-                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-white rounded transition"
+                            className="w-full md:w-auto py-1.5 md:py-1 px-3 md:px-1 text-slate-400 hover:text-red-500 hover:bg-red-50 md:hover:bg-white rounded-lg md:rounded border border-slate-200 md:border-0 flex items-center justify-center gap-1 transition text-xs font-semibold"
                             disabled={items.length === 1}
                           >
                             <MinusCircle size={16} />
+                            <span className="md:hidden">حذف</span>
                           </button>
                         </div>
                       </div>
@@ -2162,9 +2401,9 @@ export default function ProformasView({
               {/* Financial Bottom Block */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t border-slate-100 pt-5">
                 {/* Notes and custom variables */}
-                <div className="space-y-3 text-xs">
+                <div className={`space-y-3 text-xs ${proformaType === 'TECHNICAL' ? 'md:col-span-2' : ''}`}>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">شرایط و مفاد عمومی پیشنهاد قیمت</label>
+                    <label className="text-xs font-semibold text-slate-500">شرایط و توضیحات</label>
                     <textarea
                       rows={4}
                       value={notes}
@@ -2173,65 +2412,72 @@ export default function ProformasView({
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
                     />
                   </div>
-                </div>
-                {/* Numerical Totals Panel */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-2.5 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">جمع ناخالص اقلام:</span>
-                    <span className="font-mono text-slate-700">{subTotal.toLocaleString()} {currency}</span>
-                  </div>
-                  {/* Discount percentage input */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">اعمال درصد تخفیف کلی:</span>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={discountPercent}
-                        onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
-                        className="w-14 border border-slate-200 rounded px-1.5 py-0.5 text-xs text-center font-mono"
-                      />
-                      <span className="text-slate-400">%</span>
-                      <span className="font-mono text-red-600 font-semibold">({discountAmount.toLocaleString()} {currency})</span>
-                    </div>
-                  </div>
-                  {/* Tax percentage input */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">مالیات بر ارزش افزوده (VAT):</span>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={taxPercent}
-                        onChange={(e) => setTaxPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
-                        className="w-14 border border-slate-200 rounded px-1.5 py-0.5 text-xs text-center font-mono"
-                      />
-                      <span className="text-slate-400">%</span>
-                      <span className="font-mono text-slate-600 font-semibold">({taxAmount.toLocaleString()} {currency})</span>
-                    </div>
-                  </div>
-                  <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-sm font-bold text-sky-700">
-                    <span>مبلغ کل خالص فاکتور:</span>
-                    <span className="font-mono text-base">{finalAmount.toLocaleString()} {currency}</span>
-                  </div>
-                  {currency === 'ریال' ? (
-                    <div className="text-left font-semibold text-slate-500 text-[10px]">
-                      معادل تومان: {formatToman(finalAmount)}
-                    </div>
-                  ) : (
-                    <div className="text-left font-semibold text-slate-500 text-[10px]">
-                      {(() => {
-                        const eng = mapPersianCurrencyToEnglish(currency);
-                        const rateObj = eng ? exchangeRates.find(r => r.currency === eng) : undefined;
-                        const rate = rateObj ? rateObj.rateToRIYAL : 1;
-                        const riyalAmount = finalAmount * rate;
-                        return `تسعیر همزمان: ${Math.round(riyalAmount).toLocaleString()} ریال (${Math.round(riyalAmount / 10).toLocaleString()} تومان)`;
-                      })()}
+                  {proformaType === 'TECHNICAL' && (
+                    <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-700 font-medium">
+                      ℹ️ این پیش‌فاکتور از نوع <strong>فنی</strong> است. کلیه اطلاعات قیمتی، تخفیف، مالیات و مبالغ نهایی از پیش‌نمایش و فایل چاپی حذف خواهند شد.
                     </div>
                   )}
                 </div>
+                {/* Numerical Totals Panel */}
+                {proformaType !== 'TECHNICAL' && (
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-2.5 text-xs">
+                    <div className="flex justify-between items-center flex-wrap gap-2">
+                      <span className="text-slate-500">جمع ناخالص اقلام:</span>
+                      <span className="font-mono text-slate-700">{subTotal.toLocaleString()} {currency}</span>
+                    </div>
+                    {/* Discount percentage input */}
+                    <div className="flex justify-between items-center flex-wrap gap-2">
+                      <span className="text-slate-500">اعمال درصد تخفیف کلی:</span>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={discountPercent}
+                          onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                          className="w-14 border border-slate-200 rounded px-1.5 py-0.5 text-xs text-center font-mono"
+                        />
+                        <span className="text-slate-400">%</span>
+                        <span className="font-mono text-red-600 font-semibold">({discountAmount.toLocaleString()} {currency})</span>
+                      </div>
+                    </div>
+                    {/* Tax percentage input */}
+                    <div className="flex justify-between items-center flex-wrap gap-2">
+                      <span className="text-slate-500">مالیات بر ارزش افزوده (VAT):</span>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={taxPercent}
+                          onChange={(e) => setTaxPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                          className="w-14 border border-slate-200 rounded px-1.5 py-0.5 text-xs text-center font-mono"
+                        />
+                        <span className="text-slate-400">%</span>
+                        <span className="font-mono text-slate-600 font-semibold">({taxAmount.toLocaleString()} {currency})</span>
+                      </div>
+                    </div>
+                    <div className="border-t border-slate-200 pt-2 flex justify-between items-center flex-wrap gap-2 text-sm font-bold text-sky-700">
+                      <span>مبلغ کل خالص فاکتور:</span>
+                      <span className="font-mono text-base">{finalAmount.toLocaleString()} {currency}</span>
+                    </div>
+                    {currency === 'ریال' ? (
+                      <div className="text-left font-semibold text-slate-500 text-[10px]">
+                        معادل تومان: {formatToman(finalAmount)}
+                      </div>
+                    ) : (
+                      <div className="text-left font-semibold text-slate-500 text-[10px]">
+                        {(() => {
+                          const eng = mapPersianCurrencyToEnglish(currency);
+                          const rateObj = eng ? exchangeRates.find(r => r.currency === eng) : undefined;
+                          const rate = rateObj ? rateObj.rateToRIYAL : 1;
+                          const riyalAmount = finalAmount * rate;
+                          return `تسعیر همزمان: ${Math.round(riyalAmount).toLocaleString()} ریال (${Math.round(riyalAmount / 10).toLocaleString()} تومان)`;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               {/* Form Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

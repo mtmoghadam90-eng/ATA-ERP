@@ -322,6 +322,8 @@ export default function App() {
             customers={store.customers}
             suppliers={store.suppliers}
             projects={store.projects}
+            proformas={store.proformas}
+            exchangeRates={store.exchangeRates}
             addTransaction={store.addTransaction}
             updateTransaction={store.updateTransaction}
             deleteTransaction={store.deleteTransaction}
@@ -369,6 +371,7 @@ export default function App() {
           <PackagingDeliveryView 
             projects={store.projects}
             proformas={store.proformas}
+            products={store.products}
             packagingDeliveries={store.packagingDeliveries}
             addPackagingDelivery={store.addPackagingDelivery}
             updatePackagingDelivery={store.updatePackagingDelivery}

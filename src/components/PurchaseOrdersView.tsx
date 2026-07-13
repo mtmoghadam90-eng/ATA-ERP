@@ -30,6 +30,7 @@ import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
+import { SearchableSelect } from './SearchableSelect';
 
 interface PurchaseOrdersViewProps {
   purchaseOrders: PurchaseOrder[];
@@ -888,13 +889,13 @@ export default function PurchaseOrdersView({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
                 {/* Project Linked */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">مرتبط با پروژه مادری (کد پروژه) *</label>
-                  <div className="flex gap-1.5 items-center">
-                    <select
+                <div className="space-y-1.5 w-full min-w-0">
+                  <label className="text-xs font-semibold text-slate-500">کد پروژه مادری *</label>
+                  <div className="flex gap-1.5 items-center w-full min-w-0">
+                    <SearchableSelect
                       value={projectId}
-                      onChange={(e) => {
-                        const projId = e.target.value;
+                      onChange={(val) => {
+                        const projId = val;
                         setProjectId(projId);
                         if (projId) {
                           const relatedProformas = proformas.filter(pf => pf.projectId === projId);
@@ -933,7 +934,7 @@ export default function PurchaseOrdersView({
                                 const basePriceForeign = prod ? Math.round(prod.basePriceRIYAL / exchangeRateInput) || 100 : 100;
                                 return {
                                   id: `poi-${Date.now()}-${idx}`,
-                                  productId: neededItem.productId,
+                                  productId: neededItem.productId === 'generic' ? '' : neededItem.productId,
                                   productName: prod?.displayName || neededItem.name,
                                   productCode: prod?.code || '',
                                   brand: prod?.brand || '',
@@ -947,13 +948,13 @@ export default function PurchaseOrdersView({
                           }
                         }
                       }}
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-bold text-sky-700 border-sky-300"
-                    >
-                      <option value="">خرید عمومی (بدون پروژه)</option>
-                      {projects.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: 'خرید عمومی (بدون پروژه)' },
+                        ...projects.map(p => ({ value: p.id, label: `${p.name} (${p.code})` }))
+                      ]}
+                      placeholder="خرید عمومی (بدون پروژه)"
+                      className="font-bold text-sky-700 border-sky-300"
+                    />
                     {addProject && (
                       <button
                         type="button"
@@ -971,17 +972,16 @@ export default function PurchaseOrdersView({
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">انتخاب تأمین‌کننده خارجی *</label>
                   <div className="flex gap-1.5 items-center">
-                    <select
+                    <SearchableSelect
                       value={supplierId}
-                      onChange={(e) => setSupplierId(e.target.value)}
+                      onChange={(val) => setSupplierId(val)}
                       required
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                    >
-                      <option value="">-- انتخاب سازنده --</option>
-                      {suppliers.map(s => (
-                        <option key={s.id} value={s.id}>{s.name} ({s.country})</option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: '-- انتخاب سازنده --' },
+                        ...suppliers.map(s => ({ value: s.id, label: `${s.name} (${s.country})` }))
+                      ]}
+                      placeholder="-- انتخاب سازنده --"
+                    />
                     {addSupplier && (
                       <button
                         type="button"
@@ -998,10 +998,10 @@ export default function PurchaseOrdersView({
                 {/* Proforma Linked */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">مرتبط با پیش‌فاکتور مشتری (پروفرما)</label>
-                  <select
+                  <SearchableSelect
                     value={proformaId}
-                    onChange={(e) => {
-                      const pfId = e.target.value;
+                    onChange={(val) => {
+                      const pfId = val;
                       setProformaId(pfId);
                       const pfObj = proformas.find(pf => pf.id === pfId);
                       if (pfObj) {
@@ -1029,13 +1029,12 @@ export default function PurchaseOrdersView({
                         }
                       }
                     }}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                  >
-                    <option value="">خرید متفرقه (بدون ارتباط با پیش‌فاکتور)</option>
-                    {proformas.map(pf => (
-                      <option key={pf.id} value={pf.id}>{pf.proformaNumber} - {pf.customerName}</option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: '', label: 'خرید متفرقه (بدون ارتباط با پیش‌فاکتور)' },
+                      ...proformas.map(pf => ({ value: pf.id, label: `${pf.proformaNumber} - ${pf.customerName}` }))
+                    ]}
+                    placeholder="خرید متفرقه (بدون ارتباط با پیش‌فاکتور)"
+                  />
                 </div>
 
                 {/* Currency select */}
@@ -1188,16 +1187,23 @@ export default function PurchaseOrdersView({
                       {/* Product select & Proforma Item select */}
                       <div className="col-span-6 space-y-1.5">
                         <div className="flex gap-1 items-center">
-                          <select
+                          <SearchableSelect
                             value={item.productId}
-                            onChange={(e) => handleItemProductChange(idx, e.target.value)}
-                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white text-right min-w-0"
-                          >
-                            <option value="">-- انتخاب کالا --</option>
-                            {products.map(p => (
-                              <option key={p.id} value={p.id}>{p.code} - {p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}</option>
-                            ))}
-                          </select>
+                            onChange={(val) => handleItemProductChange(idx, val)}
+                            options={[
+                              { value: '', label: '-- انتخاب کالا --' },
+                              ...products.map(p => {
+                                const details = [p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ');
+                                const detailsText = details ? ` (${details})` : '';
+                                return {
+                                  value: p.id,
+                                  label: `${p.code} - ${p.displayName}${detailsText}`
+                                };
+                              })
+                            ]}
+                            placeholder="-- انتخاب کالا --"
+                            className="text-xs"
+                          />
                           {addProduct && (
                             <button
                               type="button"

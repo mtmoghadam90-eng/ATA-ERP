@@ -145,6 +145,7 @@ export default function SettingsView({
     'shippingMethods',
     'packageTypes',
     'returnReasons',
+    'equipmentTypes',
     'lossReasons'
   ];
 
@@ -164,6 +165,7 @@ export default function SettingsView({
     shippingMethods: 'نحوه ارسال کالا (پکینگ لیست/خرید)',
     packageTypes: 'نوع بسته‌بندی (پکینگ لیست)',
     returnReasons: 'دلایل برگشت کالا (خدمات پس از فروش)',
+    equipmentTypes: 'انواع پیش‌فرض تجهیزات ابزار دقیق (پروژه‌ها)',
     lossReasons: 'دلایل باخت پروژه/اقلام (پروژه‌ها/پیش‌فاکتور)'
   };
 
@@ -183,6 +185,7 @@ export default function SettingsView({
     shippingMethods: 'لیست روش‌ها و شرکت‌های حمل و نقل جهت انتخاب در زمان صدور پکینگ لیست و تحویل کالا.',
     packageTypes: 'لیست انواع پیش‌فرض بسته‌بندی کالاها در پکینگ لیست.',
     returnReasons: 'لیست دلایل و مشکلات خرابی یا برگشت کالا در بخش خدمات پس از فروش.',
+    equipmentTypes: 'لیست انواع تجهیزات ابزار دقیق (مانند فلومتر کوریولیس، ترانسمیتر فشار، لول ترانسمیتر راداری و غیره) برای ثبت سریع درخواست‌های پروژه‌ها.',
     lossReasons: 'دلایل باخت تعریف شده که کاربر می‌تواند هنگام مشخص کردن وضعیت بازنده یا لغو پروژه/پیش‌فاکتور انتخاب کند.'
   };
 
@@ -355,14 +358,18 @@ export default function SettingsView({
   const [nationalId, setNationalId] = useState(template?.nationalCode || '');
   const [logoUrl, setLogoUrl] = useState(template?.logoUrl || '');
   const [companySealUrl, setCompanySealUrl] = useState(template?.companySealUrl || '');
+  const [termsAndConditions, setTermsAndConditions] = useState(template?.termsAndConditions || '');
   const [proformaPrefix, setProformaPrefix] = useState(settings.documentFormats.proformaPrefix);
   const [purchaseOrderPrefix, setPurchaseOrderPrefix] = useState(settings.documentFormats.poPrefix);
   const [projectFormat, setProjectFormat] = useState(settings.documentFormats.projectFormat || 'ATA-{YYYY}-{SEQ:3}');
   const [proformaFormat, setProformaFormat] = useState(settings.documentFormats.proformaFormat || 'QT-{PROJECT}-{SEQ:2}');
+  const [proformaTechnicalFormat, setProformaTechnicalFormat] = useState(settings.documentFormats.proformaTechnicalFormat || 'QT-TECH-{PROJECT}-{SEQ:2}');
+  const [proformaAfterSalesFormat, setProformaAfterSalesFormat] = useState(settings.documentFormats.proformaAfterSalesFormat || 'QT-SERV-{PROJECT}-{SEQ:2}');
   const [poFormat, setPoFormat] = useState(settings.documentFormats.poFormat || 'PO-{PROJECT}-{SEQ:3}');
   const [transactionFormat, setTransactionFormat] = useState(settings.documentFormats.transactionFormat || 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}');
   const [productFormat, setProductFormat] = useState(settings.documentFormats.productFormat || 'EQ-{RAND:5}');
   const [vatPercent, setVatPercent] = useState(10);
+  const [showProductBrandInDocuments, setShowProductBrandInDocuments] = useState(!!settings.showProductBrandInDocuments);
 
   const [isSaved, setIsSaved] = useState(false);
 
@@ -403,7 +410,8 @@ export default function SettingsView({
           registrationNumber,
           nationalCode: nationalId,
           logoUrl,
-          companySealUrl
+          companySealUrl,
+          termsAndConditions
         };
       }
       return t;
@@ -411,6 +419,7 @@ export default function SettingsView({
 
     updateSettings({
       ...settings,
+      showProductBrandInDocuments,
       proformaTemplates: updatedTemplates,
       documentFormats: {
         ...settings.documentFormats,
@@ -418,6 +427,8 @@ export default function SettingsView({
         poPrefix: purchaseOrderPrefix,
         projectFormat,
         proformaFormat,
+        proformaTechnicalFormat,
+        proformaAfterSalesFormat,
         poFormat,
         transactionFormat,
         productFormat
@@ -893,6 +904,21 @@ export default function SettingsView({
                   />
                 </div>
 
+                {/* Default Terms & Conditions (شرایط و توضیحات) */}
+                <div className="space-y-1.5 md:col-span-2 border-t border-slate-100 pt-4">
+                  <label className="text-xs font-bold text-slate-700 block">شرایط و توضیحات (پیش‌فرض پیش‌فاکتورها)</label>
+                  <span className="text-[10px] text-slate-400 block mb-1">
+                    این متن به صورت خودکار به عنوان شرایط و مفاد عمومی در زمان ساخت پیش‌فاکتور جدید قرار می‌گیرد.
+                  </span>
+                  <textarea
+                    rows={4}
+                    value={termsAndConditions}
+                    onChange={(e) => setTermsAndConditions(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
+                    placeholder="مفاد عمومی، مدت اعتبار پیشنهاد، شرایط گارانتی و غیره..."
+                  />
+                </div>
+
               </div>
             </div>
 
@@ -900,10 +926,29 @@ export default function SettingsView({
             <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
               <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
                 <Sliders size={18} className="text-sky-500" />
-                <h3 className="font-bold text-sm">متغیرها و فرمت‌های شماره‌گذاری</h3>
+                <h3 className="font-bold text-sm">تنظیمات کالا و فرمت‌ها</h3>
               </div>
 
               <div className="space-y-4">
+
+                {/* Brand display toggle */}
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/80 flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="showProductBrandInDocuments"
+                    checked={showProductBrandInDocuments}
+                    onChange={(e) => setShowProductBrandInDocuments(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 mt-0.5 cursor-pointer"
+                  />
+                  <div className="space-y-0.5">
+                    <label htmlFor="showProductBrandInDocuments" className="text-xs font-bold text-slate-800 cursor-pointer">
+                      نمایش برند کالا در اسناد و فرم‌ها
+                    </label>
+                    <p className="text-[10px] text-slate-500 leading-normal">
+                      در صورت فعال‌سازی، برند کالاها در پیش‌فاکتور، پکینگ لیست، رسیدهای خدمات پس از فروش و سایر فرم‌های برنامه نمایش داده می‌شود.
+                    </p>
+                  </div>
+                </div>
 
                 {/* Advanced Numbering Formats Header */}
                 <div className="pt-2 border-t border-slate-100">
@@ -936,7 +981,7 @@ export default function SettingsView({
 
                 {/* Proforma Number Format */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورها</label>
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورهای مالی</label>
                   <input
                     type="text"
                     required
@@ -948,6 +993,40 @@ export default function SettingsView({
                   <div className="text-[10px] text-slate-400 flex justify-between">
                     <span>پیش‌فرض: <code className="font-mono">QT-{"{PROJECT}"}-{"{SEQ:2}"}</code></span>
                     <span>مثال: <code className="font-mono text-emerald-600">QT-ATA-1405-001-01</code></span>
+                  </div>
+                </div>
+
+                {/* Technical Proforma Number Format */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورهای فنی</label>
+                  <input
+                    type="text"
+                    required
+                    value={proformaTechnicalFormat}
+                    onChange={(e) => setProformaTechnicalFormat(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
+                    placeholder="QT-TECH-{PROJECT}-{SEQ:2}"
+                  />
+                  <div className="text-[10px] text-slate-400 flex justify-between">
+                    <span>پیش‌فرض: <code className="font-mono">QT-TECH-{"{PROJECT}"}-{"{SEQ:2}"}</code></span>
+                    <span>مثال: <code className="font-mono text-emerald-600">QT-TECH-ATA-1405-001-01</code></span>
+                  </div>
+                </div>
+
+                {/* After-Sales Proforma Number Format */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورهای خدمات پس از فروش</label>
+                  <input
+                    type="text"
+                    required
+                    value={proformaAfterSalesFormat}
+                    onChange={(e) => setProformaAfterSalesFormat(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
+                    placeholder="QT-SERV-{PROJECT}-{SEQ:2}"
+                  />
+                  <div className="text-[10px] text-slate-400 flex justify-between">
+                    <span>پیش‌فرض: <code className="font-mono">QT-SERV-{"{PROJECT}"}-{"{SEQ:2}"}</code></span>
+                    <span>مثال: <code className="font-mono text-emerald-600">QT-SERV-ATA-1405-001-01</code></span>
                   </div>
                 </div>
 

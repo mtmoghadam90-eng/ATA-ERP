@@ -17,6 +17,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import { SearchableSelect } from './SearchableSelect';
 import { getTodayShamsi } from '../dateUtils';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
@@ -527,42 +528,41 @@ export default function AfterSalesServicesView({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">پروژه (مشتری) <span className="text-red-500">*</span></label>
-                  <select
+                  <SearchableSelect
                     value={selectedProjectId}
-                    onChange={(e) => {
-                      setSelectedProjectId(e.target.value);
+                    onChange={(val) => {
+                      setSelectedProjectId(val);
                       setSelectedProformaNumber('');
                       resetItemForm();
                       setServiceItems([]);
                     }}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700"
+                    options={[
+                      { value: '', label: 'انتخاب پروژه...' },
+                      ...projects.map(p => ({
+                        value: p.id,
+                        label: p.code ? `${p.code} - ${p.name}` : p.name
+                      }))
+                    ]}
+                    placeholder="انتخاب پروژه..."
                     required
-                  >
-                    <option value="">انتخاب پروژه...</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.code ? `${p.code} - ` : ''}{p.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">پیش‌فاکتور مرجع (فقط پیش‌فاکتورهای تایید شده)</label>
-                  <select
+                  <SearchableSelect
                     value={selectedProformaNumber}
-                    onChange={(e) => {
-                      setSelectedProformaNumber(e.target.value);
+                    onChange={(val) => {
+                      setSelectedProformaNumber(val);
                       resetItemForm();
                     }}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700 font-mono"
+                    options={[
+                      { value: '', label: 'انتخاب پیش‌فاکتور...' },
+                      ...selectedProjectProformas.map(p => ({ value: p.proformaNumber, label: p.proformaNumber }))
+                    ]}
+                    placeholder="انتخاب پیش‌فاکتور..."
                     disabled={!selectedProjectId}
-                  >
-                    <option value="">انتخاب پیش‌فاکتور...</option>
-                    {selectedProjectProformas.map(p => (
-                      <option key={p.id} value={p.proformaNumber}>{p.proformaNumber}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 
@@ -579,12 +579,12 @@ export default function AfterSalesServicesView({
                     <label className="text-xs font-bold text-slate-700">نام کالا / تجهیز برگشتی <span className="text-red-500">*</span></label>
                     {selectedProformaNumber && proformaItems.length > 0 ? (
                       <div className="space-y-2">
-                        <select
+                        <SearchableSelect
                           value={itemProductDropdownVal}
-                          onChange={(e) => {
-                            setItemProductDropdownVal(e.target.value);
-                            if (e.target.value !== 'custom' && e.target.value !== '') {
-                              const selected = proformaItems.find(pi => pi.productId === e.target.value);
+                          onChange={(val) => {
+                            setItemProductDropdownVal(val);
+                            if (val !== 'custom' && val !== '') {
+                              const selected = proformaItems.find(pi => pi.productId === val);
                               if (selected) {
                                 setItemCustomName(selected.brand ? `${selected.productName} (${selected.brand})` : selected.productName);
                               }
@@ -592,16 +592,17 @@ export default function AfterSalesServicesView({
                               setItemCustomName('');
                             }
                           }}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
-                        >
-                          <option value="">انتخاب کالا از پیش‌فاکتور...</option>
-                          {proformaItems.map(pi => (
-                            <option key={pi.productId} value={pi.productId}>
-                              {pi.productName}{pi.brand ? ` (${pi.brand})` : ''} - {pi.quantity} {pi.unit}
-                            </option>
-                          ))}
-                          <option value="custom">ورود دستی نام کالا...</option>
-                        </select>
+                          options={[
+                            { value: '', label: 'انتخاب کالا از پیش‌فاکتور...' },
+                            ...proformaItems.map(pi => ({
+                              value: pi.productId,
+                              label: `${pi.productName}${pi.brand ? ` (${pi.brand})` : ''} - ${pi.quantity} ${pi.unit}`
+                            })),
+                            { value: 'custom', label: 'ورود دستی نام کالا...' }
+                          ]}
+                          placeholder="انتخاب کالا از پیش‌فاکتور..."
+                          className="text-xs"
+                        />
                         {(itemProductDropdownVal === 'custom' || !itemProductDropdownVal) && (
                           <input
                             type="text"
