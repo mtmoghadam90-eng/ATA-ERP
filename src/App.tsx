@@ -204,6 +204,7 @@ export default function App() {
             updateProduct={store.updateProduct}
             deleteProduct={store.deleteProduct}
             adjustProductStock={store.adjustProductStock}
+            batchImportProducts={store.batchImportProducts}
             categories={store.settings.dropdownItems.categories}
             units={store.settings.dropdownItems.units}
             settings={store.settings}

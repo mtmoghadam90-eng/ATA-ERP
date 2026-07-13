@@ -507,6 +507,180 @@ export function useERPStore() {
     }
   };
 
+  const batchImportProducts = (
+    items: Array<{
+      code?: string;
+      name?: string;
+      category?: string;
+      supplyType?: 'INVENTORY' | 'ORDER';
+      notes?: string;
+      size?: string;
+      measurementRange?: string;
+      amt?: number;
+      type?: string;
+      dateVal?: string;
+    }>
+  ) => {
+    let createCount = 0;
+    let successCount = 0;
+    const newTransactions: InventoryTransaction[] = [];
+    const nowStr = new Date().toISOString();
+
+    setProducts(prevProducts => {
+      let currentProducts = [...prevProducts];
+
+      items.forEach((item, index) => {
+        const code = (item.code || "").trim();
+        let amt = Number(item.amt);
+        const type = item.type;
+        const notes = item.notes || "ویرایش گروهی";
+        const dateVal = item.dateVal;
+        
+        const name = item.name ? String(item.name).trim() : "";
+        const category = item.category ? String(item.category).trim() : "";
+        const supplyType = item.supplyType || 'INVENTORY';
+        const size = item.size || "";
+        const mRange = item.measurementRange || "";
+
+        // Case 1: Code is empty but name and category are provided -> Create new product
+        if (!code && name && category) {
+          const seqNum = currentProducts.length + 1;
+          const finalCode = formatERPNumber(
+            settings.documentFormats.productFormat || 'EQ-{RAND:5}',
+            {
+              seq: seqNum,
+              category: category
+            }
+          );
+          const initialStock = supplyType === 'INVENTORY' && !isNaN(amt) && amt > 0 ? amt : 0;
+          const newProduct: Product = {
+            id: `prod-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+            code: finalCode,
+            name: name,
+            displayName: name,
+            category: category,
+            supplyType: supplyType,
+            description: notes,
+            size: size,
+            measurementRange: mRange,
+            images: [],
+            brand: "",
+            modelNumber: "N/A",
+            unit: "عدد",
+            basePriceRIYAL: 0,
+            minStockLevel: 0,
+            stockLevel: initialStock,
+            customValues: {}
+          };
+          currentProducts = [newProduct, ...currentProducts];
+          createCount++;
+
+          if (initialStock > 0) {
+            newTransactions.push({
+              id: `inv-tr-${Date.now()}-${index}-init`,
+              productId: newProduct.id,
+              date: dateVal || nowStr,
+              type: 'IN',
+              quantity: initialStock,
+              referenceType: 'MANUAL',
+              notes: 'موجودی اولیه (واردات گروهی)'
+            });
+          }
+
+          logAction('CREATE', 'کالاها', newProduct.id, `ایجاد کالای جدید (واردات گروهی): ${newProduct.name} (کد: ${newProduct.code})`, undefined, newProduct);
+        } else if (code) {
+          // Case 2: Code is provided
+          const prodIndex = currentProducts.findIndex(p => p.code === code);
+          if (prodIndex !== -1) {
+            // Product exists -> Adjust stock
+            const product = currentProducts[prodIndex];
+            if (product.supplyType !== 'ORDER' && !isNaN(amt) && amt > 0) {
+              let adjustedAmt = amt;
+              if (type === 'OUT' || type === 'out') {
+                if ((product.stockLevel || 0) < amt) {
+                  return; // Skip if insufficient stock
+                }
+                adjustedAmt = -amt;
+              }
+              
+              const beforeStock = product.stockLevel || 0;
+              const afterStock = Math.max(0, beforeStock + adjustedAmt);
+              
+              currentProducts[prodIndex] = {
+                ...product,
+                stockLevel: afterStock
+              };
+
+              newTransactions.push({
+                id: `inv-tr-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+                productId: product.id,
+                date: dateVal || nowStr,
+                type: adjustedAmt > 0 ? 'IN' : 'OUT',
+                quantity: amt,
+                referenceType: 'MANUAL',
+                notes
+              });
+
+              successCount++;
+              logAction('UPDATE', 'کالاها', product.id, `تعدیل موجودی کالا (واردات گروهی): ${product.name} (کد: ${product.code}) از ${beforeStock} به ${afterStock}`, product, currentProducts[prodIndex]);
+            }
+          } else if (name && category) {
+            // Product does not exist -> Create new product with given code
+            const initialStock = supplyType === 'INVENTORY' && !isNaN(amt) && amt > 0 ? amt : 0;
+            const newProduct: Product = {
+              id: `prod-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+              code: code,
+              name: name,
+              displayName: name,
+              category: category,
+              supplyType: supplyType,
+              description: notes,
+              size: size,
+              measurementRange: mRange,
+              images: [],
+              brand: "",
+              modelNumber: "N/A",
+              unit: "عدد",
+              basePriceRIYAL: 0,
+              minStockLevel: 0,
+              stockLevel: initialStock,
+              customValues: {}
+            };
+            currentProducts = [newProduct, ...currentProducts];
+            createCount++;
+
+            if (initialStock > 0) {
+              newTransactions.push({
+                id: `inv-tr-${Date.now()}-${index}-init`,
+                productId: newProduct.id,
+                date: dateVal || nowStr,
+                type: 'IN',
+                quantity: initialStock,
+                referenceType: 'MANUAL',
+                notes: 'موجودی اولیه (واردات گروهی)'
+              });
+            }
+
+            logAction('CREATE', 'کالاها', newProduct.id, `ایجاد کالای جدید (واردات گروهی): ${newProduct.name} (کد: ${newProduct.code})`, undefined, newProduct);
+          }
+        }
+      });
+
+      saveToServer('erp_products', currentProducts);
+      return currentProducts;
+    });
+
+    if (newTransactions.length > 0) {
+      setInventoryTransactions(prev => {
+        const updatedTr = [...newTransactions, ...prev];
+        saveToServer('erp_inventory_transactions', updatedTr);
+        return updatedTr;
+      });
+    }
+
+    return { successCount, createCount };
+  };
+
   const adjustProductStock = (id: string, amount: number, referenceId?: string, referenceType?: InventoryTransaction['referenceType'], notes?: string, transactionDate?: string) => {
     const before = products.find(p => p.id === id);
     if (!before) return;
@@ -1866,6 +2040,7 @@ export function useERPStore() {
     updateProduct,
     deleteProduct,
     adjustProductStock,
+    batchImportProducts,
     
     addSupplier,
     updateSupplier,

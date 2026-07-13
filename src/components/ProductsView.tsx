@@ -25,6 +25,18 @@ interface ProductsViewProps {
   updateProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
   adjustProductStock: (id: string, amount: number, referenceId?: string, referenceType?: 'MANUAL' | 'PURCHASE_ORDER' | 'PROFORMA', notes?: string, transactionDate?: string) => void;
+  batchImportProducts: (items: Array<{
+    code?: string;
+    name?: string;
+    category?: string;
+    supplyType?: 'INVENTORY' | 'ORDER';
+    notes?: string;
+    size?: string;
+    measurementRange?: string;
+    amt?: number;
+    type?: string;
+    dateVal?: string;
+  }>) => { successCount: number; createCount: number };
   categories: string[];
   units: string[];
   settings: ERPSettings;
@@ -36,6 +48,7 @@ export default function ProductsView({
   updateProduct,
   deleteProduct,
   adjustProductStock,
+  batchImportProducts,
   categories,
   settings,
   inventoryTransactions
@@ -203,80 +216,34 @@ export default function ProductsView({
           }
         };
 
-        let successCount = 0;
-        let createCount = 0;
-        jsonData.forEach(row => {
+        const itemsToImport = jsonData.map(row => {
           const code = row["کد کالا"] || "";
-          let amt = Number(row["تعداد تغییر / موجودی اولیه"]) || Number(row["تعداد تغییر"]);
+          const amt = Number(row["تعداد تغییر / موجودی اولیه"]) || Number(row["تعداد تغییر"]);
           const type = row["نوع تغییر"];
           const notes = row["توضیحات"] || "ویرایش گروهی";
           const dateVal = row["تاریخ"] ? parseDate(String(row["تاریخ"])) : undefined;
           
           const name = row["نام تجهیز"];
           const category = row["دسته بندی"];
-          const supplyType = row["نوع تامین"] === 'ORDER' ? 'ORDER' : 'INVENTORY';
+          const supplyType = (row["نوع تامین"] === 'ORDER' ? 'ORDER' : 'INVENTORY') as 'INVENTORY' | 'ORDER';
           const size = row["سایز"] || "";
           const mRange = row["رنج اندازه گیری"] || "";
 
-          // if code is empty but name is provided, we can treat it as new product
-          if (!code && name && category) {
-             addProduct({
-                code: "",
-                name: name,
-                displayName: name,
-                category: category,
-                supplyType: supplyType,
-                description: notes,
-                size: size,
-                measurementRange: mRange,
-                images: [],
-                brand: "",
-                modelNumber: "N/A",
-                unit: "عدد",
-                basePriceRIYAL: 0,
-                minStockLevel: 0,
-                stockLevel: supplyType === 'INVENTORY' && !isNaN(amt) && amt > 0 ? amt : 0,
-                transactionDate: dateVal,
-                customValues: {}
-              });
-              createCount++;
-          } else if (code) {
-            const product = products.find(p => p.code === code);
-            if (product) {
-              if (product.supplyType !== 'ORDER' && !isNaN(amt) && amt > 0) {
-                if (type === 'OUT' || type === 'out') {
-                  if ((product.stockLevel || 0) < amt) {
-                    return;
-                  }
-                  amt = -amt;
-                }
-                adjustProductStock(product.id, amt, undefined, 'MANUAL', notes, dateVal);
-                successCount++;
-              }
-            } else if (name && category) {
-              addProduct({
-                code: code,
-                name: name,
-                displayName: name,
-                category: category,
-                supplyType: supplyType,
-                description: notes,
-                size: size,
-                measurementRange: mRange,
-                images: [],
-                brand: "",
-                modelNumber: "N/A",
-                unit: "عدد",
-                basePriceRIYAL: 0,
-                minStockLevel: 0,
-                stockLevel: supplyType === 'INVENTORY' && !isNaN(amt) && amt > 0 ? amt : 0,
-                transactionDate: dateVal,
-                customValues: {}
-              });
-              createCount++;
-            }
-          }
+          return {
+            code,
+            name,
+            category,
+            supplyType,
+            notes,
+            size,
+            measurementRange: mRange,
+            amt,
+            type,
+            dateVal
+          };
         });
+
+        const { successCount, createCount } = batchImportProducts(itemsToImport);
         
         alert(`عملیات موفقیت آمیز بود. ${successCount} کالا بروزرسانی شد و ${createCount} کالای جدید تعریف شد.`);
         setBatchModalOpen(false);
