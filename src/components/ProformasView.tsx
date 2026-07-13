@@ -169,6 +169,7 @@ export default function ProformasView({
   const [deliveryDate, setDeliveryDate] = useState('۳ هفته کاری پس از پیش پرداخت');
   const [status, setStatus] = useState<Proforma['status']>('پیش‌نویس');
   const [currency, setCurrency] = useState<Proforma['currency']>('ریال');
+  const [historicalExchangeRate, setHistoricalExchangeRate] = useState<number>(0);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [taxPercent, setTaxPercent] = useState<number>(10); // Standard Iranian VAT is 10% since 1403
   const [notes, setNotes] = useState(settings?.proformaTemplates?.[0]?.termsAndConditions || '');
@@ -215,6 +216,7 @@ export default function ProformasView({
     setDeliveryDate('۳ هفته کاری پس از پیش پرداخت');
     setStatus('پیش‌نویس');
     setCurrency('ریال');
+    setHistoricalExchangeRate(0);
     setDiscountPercent(0);
     setTaxPercent(10);
     setNotes(settings?.proformaTemplates?.[0]?.termsAndConditions || '');
@@ -243,6 +245,7 @@ export default function ProformasView({
     setDeliveryDate(pf.deliveryDate || '');
     setStatus(pf.status);
     setCurrency(pf.currency || 'ریال');
+    setHistoricalExchangeRate(pf.historicalExchangeRate || 0);
     setDiscountPercent(pf.discountPercent);
     setTaxPercent(pf.taxPercent);
     setNotes(pf.notes);
@@ -410,6 +413,7 @@ export default function ProformasView({
         deliveryDate,
         status,
         currency,
+        historicalExchangeRate: currency === 'ریال' ? 1 : Number(historicalExchangeRate || 0),
         items: formattedItems,
         totalAmount: subTotal,
         discountPercent,
@@ -435,6 +439,7 @@ export default function ProformasView({
         deliveryDate,
         status,
         currency,
+        historicalExchangeRate: currency === 'ریال' ? 1 : Number(historicalExchangeRate || 0),
         items: formattedItems,
         totalAmount: subTotal,
         discountPercent,
@@ -2109,6 +2114,23 @@ export default function ProformasView({
                     <option value="یوان">یوان چین (CNY)</option>
                   </select>
                 </div>
+                {/* Historical Exchange Rate input */}
+                {currency !== 'ریال' && (
+                  <div className="space-y-1.5 bg-amber-50/30 p-2 rounded-lg border border-amber-200/50">
+                    <label className="text-xs font-bold text-amber-800">نرخ فروش تاریخی (به ریال) *</label>
+                    <input
+                      type="number"
+                      value={historicalExchangeRate || ''}
+                      onChange={(e) => setHistoricalExchangeRate(Number(e.target.value))}
+                      placeholder="مثال: ۶۵۰۰۰۰"
+                      className="w-full border border-amber-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none font-mono text-left bg-white"
+                      required
+                    />
+                    <span className="text-[10px] text-amber-700 block leading-relaxed">
+                      نرخ تسعیر مبنای این پیش‌فاکتور ارزی را وارد کنید. این نرخ در تمام گزارش‌ها و محاسبات سود و زیان تسعیر مبنا قرار خواهد گرفت.
+                    </span>
+                  </div>
+                )}
               </div>
               {/* Items multi-row block */}
               <div className="space-y-3">

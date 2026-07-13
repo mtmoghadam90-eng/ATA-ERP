@@ -129,6 +129,7 @@ export interface Proforma {
   finalAmount: number; // (Total - Discount) + Tax
   notes: string;
   creatorId?: string;
+  historicalExchangeRate?: number; // نرخ تسعیر تاریخی فروش
   customValues?: Record<string, any>;
 }
 
@@ -239,6 +240,12 @@ export interface Transaction {
   referenceNumber: string; // reference/check number
   notes: string;
   customValues?: Record<string, any>;
+  proformaId?: string; // پیش‌فاکتور مرتبط
+  exchangeRate?: number; // نرخ تسویه یا نرخ توافقی برای این دریافت
+  amountForeign?: number; // مقدار ارز اصلی تسویه‌شده یا دریافت‌شده
+  isDirectForeign?: boolean; // آیا دریافت مستقیم ارز بوده است؟
+  status?: 'تأیید شده' | 'پیش‌نویس' | 'لغو شده' | 'برگشت شده';
+  reversalOfTransactionId?: string; // شناسه تراکنش اصلی جهت برگشت وجه
 }
 
 export interface ModuleNotification {

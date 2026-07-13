@@ -13,11 +13,17 @@ import {
   CreditCard,
   Building,
   UserCheck,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  Globe,
+  DollarSign
 } from 'lucide-react';
 import { Transaction, Customer, Supplier, Project, ERPSettings, Proforma, ExchangeRate } from '../types';
 import { getTodayShamsi } from '../dateUtils';
 import { formatERPNumber } from '../numUtils';
+import { calculateProjectFinance, calculateCompanyFinanceSummary } from '../utils/finance';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -39,6 +45,7 @@ interface TransactionsViewProps {
   addCustomer?: (customer: Omit<Customer, 'id' | 'createdAt'>) => Customer;
   addSupplier?: (supplier: Omit<Supplier, 'id' | 'createdAt'>) => Supplier;
   addProject?: (project: Omit<Project, 'id' | 'code' | 'creationDate'>) => Project;
+  updateProforma?: (proforma: Proforma) => void;
 }
 
 export default function TransactionsView({
@@ -54,7 +61,8 @@ export default function TransactionsView({
   settings,
   addCustomer,
   addSupplier,
-  addProject
+  addProject,
+  updateProforma
 }: TransactionsViewProps) {
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -80,6 +88,18 @@ export default function TransactionsView({
   const [projectId, setProjectId] = useState('');
   const [amountRIYAL, setAmountRIYAL] = useState<number>(0);
   const [receiptType, setReceiptType] = useState<string>('');
+  
+  // New Connected Financial Fields
+  const [proformaId, setProformaId] = useState('');
+  const [exchangeRate, setExchangeRate] = useState<number>(0);
+  const [amountForeign, setAmountForeign] = useState<number>(0);
+  const [isDirectForeign, setIsDirectForeign] = useState<boolean>(false);
+  const [status, setStatus] = useState<Transaction['status']>('تأیید شده');
+  const [reversalOfTransactionId, setReversalOfTransactionId] = useState('');
+
+  // Inline editing states for incomplete financial data
+  const [editingHistoricalRates, setEditingHistoricalRates] = useState<Record<string, number>>({});
+  const [editingSettlementRates, setEditingSettlementRates] = useState<Record<string, number>>({});
 
   // Quick Customer Creation States
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
@@ -124,54 +144,20 @@ export default function TransactionsView({
   const netBalance = totalReceived - totalPaid;
 
   const [activeViewTab, setActiveViewTab] = useState<'transactions' | 'projectsSummary'>('transactions');
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
   const [projectSearch, setProjectSearch] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all');
 
-  // Helper mapping and calculations for projects
-  const mapPersianCurrencyToEnglishSummary = (cur: string): 'USD' | 'EUR' | 'AED' | 'CNY' | undefined => {
-    if (cur === 'دلار') return 'USD';
-    if (cur === 'یورو') return 'EUR';
-    if (cur === 'درهم') return 'AED';
-    if (cur === 'یوان') return 'CNY';
-    return undefined;
-  };
-
-  const getProformaAmountInRial = (pf: Proforma) => {
-    const cur = pf.currency || 'ریال';
-    if (cur === 'ریال') {
-      return pf.finalAmount || 0;
-    }
-    const engCurrency = mapPersianCurrencyToEnglishSummary(cur);
-    const rateObj = engCurrency ? exchangeRates.find(r => r.currency === engCurrency) : undefined;
-    const rate = rateObj ? rateObj.rateToRIYAL : 1;
-    return (pf.finalAmount || 0) * rate;
-  };
-
+  // Helper mapping and calculations for projects using centralized finance utils
   const computedProjectSummaries = projects.map(proj => {
-    // Find proformas for this project with status 'تأیید شده (برنده)' or 'نیمه برنده'
-    const projProformas = proformas.filter(pf => 
-      pf.projectId === proj.id && 
-      (pf.status === 'تأیید شده (برنده)' || pf.status === 'نیمه برنده')
-    );
-
-    const salesAmount = projProformas.reduce((sum, pf) => sum + getProformaAmountInRial(pf), 0);
-
-    // Find total receipts for this project
-    const paidAmount = transactions
-      .filter(t => t.projectId === proj.id && t.type === 'دریافت')
-      .reduce((sum, t) => sum + (t.amountRIYAL || 0), 0);
-
-    const remainingAmount = salesAmount - paidAmount;
-    
-    // Settlement percentage
-    const settlementPercent = salesAmount > 0 ? Math.min(100, Math.round((paidAmount / salesAmount) * 100)) : 0;
-
+    const summary = calculateProjectFinance(proj, proformas, transactions, exchangeRates);
     return {
       ...proj,
-      salesAmount,
-      paidAmount,
-      remainingAmount,
-      settlementPercent
+      salesAmount: summary.totalSalesHistoricalRiyal,
+      paidAmount: summary.totalReceivedRiyal, // Includes both allocated and unallocated project receipts
+      remainingAmount: summary.totalRemainingCurrentRiyal, // Remaining balance at today's day rate
+      settlementPercent: summary.settlementPercent,
+      summary // Pass full structured data
     };
   });
 
@@ -191,6 +177,21 @@ export default function TransactionsView({
   const totalProjSales = computedProjectSummaries.reduce((sum, p) => sum + p.salesAmount, 0);
   const totalProjReceived = computedProjectSummaries.reduce((sum, p) => sum + p.paidAmount, 0);
   const totalProjRemaining = computedProjectSummaries.reduce((sum, p) => sum + p.remainingAmount, 0);
+
+  // Find all proformas and transactions with incomplete historical or settlement rates
+  const incompleteProformas = proformas.filter(pf => {
+    const isSale = pf.status === 'تأیید شده (برنده)' || pf.status === 'نیمه برنده';
+    return isSale && pf.currency && pf.currency !== 'ریال' && (!pf.historicalExchangeRate || pf.historicalExchangeRate <= 0);
+  });
+
+  const incompleteTransactions = transactions.filter(t => {
+    if (t.type !== 'دریافت' || t.status === 'لغو شده' || t.status === 'پیش‌نویس' || !t.proformaId) return false;
+    const linkedPf = proformas.find(pf => pf.id === t.proformaId);
+    if (!linkedPf || linkedPf.currency === 'ریال') return false;
+    return !t.exchangeRate || t.exchangeRate <= 0;
+  });
+
+  const hasAnyIncompleteData = incompleteProformas.length > 0 || incompleteTransactions.length > 0;
 
   const generateAutoDocNo = (
     currentType: Transaction['type'],
@@ -223,6 +224,26 @@ export default function TransactionsView({
     );
   };
 
+  const handleSaveHistoricalRate = (pfId: string, rate: number) => {
+    const pf = proformas.find(p => p.id === pfId);
+    if (pf && updateProforma) {
+      updateProforma({
+        ...pf,
+        historicalExchangeRate: rate
+      });
+    }
+  };
+
+  const handleSaveSettlementRate = (tId: string, rate: number) => {
+    const t = transactions.find(tr => tr.id === tId);
+    if (t) {
+      updateTransaction({
+        ...t,
+        exchangeRate: rate
+      });
+    }
+  };
+
   const handleOpenAdd = () => {
     const initialCustId = customers[0]?.id || '';
     const initialSuppId = suppliers[0]?.id || '';
@@ -239,6 +260,12 @@ export default function TransactionsView({
     setReferenceNumber('');
     setNotes('');
     setCustomValues({});
+    setProformaId('');
+    setExchangeRate(0);
+    setAmountForeign(0);
+    setIsDirectForeign(false);
+    setStatus('تأیید شده');
+    setReversalOfTransactionId('');
     
     const initialReceiptTypes = settings?.dropdownItems?.receiptTypes || ['پیش پرداخت', 'میاندوره', 'تسویه'];
     setReceiptType(initialReceiptTypes[0] || '');
@@ -272,6 +299,15 @@ export default function TransactionsView({
     setReferenceNumber(tr.referenceNumber || '');
     setNotes(tr.notes || '');
     setCustomValues(tr.customValues || {});
+    
+    // Connected Financial fields loading
+    setProformaId(tr.proformaId || '');
+    setExchangeRate(tr.exchangeRate || 0);
+    setAmountForeign(tr.amountForeign || 0);
+    setIsDirectForeign(tr.isDirectForeign || false);
+    setStatus(tr.status || 'تأیید شده');
+    setReversalOfTransactionId(tr.reversalOfTransactionId || '');
+    
     setShowModal(true);
   };
 
@@ -321,7 +357,13 @@ export default function TransactionsView({
       paymentType,
       referenceNumber,
       notes,
-      customValues
+      customValues,
+      proformaId: proformaId || undefined,
+      exchangeRate: Number(exchangeRate || 0),
+      amountForeign: Number(amountForeign || 0),
+      isDirectForeign,
+      status,
+      reversalOfTransactionId: reversalOfTransactionId || undefined
     };
 
     if (editingTransaction) {
@@ -422,6 +464,27 @@ export default function TransactionsView({
           }`}
         >
           وضعیت تسویه مالی پروژه‌ها
+        </button>
+        <button
+          onClick={() => setActiveViewTab('incompleteData')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeViewTab === 'incompleteData'
+              ? 'bg-amber-50 text-amber-700 shadow-sm border border-amber-200/50'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <span className="relative flex h-2 w-2">
+            {hasAnyIncompleteData && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            )}
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${hasAnyIncompleteData ? 'bg-red-500' : 'bg-slate-400'}`}></span>
+          </span>
+          تکمیل اطلاعات مالی ناقص
+          {hasAnyIncompleteData && (
+            <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+              {(incompleteProformas.length + incompleteTransactions.length).toLocaleString('fa-IR')}
+            </span>
+          )}
         </button>
       </div>
 
@@ -567,7 +630,7 @@ export default function TransactionsView({
             </div>
           </div>
         </>
-      ) : (
+      ) : activeViewTab === 'projectsSummary' ? (
         <div className="space-y-6">
           {/* Project Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -666,63 +729,201 @@ export default function TransactionsView({
                     else if (p.status === 'ارائه پیش‌فاکتور') statusColor = 'bg-blue-50 text-blue-600 border border-blue-200/50';
                     else if (p.status === 'باخته') statusColor = 'bg-red-50 text-red-600 border border-red-200/50';
 
+                    const isExpanded = expandedProjectId === p.id;
+
                     return (
-                      <tr key={p.id} className="hover:bg-slate-50/50 transition">
-                        <td className="p-4">
-                          <div className="font-bold text-slate-800">{p.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{p.code}</div>
-                        </td>
-                        <td className="p-4">
-                          <div className="text-slate-700">{p.customerName}</div>
-                        </td>
-                        <td className="p-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${statusColor}`}>
-                            {p.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-left font-mono font-semibold text-slate-800">
-                          {p.salesAmount.toLocaleString('fa-IR')}
-                        </td>
-                        <td className="p-4 text-left font-mono font-semibold text-emerald-600">
-                          {p.paidAmount > 0 ? `+${p.paidAmount.toLocaleString('fa-IR')}` : '۰'}
-                        </td>
-                        <td className="p-4 text-left font-mono font-bold text-amber-600">
-                          {p.remainingAmount.toLocaleString('fa-IR')}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-col items-center gap-1 min-w-[100px]">
-                            <span className="font-mono font-bold text-slate-600">{p.settlementPercent}%</span>
-                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all ${
-                                  p.settlementPercent === 100 
-                                    ? 'bg-emerald-500' 
-                                    : p.settlementPercent > 50 
-                                    ? 'bg-sky-500' 
-                                    : p.settlementPercent > 0 
-                                    ? 'bg-amber-500' 
-                                    : 'bg-slate-200'
-                                }`}
-                                style={{ width: `${p.settlementPercent}%` }}
-                              />
+                      <React.Fragment key={p.id}>
+                        <tr className="hover:bg-slate-50/50 transition">
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedProjectId(isExpanded ? null : p.id)}
+                                className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition"
+                                title="نمایش جزئیات مالی و تسعیر ارز"
+                              >
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </button>
+                              <div>
+                                <div className="font-bold text-slate-800">{p.name}</div>
+                                <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
+                                  <span>{p.code}</span>
+                                  {p.summary.hasIncompleteData && (
+                                    <span className="inline-flex items-center gap-0.5 bg-red-50 text-red-600 px-1 py-0.5 rounded text-[8px] font-bold">
+                                      <AlertTriangle size={8} />
+                                      نیازمند تعیین نرخ
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-4 text-center">
-                          <button
-                            onClick={() => {
-                              setSearch(p.name);
-                              setSelectedType('all');
-                              setActiveViewTab('transactions');
-                            }}
-                            className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-lg text-[10px] font-bold transition flex items-center gap-1 mx-auto"
-                            title="مشاهده تمام تراکنش‌های ثبت شده برای این پروژه"
-                          >
-                            <RefreshCw size={12} />
-                            مشاهده تراکنش‌ها
-                          </button>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="p-4">
+                            <div className="text-slate-700">{p.customerName}</div>
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${statusColor}`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-left font-mono font-semibold text-slate-800">
+                            {p.salesAmount.toLocaleString('fa-IR')}
+                          </td>
+                          <td className="p-4 text-left font-mono font-semibold text-emerald-600">
+                            {p.paidAmount > 0 ? `+${p.paidAmount.toLocaleString('fa-IR')}` : '۰'}
+                          </td>
+                          <td className="p-4 text-left font-mono font-bold text-amber-600">
+                            {p.remainingAmount.toLocaleString('fa-IR')}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col items-center gap-1 min-w-[100px]">
+                              <span className="font-mono font-bold text-slate-600">{p.settlementPercent}%</span>
+                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all ${
+                                    p.settlementPercent === 100 
+                                      ? 'bg-emerald-500' 
+                                      : p.settlementPercent > 50 
+                                      ? 'bg-sky-500' 
+                                      : p.settlementPercent > 0 
+                                      ? 'bg-amber-500' 
+                                      : 'bg-slate-200'
+                                  }`}
+                                  style={{ width: `${p.settlementPercent}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 text-center">
+                            <div className="flex items-center gap-1.5 justify-center">
+                              <button
+                                onClick={() => {
+                                  setSearch(p.name);
+                                  setSelectedType('all');
+                                  setActiveViewTab('transactions');
+                                }}
+                                className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded text-[10px] font-bold transition flex items-center gap-1"
+                                title="مشاهده تمام تراکنش‌های ثبت شده برای این پروژه"
+                              >
+                                <RefreshCw size={10} />
+                                تراکنش‌ها
+                              </button>
+                              <button
+                                onClick={() => setExpandedProjectId(isExpanded ? null : p.id)}
+                                className={`px-2 py-1 rounded text-[10px] font-bold transition ${
+                                  isExpanded ? 'bg-slate-200 text-slate-700' : 'bg-slate-50 hover:bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {isExpanded ? 'بستن جزئیات' : 'جزئیات مالی'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr className="bg-slate-50/55">
+                            <td colSpan={8} className="p-4 border-t border-slate-100">
+                              <div className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm space-y-4 animate-fade-in text-right">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2 border-b border-slate-100 gap-2">
+                                  <h4 className="font-bold text-xs sm:text-sm text-slate-800 flex items-center gap-2">
+                                    <Globe size={16} className="text-sky-500 animate-pulse" />
+                                    جزئیات حسابداری ارزی و تسعیر پروژه {p.name}
+                                  </h4>
+                                  <div className="text-[10px] sm:text-xs text-slate-500">
+                                    جمع مانده ارزی پروژه:{' '}
+                                    <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded">
+                                      {Object.entries(p.summary.currencyBalances).length > 0 
+                                        ? Object.entries(p.summary.currencyBalances)
+                                            .map(([cur, amt]) => `${amt.toLocaleString('fa-IR')} ${cur}`)
+                                            .join(' ، ')
+                                        : 'فاقد مانده ارزی'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Currency Financial stats */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100/80">
+                                    <div className="text-[10px] text-slate-400 font-bold">سود یا زیان تسعیر تحقق‌یافته</div>
+                                    <div className={`text-xs sm:text-sm font-extrabold font-mono mt-1 ${p.summary.totalRealizedGainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                      {p.summary.totalRealizedGainLoss >= 0 ? '+' : ''}{p.summary.totalRealizedGainLoss.toLocaleString('fa-IR')} <span className="text-[10px] font-normal">ریال</span>
+                                    </div>
+                                    <div className="text-[9px] text-slate-400 mt-0.5">سود/زیان مابه‌التفاوت نرخ وصولی و فروش</div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100/80">
+                                    <div className="text-[10px] text-slate-400 font-bold">سود یا زیان تسعیر تحقق‌نیافته</div>
+                                    <div className={`text-xs sm:text-sm font-extrabold font-mono mt-1 ${p.summary.totalUnrealizedGainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                      {p.summary.totalUnrealizedGainLoss >= 0 ? '+' : ''}{p.summary.totalUnrealizedGainLoss.toLocaleString('fa-IR')} <span className="text-[10px] font-normal">ریال</span>
+                                    </div>
+                                    <div className="text-[9px] text-slate-400 mt-0.5">تغییر ارزش مطالبات وصول‌نشده به نرخ روز</div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100/80">
+                                    <div className="text-[10px] text-slate-400 font-bold">پیش‌پرداخت / مبالغ تخصیص‌نیافته</div>
+                                    <div className="text-xs sm:text-sm font-extrabold text-blue-600 font-mono mt-1">
+                                      {p.summary.totalUnallocatedRiyal.toLocaleString('fa-IR')} <span className="text-[10px] font-normal">ریال</span>
+                                    </div>
+                                    <div className="text-[9px] text-slate-400 mt-0.5">دریافتی‌های مازاد ریالی متصل به پروژه</div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100/80">
+                                    <div className="text-[10px] text-slate-400 font-bold">وضعیت صحت اطلاعات ارزی</div>
+                                    <div className={`text-[11px] font-bold mt-1.5 ${p.summary.hasIncompleteData ? 'text-red-500' : 'text-emerald-600'}`}>
+                                      {p.summary.hasIncompleteData ? '⚠️ نیازمند اصلاح نرخ تاریخی' : '✓ اطلاعات مالی کامل'}
+                                    </div>
+                                    <div className="text-[9px] text-slate-400 mt-0.5">وجود یا فقدان نرخ برابری روز/تاریخی</div>
+                                  </div>
+                                </div>
+
+                                {/* Proformas subtable */}
+                                {p.summary.proformas.length > 0 && (
+                                  <div className="space-y-1.5">
+                                    <h5 className="font-bold text-[10px] text-slate-500">پیش‌فاکتورهای قطعی ارزی و ریالی پروژه</h5>
+                                    <div className="border border-slate-100 rounded-lg overflow-hidden">
+                                      <table className="w-full text-right border-collapse text-[10px] sm:text-[11px]">
+                                        <thead>
+                                          <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
+                                            <th className="p-2">شماره پیش‌فاکتور</th>
+                                            <th className="p-2 text-center">ارز مبنا</th>
+                                            <th className="p-2 text-left">مبلغ اصلی ارزی</th>
+                                            <th className="p-2 text-left">نرخ فروش تاریخی</th>
+                                            <th className="p-2 text-left">فروش تاریخی (ریال)</th>
+                                            <th className="p-2 text-left">تسویه شده ارزی</th>
+                                            <th className="p-2 text-left">دریافتی واقعی (ریال)</th>
+                                            <th className="p-2 text-left">مانده طلب ارزی</th>
+                                            <th className="p-2 text-left">ارزش روز مانده (ریال)</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                          {p.summary.proformas.map((rep) => (
+                                            <tr key={rep.proformaId} className="hover:bg-slate-50/50">
+                                              <td className="p-2 font-bold text-slate-700">{rep.proformaNumber}</td>
+                                              <td className="p-2 text-center text-emerald-700 font-bold">{rep.currency}</td>
+                                              <td className="p-2 text-left font-mono">{rep.salesAmountForeign.toLocaleString('fa-IR')}</td>
+                                              <td className="p-2 text-left font-mono text-slate-500">
+                                                {rep.missingHistoricalRate ? (
+                                                  <span className="text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded">⚠️ نامشخص</span>
+                                                ) : (
+                                                  rep.historicalExchangeRate.toLocaleString('fa-IR')
+                                                )}
+                                              </td>
+                                              <td className="p-2 text-left font-mono">{rep.salesAmountHistoricalRiyal.toLocaleString('fa-IR')}</td>
+                                              <td className="p-2 text-left font-mono text-emerald-600">{rep.settledAmountForeign.toLocaleString('fa-IR')}</td>
+                                              <td className="p-2 text-left font-mono text-emerald-600">{rep.actualReceivedRiyal.toLocaleString('fa-IR')}</td>
+                                              <td className="p-2 text-left font-mono font-bold text-amber-600">{rep.remainingAmountForeign.toLocaleString('fa-IR')}</td>
+                                              <td className="p-2 text-left font-mono font-bold text-amber-600">{rep.remainingAmountCurrentRiyal.toLocaleString('fa-IR')}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
 
@@ -731,6 +932,175 @@ export default function TransactionsView({
                       <td colSpan={8} className="text-center p-12 text-slate-400 bg-white">
                         <FileSpreadsheet className="mx-auto text-slate-300 mb-3" size={40} />
                         هیچ پروژه‌ای یافت نشد.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Header section explaining */}
+          <div className="bg-amber-50 border border-amber-200/60 rounded-2xl p-5 text-right space-y-2 animate-fade-in">
+            <h3 className="font-bold text-amber-800 text-sm flex items-center gap-2">
+              <AlertTriangle size={18} className="text-amber-600 animate-bounce" />
+              مدیریت و تکمیل اطلاعات مالی ناقص (نرخ‌های تسعیر ارز)
+            </h3>
+            <p className="text-xs text-amber-700 leading-relaxed">
+              بر اساس اصول حسابداری، کلیه اسناد ارزی (پیش‌فاکتورهای قطعی و دریافت‌های صندوق) باید دارای نرخ برابری ارز (ریال) مشخص در زمان ثبت سند باشند تا گزارشات سود و زیان تسعیر و مانده مطالبات معوق بدون خطای محاسباتی مدیریت شوند. در این بخش می‌توانید نرخ‌های نامشخص تاریخی را تکمیل نمایید.
+            </p>
+          </div>
+
+          {/* Section 1: Incomplete Proformas (Historical Rates) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-fade-in">
+            <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h4 className="font-bold text-slate-800 text-xs sm:text-sm">پیش‌فاکتورهای ارزی نیازمند تعیین نرخ فروش تاریخی</h4>
+              <span className="bg-red-100 text-red-600 text-[10px] px-2 py-1 rounded-full font-bold">
+                {incompleteProformas.length.toLocaleString('fa-IR')} مورد
+              </span>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-100/55 text-slate-500 font-bold border-b border-slate-100">
+                    <th className="p-3">شماره و تاریخ پیش‌فاکتور</th>
+                    <th className="p-3">پروژه مربوطه</th>
+                    <th className="p-3">مشتری</th>
+                    <th className="p-3 text-center">ارز</th>
+                    <th className="p-3 text-left">مبلغ ارزی</th>
+                    <th className="p-3 text-center w-60">نرخ برابری تاریخی (ریال)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {incompleteProformas.map(pf => {
+                    const rateVal = editingHistoricalRates[pf.id] ?? '';
+                    const linkedProj = projects.find(pr => pr.id === pf.projectId);
+                    return (
+                      <tr key={pf.id} className="hover:bg-slate-50/50">
+                        <td className="p-3">
+                          <div className="font-bold text-slate-800">{pf.proformaNumber}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{pf.issueDate}</div>
+                        </td>
+                        <td className="p-3 text-slate-600">{linkedProj?.name || 'فاقد پروژه'}</td>
+                        <td className="p-3 text-slate-600">{pf.customerName}</td>
+                        <td className="p-3 text-center font-bold text-emerald-700">{pf.currency}</td>
+                        <td className="p-3 text-left font-mono text-slate-700">{pf.finalAmount?.toLocaleString()}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2 justify-center">
+                            <input
+                              type="number"
+                              value={rateVal}
+                              placeholder="نرخ ریالی، مثلاً ۶۰۰,۰۰۰"
+                              onChange={(e) => setEditingHistoricalRates({
+                                ...editingHistoricalRates,
+                                [pf.id]: Number(e.target.value)
+                              })}
+                              className="w-40 border border-slate-200 rounded px-2.5 py-1 text-center font-mono text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                            />
+                            <button
+                              disabled={!rateVal}
+                              onClick={() => {
+                                handleSaveHistoricalRate(pf.id, Number(rateVal));
+                                setEditingHistoricalRates(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[pf.id];
+                                  return updated;
+                                });
+                              }}
+                              className="px-3 py-1 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded text-xs font-bold transition shadow-sm"
+                            >
+                              ذخیره
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {incompleteProformas.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center p-8 text-emerald-600 bg-white font-bold">
+                        ✓ عالی! کلیه پیش‌فاکتورها دارای نرخ فروش تاریخی معتبر می‌باشند.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Section 2: Incomplete Transactions (Settlement Rates) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-fade-in">
+            <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h4 className="font-bold text-slate-800 text-xs sm:text-sm">دریافتی‌های ارزی صندوق نیازمند تعیین نرخ تسویه</h4>
+              <span className="bg-red-100 text-red-600 text-[10px] px-2 py-1 rounded-full font-bold">
+                {incompleteTransactions.length.toLocaleString('fa-IR')} مورد
+              </span>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-100/55 text-slate-500 font-bold border-b border-slate-100">
+                    <th className="p-3">شماره سند و تاریخ دریافت</th>
+                    <th className="p-3">پیش‌فاکتور متصل</th>
+                    <th className="p-3">پروژه مربوطه</th>
+                    <th className="p-3">مشتری</th>
+                    <th className="p-3 text-left">مبلغ دریافتی ریالی</th>
+                    <th className="p-3 text-center w-60">نرخ تسویه (برابری ریال در دریافت)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {incompleteTransactions.map(t => {
+                    const rateVal = editingSettlementRates[t.id] ?? '';
+                    const linkedPf = proformas.find(pf => pf.id === t.proformaId);
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50/50">
+                        <td className="p-3">
+                          <div className="font-bold text-slate-800">{t.documentNumber}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{t.date}</div>
+                        </td>
+                        <td className="p-3 font-bold text-slate-700">{linkedPf?.proformaNumber || 'ناشناس'}</td>
+                        <td className="p-3 text-slate-600">{t.projectName}</td>
+                        <td className="p-3 text-slate-600">{t.customerName}</td>
+                        <td className="p-3 text-left font-mono text-slate-700">{t.amountRIYAL?.toLocaleString()}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2 justify-center">
+                            <input
+                              type="number"
+                              value={rateVal}
+                              placeholder="نرخ تسویه، مثلاً ۶۱۰,۰۰۰"
+                              onChange={(e) => setEditingSettlementRates({
+                                ...editingSettlementRates,
+                                [t.id]: Number(e.target.value)
+                              })}
+                              className="w-40 border border-slate-200 rounded px-2.5 py-1 text-center font-mono text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                            />
+                            <button
+                              disabled={!rateVal}
+                              onClick={() => {
+                                handleSaveSettlementRate(t.id, Number(rateVal));
+                                setEditingSettlementRates(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[t.id];
+                                  return updated;
+                                });
+                              }}
+                              className="px-3 py-1 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded text-xs font-bold transition shadow-sm"
+                            >
+                              ذخیره
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {incompleteTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center p-8 text-emerald-600 bg-white font-bold">
+                        ✓ عالی! کلیه تراکنش‌های دریافتی ارزی دارای نرخ تسویه معتبر می‌باشند.
                       </td>
                     </tr>
                   )}

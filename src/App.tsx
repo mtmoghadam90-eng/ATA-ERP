@@ -331,6 +331,7 @@ export default function App() {
             addCustomer={store.addCustomer}
             addSupplier={store.addSupplier}
             addProject={store.addProject}
+            updateProforma={store.updateProforma}
           />
         );
             case 'tasks':
