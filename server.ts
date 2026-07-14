@@ -211,9 +211,35 @@ async function startServer() {
     });
   });
 
+  // Whitelist of valid database keys to prevent access/tamper with unauthorized keys
+  const ALLOWED_KEYS = new Set([
+    'erp_settings',
+    'erp_exchange_rates',
+    'erp_customers',
+    'erp_products',
+    'erp_suppliers',
+    'erp_projects',
+    'erp_proformas',
+    'erp_purchase_orders',
+    'erp_transactions',
+    'erp_inventory_transactions',
+    'erp_tasks',
+    'erp_project_category_groups',
+    'erp_supplier_inquiries',
+    'erp_packaging_deliveries',
+    'erp_after_sales_services',
+    'erp_users',
+    'erp_audit_logs'
+  ]);
+
   // KV Store APIs
   app.get("/api/data/:key", (req, res) => {
-    const row = getStmt.get(req.params.key) as {value: string} | undefined;
+    const key = req.params.key;
+    if (!ALLOWED_KEYS.has(key)) {
+      return res.status(403).json({ error: "Access denied: Unauthorized key" });
+    }
+    
+    const row = getStmt.get(key) as {value: string} | undefined;
     if (row) {
       res.json(JSON.parse(row.value));
     } else {
@@ -223,6 +249,10 @@ async function startServer() {
 
   app.post("/api/data/:key", (req, res) => {
     const key = req.params.key;
+    if (!ALLOWED_KEYS.has(key)) {
+      return res.status(403).json({ error: "Access denied: Unauthorized key" });
+    }
+    
     let data = req.body;
     
     // If saving users, ensure passwords are hashed if they changed
@@ -246,23 +276,121 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Login attempt trackers for rate-limiting
+  const userLoginAttempts = new Map<string, { count: number; lastAttempt: number }>();
+  const ipLoginAttempts = new Map<string, { count: number; lastAttempt: number }>();
+
   // Login API
   app.post("/api/login", (req, res) => {
     const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: "لطفا نام کاربری و رمز ورود را وارد کنید" });
+    }
+    const ip = req.ip || (req.headers['x-forwarded-for'] as string) || 'unknown';
+    const now = Date.now();
+    
+    const userKey = `${ip}:${username.toLowerCase()}`;
+    const ipKey = ip;
+
+    // Check user-specific block (e.g. 5 failed attempts from this IP for this user)
+    const userAttempt = userLoginAttempts.get(userKey);
+    if (userAttempt && userAttempt.count >= 5 && now - userAttempt.lastAttempt < 5 * 60 * 1000) {
+      const remainingTime = Math.ceil((5 * 60 * 1000 - (now - userAttempt.lastAttempt)) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `تعداد تلاش‌های ناموفق برای این حساب از سیستم شما بیش از حد مجاز است. لطفا ${remainingTime} ثانیه دیگر دوباره تلاش کنید.`
+      });
+    }
+
+    // Check IP-specific block (e.g. 20 failed attempts total across any accounts from this IP)
+    const ipAttempt = ipLoginAttempts.get(ipKey);
+    if (ipAttempt && ipAttempt.count >= 20 && now - ipAttempt.lastAttempt < 10 * 60 * 1000) {
+      const remainingTime = Math.ceil((10 * 60 * 1000 - (now - ipAttempt.lastAttempt)) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `تعداد تلاش‌های ناموفق از شبکه شما بیش از حد مجاز است. لطفا ${remainingTime} ثانیه دیگر دوباره تلاش کنید.`
+      });
+    }
+
     const row = getStmt.get('erp_users') as {value: string} | undefined;
     if (!row) {
-      return res.status(401).json({ success: false, message: "User not found" });
+      return res.status(401).json({ success: false, message: "کاربری یافت نشد" });
     }
     const users = JSON.parse(row.value);
     const foundUser = users.find((u: any) => u.username.toLowerCase() === username.toLowerCase());
     
     if (foundUser && bcrypt.compareSync(password, foundUser.password)) {
+      // Clear rate-limiting records on success
+      userLoginAttempts.delete(userKey);
+      ipLoginAttempts.delete(ipKey);
+      
+      const isDefaultPassword = bcrypt.compareSync('123', foundUser.password);
+      
       // Don't send the password hash back to the client
       const { password: _, ...safeUser } = foundUser;
-      res.json({ success: true, user: safeUser });
+      res.json({ 
+        success: true, 
+        user: safeUser,
+        mustChangePassword: isDefaultPassword 
+      });
     } else {
-      res.status(401).json({ success: false, message: "Invalid credentials" });
+      // Increment failed attempts
+      const currentU = userLoginAttempts.get(userKey) || { count: 0, lastAttempt: 0 };
+      userLoginAttempts.set(userKey, {
+        count: currentU.count + 1,
+        lastAttempt: now
+      });
+
+      const currentIP = ipLoginAttempts.get(ipKey) || { count: 0, lastAttempt: 0 };
+      ipLoginAttempts.set(ipKey, {
+        count: currentIP.count + 1,
+        lastAttempt: now
+      });
+      
+      res.status(401).json({ success: false, message: "نام کاربری یا رمز عبور اشتباه است" });
     }
+  });
+
+  // Change Password API
+  app.post("/api/change-password", (req, res) => {
+    const { username, oldPassword, newPassword } = req.body;
+    if (!username || !oldPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: "اطلاعات ارسالی برای تغییر رمز عبور ناقص است" });
+    }
+    
+    const row = getStmt.get('erp_users') as {value: string} | undefined;
+    if (!row) {
+      return res.status(404).json({ success: false, message: "کاربری یافت نشد" });
+    }
+    const users = JSON.parse(row.value);
+    const foundUserIndex = users.findIndex((u: any) => u.username.toLowerCase() === username.toLowerCase());
+    if (foundUserIndex === -1) {
+      return res.status(404).json({ success: false, message: "کاربر یافت نشد" });
+    }
+    
+    const foundUser = users[foundUserIndex];
+    if (!bcrypt.compareSync(oldPassword, foundUser.password)) {
+      return res.status(401).json({ success: false, message: "رمز عبور فعلی نادرست است" });
+    }
+    
+    if (newPassword.length < 4) {
+      return res.status(400).json({ success: false, message: "رمز عبور جدید باید حداقل ۴ کاراکتر باشد" });
+    }
+    
+    if (newPassword === '123') {
+      return res.status(400).json({ success: false, message: "نمی‌توانید از رمز عبور ساده و پیش‌فرض استفاده کنید" });
+    }
+    
+    // Update password
+    foundUser.password = bcrypt.hashSync(newPassword, 10);
+    users[foundUserIndex] = foundUser;
+    
+    // Save to DB
+    insertStmt.run('erp_users', JSON.stringify(users));
+    
+    // Don't send the password hash back to the client
+    const { password: _, ...safeUser } = foundUser;
+    res.json({ success: true, user: safeUser, message: "رمز عبور با موفقیت تغییر یافت" });
   });
 
   // Vite middleware for development, serving index.html / dist in production

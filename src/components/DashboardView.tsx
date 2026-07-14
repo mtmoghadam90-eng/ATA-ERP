@@ -82,6 +82,22 @@ export default function DashboardView({
   // State to filter tasks list between "My Tasks" and "All Tasks"
   const [taskFilter, setTaskFilter] = useState<'my' | 'all'>('my');
 
+  // Helper to convert foreign currency to Rial
+  const getProformaRiyalValue = (amount: number, currencyName?: string) => {
+    if (!currencyName || currencyName === 'ریال') return amount;
+    let engCode: 'USD' | 'EUR' | 'AED' | 'CNY' | 'IRR' = 'IRR';
+    if (currencyName === 'دلار') engCode = 'USD';
+    else if (currencyName === 'یورو') engCode = 'EUR';
+    else if (currencyName === 'درهم') engCode = 'AED';
+    else if (currencyName === 'یوان') engCode = 'CNY';
+    
+    if (engCode === 'IRR') return amount;
+    
+    const rateObj = exchangeRates?.find(r => r.currency === engCode);
+    const rate = rateObj ? rateObj.rateToRIYAL : 1;
+    return amount * rate;
+  };
+
   // 1. Calculate stats
   // Total Won Revenue (Proformas with status 'تأیید شده (برنده)' or 'نیمه برنده')
   const wonProformas = proformas.filter(p => {
@@ -90,21 +106,27 @@ export default function DashboardView({
   });
   const totalRevenue = wonProformas.reduce((sum, p) => {
     const outcome = getProformaOutcomeStatus(p);
+    let wonAmountForeign = 0;
+    
     if (outcome === 'تأیید شده (برنده)') {
-      return sum + p.finalAmount;
+      wonAmountForeign = p.finalAmount;
     } else if (outcome === 'نیمه برنده') {
       const wonItemsTotal = p.items?.filter(item => item.status === 'برنده').reduce((s, item) => s + (item.totalPriceRIYAL || 0), 0) || 0;
       const ratio = p.totalAmount > 0 ? wonItemsTotal / p.totalAmount : 0;
-      return sum + Math.round(p.finalAmount * ratio);
+      wonAmountForeign = Math.round(p.finalAmount * ratio);
     } else {
       // Fallback for custom or old data
       const wonItemsTotal = p.items?.filter(item => item.status === 'برنده').reduce((s, item) => s + (item.totalPriceRIYAL || 0), 0) || 0;
       if (wonItemsTotal > 0) {
         const ratio = p.totalAmount > 0 ? wonItemsTotal / p.totalAmount : 0;
-        return sum + Math.round(p.finalAmount * ratio);
+        wonAmountForeign = Math.round(p.finalAmount * ratio);
+      } else {
+        wonAmountForeign = p.finalAmount;
       }
-      return sum + p.finalAmount;
     }
+    
+    const riyalValue = getProformaRiyalValue(wonAmountForeign, p.currency);
+    return sum + riyalValue;
   }, 0);
 
   // Active Proformas (not won, draft, lost or cancelled - e.g., 'ارسال شده', 'پیش‌نویس')
@@ -112,7 +134,7 @@ export default function DashboardView({
     const outcome = getProformaOutcomeStatus(p);
     return outcome === 'جاری' || outcome === 'پیش‌نویس';
   });
-  const activeProformasValue = activeProformas.reduce((sum, p) => sum + p.finalAmount, 0);
+  const activeProformasValue = activeProformas.reduce((sum, p) => sum + getProformaRiyalValue(p.finalAmount, p.currency), 0);
 
   // Active Purchase Orders (under tracking)
   const activePOs = purchaseOrders.filter(po => po.status !== 'تحویل شده (رسید انبار)');
@@ -156,7 +178,8 @@ export default function DashboardView({
     p.items.forEach(item => {
       const prod = products.find(pr => pr.id === item.productId);
       const cat = prod ? prod.category : 'سایر تجهیزات';
-      acc[cat] = (acc[cat] || 0) + item.totalPriceRIYAL;
+      const riyalValue = getProformaRiyalValue(item.totalPriceRIYAL, p.currency);
+      acc[cat] = (acc[cat] || 0) + riyalValue;
     });
     return acc;
   }, {});

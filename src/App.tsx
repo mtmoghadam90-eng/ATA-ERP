@@ -189,7 +189,7 @@ export default function App() {
 
   // If there is no user logged in, intercept and show the LoginView
   if (!store.currentUser) {
-    return <LoginView onLogin={store.login} />;
+    return <LoginView onLogin={store.login} onLoginSuccess={store.loginWithUser} />;
   }
 
   const renderActiveView = () => {

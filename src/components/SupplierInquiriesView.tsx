@@ -1717,6 +1717,7 @@ export default function SupplierInquiriesView({
                         if (e.target.files && e.target.files[0]) {
                           handleAnswerFileUpload(e.target.files[0], 'tech');
                         }
+                        if (e.target) e.target.value = '';
                       }}
                     />
                     <Upload className="mx-auto mb-2 text-slate-400 group-hover:text-emerald-500 transition-colors" size={20} />
@@ -1794,6 +1795,7 @@ export default function SupplierInquiriesView({
                         if (e.target.files && e.target.files[0]) {
                           handleAnswerFileUpload(e.target.files[0], 'fin');
                         }
+                        if (e.target) e.target.value = '';
                       }}
                     />
                     <Upload className="mx-auto mb-2 text-slate-400 group-hover:text-emerald-500 transition-colors" size={20} />
@@ -2262,6 +2264,7 @@ export default function SupplierInquiriesView({
                             if (e.target.files && e.target.files[0]) {
                               handleEditFileUpload(e.target.files[0], 'tech');
                             }
+                            if (e.target) e.target.value = '';
                           }}
                         />
                         <Upload className="mx-auto mb-2 text-slate-400 group-hover:text-sky-500 transition-colors" size={20} />
@@ -2339,6 +2342,7 @@ export default function SupplierInquiriesView({
                             if (e.target.files && e.target.files[0]) {
                               handleEditFileUpload(e.target.files[0], 'fin');
                             }
+                            if (e.target) e.target.value = '';
                           }}
                         />
                         <Upload className="mx-auto mb-2 text-slate-400 group-hover:text-sky-500 transition-colors" size={20} />

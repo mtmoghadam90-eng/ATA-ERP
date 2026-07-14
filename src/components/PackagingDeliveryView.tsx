@@ -106,11 +106,9 @@ export default function PackagingDeliveryView({
     return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
   });
 
-  // When project changes, reset proforma and auto-fill checklist
+  // When project changes, auto-select first won proforma & auto-fill checklist & packing items
   const handleProjectChange = (projectId: string) => {
     setSelectedProjectId(projectId);
-    setSelectedProformaId('');
-    setPackingItems([]);
     
     // Initialize checklist with template from settings
     const template = settings.deliveryChecklistTemplate || [];
@@ -120,6 +118,32 @@ export default function PackagingDeliveryView({
         completed: false
       }))
     );
+
+    // Find first won/semi-won proforma of this project
+    const projProformas = proformas.filter(p => {
+      if (p.projectId !== projectId) return false;
+      const outcome = getProformaOutcomeStatus(p);
+      return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+    });
+
+    const firstProf = projProformas[0];
+    if (firstProf) {
+      setSelectedProformaId(firstProf.id);
+      const wonItems = getWonItemsOfProforma(firstProf, true);
+      const defaultPackingItems: PackingItem[] = wonItems.map((item, idx) => ({
+        id: `pack-item-auto-${idx}-${Date.now()}`,
+        itemOrDocName: item.productName,
+        productId: item.productId,
+        quantity: item.quantity,
+        packageType: 'کارتن',
+        dimensions: '50x40x30 سانتی‌متر',
+        weight: 1
+      }));
+      setPackingItems(defaultPackingItems);
+    } else {
+      setSelectedProformaId('');
+      setPackingItems([]);
+    }
   };
 
   // When proforma changes, populate default packing items from its items
@@ -132,7 +156,7 @@ export default function PackagingDeliveryView({
 
     const prof = proformas.find(p => p.id === proformaId);
     if (prof) {
-      const wonItems = getWonItemsOfProforma(prof);
+      const wonItems = getWonItemsOfProforma(prof, true);
       const defaultPackingItems: PackingItem[] = wonItems.map((item, idx) => ({
         id: `pack-item-auto-${idx}-${Date.now()}`,
         itemOrDocName: item.productName,
@@ -160,6 +184,7 @@ export default function PackagingDeliveryView({
         }
       }
     }
+    if (e.target) e.target.value = '';
   };
 
   const handleDragOver = (e: React.DragEvent) => {

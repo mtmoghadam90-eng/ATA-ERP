@@ -26,8 +26,8 @@ export const mapCurrencyToEnglish = (persian: string | undefined): 'USD' | 'EUR'
   return 'IRR';
 };
 
-// Helper to determine proforma outcome status self-contained
-export const getProformaStatus = (pf: Proforma): 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده' => {
+// Helper to determine proforma literal status self-contained
+export const getProformaLiteralStatus = (pf: Proforma): 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده' => {
   if (pf.isCancelled || pf.status === 'لغو شده') return 'لغو شده';
   
   const items = pf.items || [];
@@ -54,13 +54,13 @@ export const getProformaStatus = (pf: Proforma): 'پیش‌نویس' | 'ارسا
 
 // Helper to check if a proforma counts as a won/sales proforma
 export const isSalesProforma = (pf: Proforma): boolean => {
-  const status = getProformaStatus(pf);
+  const status = getProformaLiteralStatus(pf);
   return status === 'تأیید شده (برنده)' || status === 'نیمه برنده';
 };
 
 // Helper to get won items currency amount
 export const getWonItemsCurrencyAmount = (pf: Proforma): number => {
-  const status = getProformaStatus(pf);
+  const status = getProformaLiteralStatus(pf);
   if (status !== 'تأیید شده (برنده)' && status !== 'نیمه برنده') return 0;
   
   if (status === 'تأیید شده (برنده)') {

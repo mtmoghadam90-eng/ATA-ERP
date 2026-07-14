@@ -25,7 +25,8 @@ export const SEED_PRODUCTS: Product[] = [
     basePriceRIYAL: 285000000,
     description: 'ترانسمیتر هوشمند فشار به همراه صفحه نمایش دیجیتال و خروجی HART، بازه کاری -1 تا 10 بار، بدنه استنلس استیل 316',
     stockLevel: 12,
-    minStockLevel: 5
+    minStockLevel: 5,
+    supplyType: 'ORDER'
   },
   {
     id: 'prod-2',
@@ -109,7 +110,8 @@ export const SEED_PRODUCTS: Product[] = [
     basePriceRIYAL: 1980000000,
     description: 'شیر کنترل مسیر گلوب سوپاپ سایز 2 اینچ کلاس 300 به همراه اکچویتور پنوماتیکی دیافراگمی فیشر و پوزیشنر هوشمند DVC6200',
     stockLevel: 1,
-    minStockLevel: 0
+    minStockLevel: 0,
+    supplyType: 'ORDER'
   }
 ];
 
@@ -278,6 +280,22 @@ export const SEED_PROJECTS: Project[] = [
     agreedDeliveryDate: '2026-10-01',
     closingDate: '2026-06-25',
     endUser: 'بویلر فاز ۲ تندگویان'
+  }  ,
+  {
+    id: 'proj-3',
+    code: 'ATA-1405-TEST',
+    name: 'پروژه تست تامین کالای انبار و سفارش (تست کامل نرم‌افزار)',
+    customerId: 'cust-1',
+    customerName: 'شرکت ملی مناطق نفت‌خیز جنوب',
+    creationDate: '2026-07-01',
+    status: 'برنده (موفق)',
+    description: 'یک پروژه تست برای بررسی عملکرد تب وضعیت تامین کالاها',
+    salesExpert: 'تست سیستم',
+    itemsNeeded: [
+      { productId: 'prod-1', name: 'ترانسمیتر فشار روزمونت مدل 3051S', quantity: 2, supplyMethod: 'ORDER' },
+      { productId: 'prod-2', name: 'ترانسمیتر فشار اندرس هاوزر مدل Cerabar M', quantity: 5, supplyMethod: 'INVENTORY' },
+      { productId: 'prod-3', name: 'سنسور دما ویکا', quantity: 10, supplyMethod: 'NONE' }
+    ]
   }
 ];
 
@@ -354,6 +372,63 @@ export const SEED_PROFORMAS: Proforma[] = [
     taxAmount: 388080000,
     finalAmount: 4268880000,
     notes: 'پیش‌پرداخت ۵۰ درصد جهت ورود کالا از انبار دبی، مابقی تسویه قبل از تحویل درب کارخانه بندر امام.'
+  }  ,
+  {
+    id: 'pf-3',
+    proformaNumber: 'QT-ATA-1405-TEST-01',
+    customerId: 'cust-1',
+    customerName: 'شرکت ملی مناطق نفت‌خیز جنوب',
+    projectId: 'proj-3',
+    projectName: 'پروژه تست تامین کالای انبار و سفارش (تست کامل نرم‌افزار)',
+    issueDate: '2026-07-05',
+    expiryDate: '2026-08-05',
+    deliveryDate: '2026-09-01',
+    status: 'تأیید شده (برنده)',
+    items: [
+      {
+        id: 'pfi-4',
+        productId: 'prod-1',
+        productName: 'ترانسمیتر فشار روزمونت مدل 3051S',
+        productCode: 'RM-3051S-TG',
+        brand: 'Rosemount (Emerson)',
+        quantity: 2,
+        unitPriceRIYAL: 300000000,
+        totalPriceRIYAL: 600000000,
+        supplyMethod: 'ORDER',
+        status: 'برنده'
+      },
+      {
+        id: 'pfi-5',
+        productId: 'prod-2',
+        productName: 'ترانسمیتر فشار اندرس هاوزر مدل Cerabar M',
+        productCode: 'EH-PMC51',
+        brand: 'Endress+Hauser',
+        quantity: 5,
+        unitPriceRIYAL: 200000000,
+        totalPriceRIYAL: 1000000000,
+        supplyMethod: 'INVENTORY',
+        status: 'برنده'
+      },
+      {
+        id: 'pfi-6',
+        productId: 'prod-3',
+        productName: 'ترانسمیتر سطح راداری موج هدایت شونده یوکوگاوا',
+        productCode: 'YK-GWR',
+        brand: 'Yokogawa',
+        quantity: 10,
+        unitPriceRIYAL: 15000000,
+        totalPriceRIYAL: 150000000,
+        supplyMethod: 'NONE',
+        status: 'برنده'
+      }
+    ],
+    totalAmount: 1750000000,
+    discountPercent: 0,
+    discountAmount: 0,
+    taxPercent: 0,
+    taxAmount: 0,
+    finalAmount: 1750000000,
+    notes: 'پیش‌فاکتور تست سیستم'
   }
 ];
 

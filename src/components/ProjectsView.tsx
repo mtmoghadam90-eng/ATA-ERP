@@ -823,6 +823,7 @@ export default function ProjectsView({
     } catch (err: any) {
       alert(err.message || 'خطا در بارگذاری فایل');
     } finally {
+      if (e.target) e.target.value = '';
       setIsUploadingDoc(false);
     }
   };
@@ -872,8 +873,6 @@ export default function ProjectsView({
       productCode: string;
       brand: string;
       quantity: number;
-      unitPriceRIYAL: number;
-      totalPriceRIYAL: number;
       supplyMethod: 'INVENTORY' | 'ORDER' | 'NONE';
       proformaNumber: string;
       proformaId: string;
@@ -894,13 +893,21 @@ export default function ProjectsView({
         // Correctly resolve the supplyMethod: Check matching product from products list
         const matchedProd = products?.find(p => p.id === item.productId || p.code === item.productCode);
         
+        // Also check if the project has specified a supply method for this product
+        const projectItemNeeded = project.itemsNeeded?.find(i => i.productId === item.productId);
+        
         let resolvedSupplyMethod: 'INVENTORY' | 'ORDER' | 'NONE' = 'INVENTORY';
-        if (item.supplyMethod === 'ORDER' || item.supplyMethod === 'NONE') {
+        
+        if (item.supplyMethod && item.supplyMethod !== 'INVENTORY') {
           resolvedSupplyMethod = item.supplyMethod;
+        } else if (projectItemNeeded && projectItemNeeded.supplyMethod && projectItemNeeded.supplyMethod !== 'INVENTORY') {
+          resolvedSupplyMethod = projectItemNeeded.supplyMethod;
         } else if (matchedProd && matchedProd.supplyType === 'ORDER') {
           resolvedSupplyMethod = 'ORDER';
         } else if (item.supplyMethod) {
           resolvedSupplyMethod = item.supplyMethod;
+        } else if (projectItemNeeded && projectItemNeeded.supplyMethod) {
+          resolvedSupplyMethod = projectItemNeeded.supplyMethod;
         } else if (matchedProd && matchedProd.supplyType) {
           resolvedSupplyMethod = matchedProd.supplyType;
         }
@@ -911,8 +918,6 @@ export default function ProjectsView({
           productCode: item.productCode,
           brand: item.brand,
           quantity: item.quantity,
-          unitPriceRIYAL: item.unitPriceRIYAL || 0,
-          totalPriceRIYAL: item.totalPriceRIYAL || 0,
           supplyMethod: resolvedSupplyMethod,
           proformaNumber: pf.proformaNumber,
           proformaId: pf.id,

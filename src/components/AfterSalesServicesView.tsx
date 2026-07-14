@@ -91,7 +91,7 @@ export default function AfterSalesServicesView({
   // Won items of the selected proforma
   const proformaItems = useMemo(() => {
     if (!selectedProfObj) return [];
-    return getWonItemsOfProforma(selectedProfObj);
+    return getWonItemsOfProforma(selectedProfObj, true);
   }, [selectedProfObj]);
 
   const resetItemForm = () => {

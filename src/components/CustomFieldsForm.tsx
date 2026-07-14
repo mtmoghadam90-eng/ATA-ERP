@@ -53,6 +53,8 @@ export default function CustomFieldsForm({
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'خطا در بارگذاری فایل');
+    } finally {
+      if (e.target) e.target.value = '';
     }
   };
 

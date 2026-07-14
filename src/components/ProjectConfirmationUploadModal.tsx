@@ -68,6 +68,7 @@ export default function ProjectConfirmationUploadModal({
       setCustomFileName(`تاییدیه_شروع_پروژه_${project.code}_${nameWithoutExt}`);
       setError(null);
     }
+    if (e.target) e.target.value = '';
   };
 
   const onButtonClick = () => {
@@ -180,21 +181,7 @@ export default function ProjectConfirmationUploadModal({
           </div>
 
           {/* Form Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Target Folder */}
-            <div className="space-y-1.5">
-              <label className="block text-slate-600 font-bold">پوشه مقصد در مستندات پروژه:</label>
-              <select
-                value={selectedFolder}
-                onChange={(e) => setSelectedFolder(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-sky-500 text-slate-700"
-              >
-                {folders.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </div>
-
+          <div className="space-y-4">
             {/* Custom File Name */}
             <div className="space-y-1.5">
               <label className="block text-slate-600 font-bold">نام سند در سیستم:</label>
@@ -203,9 +190,15 @@ export default function ProjectConfirmationUploadModal({
                 value={customFileName}
                 onChange={(e) => setCustomFileName(e.target.value)}
                 placeholder="مثلاً: نامه_ابلاغ_قرارداد_کارفرما"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-sky-500 text-slate-700 font-mono text-left"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:border-sky-500 text-slate-700 font-mono text-left"
                 dir="ltr"
               />
+            </div>
+            
+            {/* Auto destination notice */}
+            <div className="text-[10px] text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-150 flex items-center gap-1.5 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+              <span>محل ذخیره مستند: این فایل به صورت خودکار در پوشه <strong className="text-slate-700">«پیش‌فاکتورها و مهندسی فروش»</strong> پروژه ذخیره می‌شود.</span>
             </div>
           </div>
 

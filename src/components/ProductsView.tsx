@@ -738,6 +738,7 @@ export default function ProductsView({
                             }
                           }
                         }
+                        if (e.target) e.target.value = '';
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                     />

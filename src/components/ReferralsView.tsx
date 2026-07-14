@@ -731,6 +731,7 @@ export default function ReferralsView({
                                         if (file) {
                                           if (file.size > 2 * 1024 * 1024 && !file.type.startsWith('image/')) {
                                             alert('حداکثر حجم مجاز برای فایل‌های غیرتصویری ۲ مگابایت می‌باشد.');
+                                            if (e.target) e.target.value = '';
                                             return;
                                           }
                                           compressImage(file, (dataUrl, sizeStr) => {
@@ -744,6 +745,7 @@ export default function ReferralsView({
                                             }));
                                           });
                                         }
+                                        if (e.target) e.target.value = '';
                                       }}
                                     />
                                   </label>

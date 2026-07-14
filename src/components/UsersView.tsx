@@ -508,6 +508,7 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
                               alert(err.message || 'خطا در بارگذاری تصویر امضا');
                             }
                           }
+                          if (e.target) e.target.value = '';
                         }}
                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                       />
@@ -704,6 +705,7 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
                               alert(err.message || 'خطا در بارگذاری تصویر امضا');
                             }
                           }
+                          if (e.target) e.target.value = '';
                         }}
                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                       />

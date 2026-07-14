@@ -772,6 +772,7 @@ export default function SettingsView({
                                 alert(err.message || 'خطا در بارگذاری تصویر لوگو');
                               }
                             }
+                            if (e.target) e.target.value = '';
                           }}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                         />
@@ -826,6 +827,7 @@ export default function SettingsView({
                                 alert(err.message || 'خطا در بارگذاری تصویر مهر');
                               }
                             }
+                            if (e.target) e.target.value = '';
                           }}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                         />
