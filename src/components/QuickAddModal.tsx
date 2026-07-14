@@ -646,60 +646,6 @@ export default function QuickAddModal({
                 )}
               </div>
 
-              {/* Product Images */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500">تصاویر محصول</label>
-                <div className="border-2 border-dashed border-slate-250 hover:border-sky-500 rounded-xl p-4 transition text-center cursor-pointer bg-slate-50/50 hover:bg-slate-50 relative">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={async (e) => {
-                      const files = e.target.files;
-                      if (files) {
-                        for (const file of Array.from(files) as File[]) {
-                          try {
-                            const url = await uploadFile(file);
-                            setProdImages(prev => [...prev, url]);
-                          } catch (err: any) {
-                            alert(err.message || 'خطا در بارگذاری تصویر محصول');
-                          }
-                        }
-                      }
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                  />
-                  <div className="text-slate-500 space-y-1">
-                    <div className="text-xs font-bold text-slate-700">انتخاب یا رها کردن تصاویر کالا</div>
-                    <div className="text-[10px] text-slate-400">فرمت‌های تصویری (JPG, PNG) - ذخیره‌سازی محلی</div>
-                  </div>
-                </div>
-
-                {/* Thumbnail Previews */}
-                {prodImages.length > 0 && (
-                  <div className="grid grid-cols-4 gap-3 pt-2">
-                    {prodImages.map((img, idx) => (
-                      <div key={idx} className="relative group aspect-square rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
-                        <img
-                          src={img}
-                          alt={`Product image ${idx + 1}`}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setProdImages(prev => prev.filter((_, i) => i !== idx))}
-                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-red-700 z-20"
-                          title="حذف تصویر"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               {/* Custom Fields */}
               <div className="pt-3 border-t border-slate-100">
                 <CustomFieldsForm
@@ -1377,6 +1323,60 @@ export default function QuickAddModal({
                   placeholder="جزئیات متریال بدنه، اتصالات، کلاس کاری، رنج فشار یا دما، سیگنال خروجی و گواهینامه‌ها..."
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right leading-relaxed"
                 />
+              </div>
+
+              {/* Product Images */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500">تصاویر محصول</label>
+                <div className="border-2 border-dashed border-slate-250 hover:border-sky-500 rounded-xl p-4 transition text-center cursor-pointer bg-slate-50/50 hover:bg-slate-50 relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={async (e) => {
+                      const files = e.target.files;
+                      if (files) {
+                        for (const file of Array.from(files) as File[]) {
+                          try {
+                            const url = await uploadFile(file);
+                            setProdImages(prev => [...prev, url]);
+                          } catch (err: any) {
+                            alert(err.message || 'خطا در بارگذاری تصویر محصول');
+                          }
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                  />
+                  <div className="text-slate-500 space-y-1">
+                    <div className="text-xs font-bold text-slate-700">انتخاب یا رها کردن تصاویر کالا</div>
+                    <div className="text-[10px] text-slate-400">فرمت‌های تصویری (JPG, PNG) - ذخیره‌سازی محلی</div>
+                  </div>
+                </div>
+
+                {/* Thumbnail Previews */}
+                {prodImages.length > 0 && (
+                  <div className="grid grid-cols-4 gap-3 pt-2">
+                    {prodImages.map((img, idx) => (
+                      <div key={idx} className="relative group aspect-square rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                        <img
+                          src={img}
+                          alt={`Product image ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setProdImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-red-700 z-20"
+                          title="حذف تصویر"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Custom Fields */}

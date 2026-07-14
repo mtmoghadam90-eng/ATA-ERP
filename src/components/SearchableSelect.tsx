@@ -12,6 +12,7 @@ interface SearchableSelectProps {
   options: Option[];
   placeholder?: string;
   className?: string;
+  wrapperClassName?: string;
   required?: boolean;
   disabled?: boolean;
 }
@@ -22,6 +23,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   options,
   placeholder = '-- انتخاب کنید --',
   className = '',
+  wrapperClassName = '',
   required = false,
   disabled = false,
 }) => {
@@ -78,7 +80,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${disabled ? 'opacity-60 pointer-events-none' : ''}`}
+      className={`relative w-full ${disabled ? 'opacity-60 pointer-events-none' : ''} ${wrapperClassName}`}
     >
       <button
         type="button"
@@ -104,7 +106,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl bg-white border border-slate-200 shadow-xl overflow-hidden animate-fade-in text-right">
+        <div className="absolute z-[100] mt-1 min-w-full w-max max-w-[90vw] sm:max-w-2xl rounded-xl bg-white border border-slate-200 shadow-xl overflow-hidden animate-fade-in text-right">
           <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
             <Search size={14} className="text-slate-400 shrink-0" />
             <input
@@ -143,7 +145,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                         : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="truncate flex-1">{opt.label}</span>
+                    <span className="flex-1 whitespace-normal break-words leading-relaxed text-right">{opt.label}</span>
                     {isSelected && <Check size={14} className="text-sky-600 shrink-0 mr-2" />}
                   </button>
                 );

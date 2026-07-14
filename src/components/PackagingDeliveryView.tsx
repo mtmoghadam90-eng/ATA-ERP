@@ -30,6 +30,7 @@ import {
 import { getTodayShamsi } from '../dateUtils';
 import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
 import ConfirmModal from './ConfirmModal';
+import ShamsiDatePicker from './ShamsiDatePicker';
 import { uploadFile } from '../imageUtils';
 
 interface PackagingDeliveryViewProps {
@@ -67,6 +68,7 @@ export default function PackagingDeliveryView({
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedProformaId, setSelectedProformaId] = useState<string>('');
   const [deliveryDate, setDeliveryDate] = useState<string>(getTodayShamsi());
+  const [actualDeliveryDate, setActualDeliveryDate] = useState<string>('');
   const [shippingMethod, setShippingMethod] = useState<string>(settings.dropdownItems.shippingMethods?.[0] || 'باربری');
   const [preDeliveryTestNotes, setPreDeliveryTestNotes] = useState<string>('');
   const [packingItems, setPackingItems] = useState<PackingItem[]>([]);
@@ -491,7 +493,8 @@ export default function PackagingDeliveryView({
 
         <div class="meta-box">
             <div class="meta-item"><span class="meta-label">شماره پکینگ لیست:</span> <span class="meta-value">${delivery.packingListNumber}</span></div>
-            <div class="meta-item"><span class="meta-label">تاریخ صدور / ارسال:</span> <span class="meta-value font-mono">${delivery.deliveryDate}</span></div>
+            <div class="meta-item"><span class="meta-label">تاریخ صدور پکینگ لیست:</span> <span class="meta-value font-mono">${delivery.deliveryDate}</span></div>
+            ${delivery.actualDeliveryDate ? `<div class="meta-item"><span class="meta-label">تاریخ تحویل کالا:</span> <span class="meta-value font-mono">${delivery.actualDeliveryDate}</span></div>` : ''}
             <div class="meta-item"><span class="meta-label">روش ارسال و تحویل:</span> <span class="meta-value">${delivery.shippingMethod}</span></div>
             <div class="meta-item"><span class="meta-label">پروژه (کارفرما):</span> <span class="meta-value">${delivery.projectName}</span></div>
             ${delivery.proformaNumber ? `<div class="meta-item"><span class="meta-label">پیش‌فاکتور مرجع:</span> <span class="meta-value font-mono">${delivery.proformaNumber}</span></div>` : ''}
@@ -567,6 +570,7 @@ export default function PackagingDeliveryView({
     setSelectedProjectId(delivery.projectId);
     setSelectedProformaId(delivery.proformaId || '');
     setDeliveryDate(delivery.deliveryDate);
+    setActualDeliveryDate(delivery.actualDeliveryDate || '');
     setShippingMethod(delivery.shippingMethod);
     setPreDeliveryTestNotes(delivery.preDeliveryTestNotes || '');
     setPackingItems(delivery.items);
@@ -600,6 +604,7 @@ export default function PackagingDeliveryView({
           proformaId: selectedProformaId || undefined,
           proformaNumber: prof?.proformaNumber || undefined,
           deliveryDate,
+          actualDeliveryDate,
           shippingMethod,
           preDeliveryTestNotes,
           checklist,
@@ -614,6 +619,7 @@ export default function PackagingDeliveryView({
         proformaId: selectedProformaId || undefined,
         proformaNumber: prof?.proformaNumber || undefined,
         deliveryDate,
+        actualDeliveryDate,
         shippingMethod,
         preDeliveryTestNotes,
         checklist,
@@ -628,6 +634,7 @@ export default function PackagingDeliveryView({
     setSelectedProjectId('');
     setSelectedProformaId('');
     setDeliveryDate(getTodayShamsi());
+    setActualDeliveryDate('');
     setShippingMethod(settings.dropdownItems.shippingMethods?.[0] || 'باربری');
     setPreDeliveryTestNotes('');
     setPackingItems([]);
@@ -781,8 +788,22 @@ export default function PackagingDeliveryView({
                       <div>
                         <h3 className="font-bold text-slate-800 text-sm leading-snug">{delivery.projectName}</h3>
                         {delivery.proformaNumber && (
-                          <span className="text-[10px] text-slate-400">پیش‌فاکتور: {delivery.proformaNumber}</span>
+                          <div className="text-[10px] text-slate-400 mt-0.5">پیش‌فاکتور: {delivery.proformaNumber}</div>
                         )}
+                      </div>
+
+                      {/* Display Dates Timeline */}
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1.5 text-[10px]">
+                        <div className="flex justify-between text-slate-500">
+                          <span>📦 تاریخ صدور پکینگ لیست:</span>
+                          <span className="font-mono font-bold text-slate-700">{delivery.deliveryDate}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-500">
+                          <span>🤝 تاریخ تحویل به مشتری:</span>
+                          <span className="font-mono font-bold text-emerald-600">
+                            {delivery.actualDeliveryDate || 'در انتظار تحویل'}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 text-xs text-slate-600 pt-1">
@@ -896,15 +917,21 @@ export default function PackagingDeliveryView({
 
             {/* Delivery Date */}
             <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">تاریخ تحویل / بارگیری</label>
-              <input
-                type="text"
-                value={deliveryDate}
-                onChange={e => setDeliveryDate(e.target.value)}
+              <ShamsiDatePicker
+                label="تاریخ صدور پکینگ لیست *"
                 required
-                placeholder="مثال: ۱۴۰۵/۰۴/۱۸"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-left focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono"
-                dir="ltr"
+                value={deliveryDate}
+                onChange={setDeliveryDate}
+              />
+            </div>
+
+            {/* Actual Delivery Date */}
+            <div className="space-y-1">
+              <ShamsiDatePicker
+                label="تاریخ تحویل به مشتری"
+                value={actualDeliveryDate}
+                onChange={setActualDeliveryDate}
+                placeholder="انتخاب تاریخ"
               />
             </div>
 
@@ -1302,10 +1329,16 @@ export default function PackagingDeliveryView({
                     <span className="text-slate-400">شماره پکینگ لیست:</span>
                     <strong className="text-slate-800 font-extrabold">{selectedDelivery.packingListNumber}</strong>
                   </div>
-                  <div className="text-xs text-slate-600 flex items-center gap-1.5">
-                    <span className="text-slate-400">تاریخ صدور / ارسال:</span>
+                  <div className="text-xs text-slate-600 flex items-center gap-1.5 border-b border-slate-50 pb-1">
+                    <span className="text-slate-400">تاریخ صدور پکینگ لیست:</span>
                     <strong className="text-slate-800 font-mono font-bold">{selectedDelivery.deliveryDate}</strong>
                   </div>
+                  {selectedDelivery.actualDeliveryDate && (
+                    <div className="text-xs text-emerald-600 flex items-center gap-1.5 border-b border-emerald-50 pb-1">
+                      <span className="text-emerald-500/80">تاریخ تحویل نهایی:</span>
+                      <strong className="font-mono font-bold">{selectedDelivery.actualDeliveryDate}</strong>
+                    </div>
+                  )}
                   <div className="text-xs text-slate-600 flex items-center gap-1.5">
                     <span className="text-slate-400">روش حمل و ارسال:</span>
                     <strong className="text-slate-800 font-extrabold">{selectedDelivery.shippingMethod}</strong>

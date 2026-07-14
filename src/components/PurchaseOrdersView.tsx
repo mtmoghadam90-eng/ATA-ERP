@@ -892,7 +892,7 @@ export default function PurchaseOrdersView({
                 <div className="space-y-1.5 w-full min-w-0">
                   <label className="text-xs font-semibold text-slate-500">کد پروژه مادری *</label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={projectId}
                       onChange={(val) => {
                         const projId = val;
@@ -972,7 +972,7 @@ export default function PurchaseOrdersView({
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">انتخاب تأمین‌کننده خارجی *</label>
                   <div className="flex gap-1.5 items-center">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={supplierId}
                       onChange={(val) => setSupplierId(val)}
                       required
@@ -998,7 +998,7 @@ export default function PurchaseOrdersView({
                 {/* Proforma Linked */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">مرتبط با پیش‌فاکتور مشتری (پروفرما)</label>
-                  <SearchableSelect
+                  <SearchableSelect wrapperClassName="flex-1 min-w-0"
                     value={proformaId}
                     onChange={(val) => {
                       const pfId = val;
@@ -1182,12 +1182,12 @@ export default function PurchaseOrdersView({
                 {/* Row layout */}
                 <div className="space-y-2.5 max-h-56 overflow-y-auto pl-1">
                   {items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150 items-center">
+                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150 items-start">
                       
                       {/* Product select & Proforma Item select */}
                       <div className="col-span-6 space-y-1.5">
                         <div className="flex gap-1 items-center">
-                          <SearchableSelect
+                          <SearchableSelect wrapperClassName="flex-1 min-w-0"
                             value={item.productId}
                             onChange={(val) => handleItemProductChange(idx, val)}
                             options={[

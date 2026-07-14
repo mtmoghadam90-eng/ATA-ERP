@@ -1,4 +1,7 @@
-const fs = require('fs');
-const content = fs.readFileSync('src/useERPStore.ts', 'utf-8');
-const match = content.match(/const saveToStorage[\s\S]*?};/);
-console.log(match[0]);
+const content = `
+const getActualDeliveryDate = (projectId: string) => {
+  const delivery = packagingDeliveries.find(d => d.projectId === projectId);
+  return delivery?.deliveryDate;
+};
+`;
+console.log(content);

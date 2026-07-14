@@ -22,6 +22,8 @@ import TaskCalendarModal from './components/TaskCalendarModal';
 import { getTodayShamsi, toShamsiStr } from './dateUtils';
 import ShamsiDatePicker from './components/ShamsiDatePicker';
 import ConfirmModal from './components/ConfirmModal';
+import ProjectConfirmationUploadModal from './components/ProjectConfirmationUploadModal';
+import { Project } from './types';
 
 export default function App() {
   const store = useERPStore();
@@ -33,6 +35,61 @@ export default function App() {
   const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
   const [triggeredReminders, setTriggeredReminders] = useState<string[]>([]);
   const [activeReminderTask, setActiveReminderTask] = useState<any>(null);
+
+  // Project confirmation upload state
+  const [projectToUploadDoc, setProjectToUploadDoc] = useState<Project | null>(null);
+  const prevProjectStatusesRef = React.useRef<Record<string, string>>({});
+  const isInitialLoadRef = React.useRef(true);
+
+  // Monitor project status changes (to won/semi-won)
+  useEffect(() => {
+    if (!store.isInitialized || !store.projects) return;
+
+    const prevStatuses = prevProjectStatusesRef.current;
+    
+    if (isInitialLoadRef.current) {
+      store.projects.forEach(project => {
+        prevStatuses[project.id] = project.status;
+      });
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    store.projects.forEach(project => {
+      const prevStatus = prevStatuses[project.id];
+      const currentStatus = project.status;
+
+      const isNewProject = prevStatus === undefined;
+      const isWon = currentStatus === 'برنده (موفق)' || currentStatus === 'نیمه برنده';
+      
+      let triggered = false;
+      if (isNewProject) {
+        if (isWon) {
+          triggered = true;
+        }
+      } else if (prevStatus !== currentStatus) {
+        const wasWonBefore = prevStatus === 'برنده (موفق)' || prevStatus === 'نیمه برنده';
+        if (isWon && !wasWonBefore) {
+          triggered = true;
+        }
+      }
+
+      if (triggered) {
+        // Trigger modal with short delay to allow background updates to complete
+        setTimeout(() => {
+          setProjectToUploadDoc(project);
+        }, 100);
+      }
+
+      // Keep record updated
+      prevStatuses[project.id] = currentStatus;
+    });
+  }, [store.isInitialized, store.projects]);
+
+  const handleSaveConfirmationDoc = (updatedProject: Project, url: string, fileName: string, folderName: string) => {
+    store.updateProject(updatedProject);
+    alert(`مدرک "${fileName}" با موفقیت در پوشه "${folderName}" پروژه ذخیره گردید.`);
+  };
   
   // Snooze options state
   const [showSnoozeOptions, setShowSnoozeOptions] = useState<boolean>(false);
@@ -171,6 +228,8 @@ export default function App() {
             customers={store.customers}
             projects={store.projects}
             proformas={store.proformas}
+            packagingDeliveries={store.packagingDeliveries}
+            transactions={store.transactions}
             purchaseOrders={store.purchaseOrders}
             exchangeRates={store.exchangeRates}
             tasks={store.tasks}
@@ -229,6 +288,8 @@ export default function App() {
             addProject={store.addProject}
             addProduct={store.addProduct}
             users={store.users}
+            transactions={store.transactions}
+            packagingDeliveries={store.packagingDeliveries}
             currentUser={store.currentUser}
           />
         );
@@ -279,12 +340,17 @@ export default function App() {
             addProjectActivity={store.addProjectActivity}
             completeProjectCategoryGroup={store.completeProjectCategoryGroup}
             resumeProjectCategoryGroup={store.resumeProjectCategoryGroup}
+            deleteProjectCategoryGroup={store.deleteProjectCategoryGroup}
             updateProjectActivity={store.updateProjectActivity}
             deleteProjectActivity={store.deleteProjectActivity}
             currentUser={store.currentUser}
             addCustomer={store.addCustomer}
             addProduct={store.addProduct}
             users={store.users}
+            transactions={store.transactions}
+            packagingDeliveries={store.packagingDeliveries}
+            purchaseOrders={store.purchaseOrders}
+            afterSalesServices={store.afterSalesServices}
             initialSelectedProjectId={selectedProjectIdForActivities}
             onClearInitialSelectedProject={() => setSelectedProjectIdForActivities(null)}
           />
@@ -720,6 +786,14 @@ export default function App() {
         message={store.completionPrompt?.message || ''}
         confirmText="بله، تغییر یابد"
         cancelText="انصراف"
+      />
+
+      {/* Project Confirmation Upload Modal */}
+      <ProjectConfirmationUploadModal
+        isOpen={!!projectToUploadDoc}
+        project={projectToUploadDoc}
+        onClose={() => setProjectToUploadDoc(null)}
+        onSave={handleSaveConfirmationDoc}
       />
     </div>
   );

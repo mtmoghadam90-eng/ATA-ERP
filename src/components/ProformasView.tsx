@@ -48,6 +48,8 @@ interface ProformasViewProps {
   addProduct?: (product: Omit<Product, 'id' | 'stockLevel'> & { stockLevel?: number }) => Product;
   users?: User[];
   currentUser?: User | null;
+  transactions?: any;
+  packagingDeliveries?: any;
 }
 export default function ProformasView({
   proformas,
@@ -126,7 +128,9 @@ export default function ProformasView({
     if (!selectedProformaForItems) return;
     updateProforma({
       ...selectedProformaForItems,
-      items: editingItemsList
+      items: editingItemsList,
+      isCancelled: false,
+      status: selectedProformaForItems.status === "لغو شده" ? "ارسال شده" : selectedProformaForItems.status
     });
     setShowItemsModal(false);
   };
@@ -1866,7 +1870,7 @@ export default function ProformasView({
                 <div className="space-y-1.5 w-full min-w-0">
                   <label className="text-xs font-semibold text-slate-500">کد پروژه مادری *</label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={projectId}
                       onChange={(val) => {
                         const projId = val;
@@ -1928,7 +1932,7 @@ export default function ProformasView({
                 <div className="space-y-1.5 w-full min-w-0">
                   <label className="text-xs font-semibold text-slate-500">انتخاب خریدار / کارفرما *</label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={customerId}
                       onChange={(val) => {
                         const newCustId = val;
@@ -2003,7 +2007,7 @@ export default function ProformasView({
                       <div className="space-y-1.5 animate-fade-in w-full min-w-0">
                         <label className="text-xs font-semibold text-slate-500">مخاطب *</label>
                         <div className="flex gap-1.5 items-center w-full min-w-0">
-                          <SearchableSelect
+                          <SearchableSelect wrapperClassName="flex-1 min-w-0"
                             value={contactCustomerId}
                             onChange={(val) => {
                               const newContactId = val;
@@ -2171,7 +2175,7 @@ export default function ProformasView({
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pl-1">
                   {items.map((item, idx) => (
                     <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-150 space-y-3">
-                      <div className="grid grid-cols-2 md:grid-cols-12 gap-3 items-center">
+                      <div className="grid grid-cols-2 md:grid-cols-12 gap-3 items-start">
                         {/* Product Selector */}
                         <div className={proformaType === 'TECHNICAL' ? "col-span-2 md:col-span-9 w-full min-w-0" : "col-span-2 md:col-span-5 w-full min-w-0"}>
                           <div className="flex flex-col gap-2 w-full min-w-0">
@@ -2216,7 +2220,7 @@ export default function ProformasView({
                                 </div>
                               </div>
                             ) : (
-                              <SearchableSelect
+                              <SearchableSelect wrapperClassName="flex-1 min-w-0"
                                 value={item.productId}
                                 onChange={(val) => handleItemProductChange(idx, val)}
                                 options={[

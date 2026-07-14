@@ -528,7 +528,7 @@ export default function AfterSalesServicesView({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">پروژه (مشتری) <span className="text-red-500">*</span></label>
-                  <SearchableSelect
+                  <SearchableSelect wrapperClassName="flex-1 min-w-0"
                     value={selectedProjectId}
                     onChange={(val) => {
                       setSelectedProjectId(val);
@@ -550,7 +550,7 @@ export default function AfterSalesServicesView({
                 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">پیش‌فاکتور مرجع (فقط پیش‌فاکتورهای تایید شده)</label>
-                  <SearchableSelect
+                  <SearchableSelect wrapperClassName="flex-1 min-w-0"
                     value={selectedProformaNumber}
                     onChange={(val) => {
                       setSelectedProformaNumber(val);
@@ -579,7 +579,7 @@ export default function AfterSalesServicesView({
                     <label className="text-xs font-bold text-slate-700">نام کالا / تجهیز برگشتی <span className="text-red-500">*</span></label>
                     {selectedProformaNumber && proformaItems.length > 0 ? (
                       <div className="space-y-2">
-                        <SearchableSelect
+                        <SearchableSelect wrapperClassName="flex-1 min-w-0"
                           value={itemProductDropdownVal}
                           onChange={(val) => {
                             setItemProductDropdownVal(val);

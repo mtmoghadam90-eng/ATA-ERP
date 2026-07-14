@@ -1364,7 +1364,7 @@ export default function TransactionsView({
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-xs font-semibold text-slate-500">انتخاب مشتری *</label>
                     <div className="flex gap-1.5 items-center">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={customerId}
                       onChange={(val) => setCustomerId(val)}
                       required
@@ -1393,7 +1393,7 @@ export default function TransactionsView({
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-xs font-semibold text-slate-500">انتخاب تأمین‌کننده *</label>
                     <div className="flex gap-1.5 items-center">
-                      <SearchableSelect
+                      <SearchableSelect wrapperClassName="flex-1 min-w-0"
                         value={supplierId}
                         onChange={(val) => setSupplierId(val)}
                         required
@@ -1503,7 +1503,7 @@ export default function TransactionsView({
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">مرتبط با پروژه (اختیاری)</label>
                   <div className="flex gap-1.5 items-center">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={projectId}
                       onChange={(val) => {
                         const projId = val;

@@ -25,9 +25,18 @@ import {
   MessageSquare,
   Calendar,
   History,
-  Check
+  Check,
+  Folder,
+  FolderOpen,
+  File,
+  Download,
+  Eye,
+  Upload,
+  ChevronRight,
+  Loader2,
+  Image as ImageIcon
 } from 'lucide-react';
-import { Project, Customer, ERPSettings, Product, Proforma, ProjectCategoryGroup, ProjectActivity, User as ERPUser } from '../types';
+import { Project, Customer, ERPSettings, Product, Proforma, ProjectCategoryGroup, ProjectActivity, User as ERPUser, PackagingDelivery, Transaction } from '../types';
 import { getTodayShamsi } from '../dateUtils';
 import { getProformaOutcomeStatus } from '../useERPStore';
 import ShamsiDatePicker from './ShamsiDatePicker';
@@ -45,6 +54,10 @@ interface ProjectsViewProps {
   customers: Customer[];
   products: Product[];
   proformas: Proforma[];
+  packagingDeliveries?: PackagingDelivery[];
+  transactions?: Transaction[];
+  purchaseOrders?: any[];
+  afterSalesServices?: any[];
   addProject: (project: Omit<Project, 'id' | 'code' | 'creationDate'> & { customValues?: Record<string, any> }) => void;
   updateProject: (project: Project) => void;
   deleteProject: (id: string) => void;
@@ -63,6 +76,7 @@ interface ProjectsViewProps {
   ) => any;
   completeProjectCategoryGroup?: (categoryGroupId: string, createdBy?: string) => void;
   resumeProjectCategoryGroup?: (categoryGroupId: string, createdBy?: string) => void;
+  deleteProjectCategoryGroup?: (categoryGroupId: string) => void;
   updateProjectActivity?: (projectId: string, categoryGroupId: string, activityId: string, newText: string) => void;
   deleteProjectActivity?: (projectId: string, categoryGroupId: string, activityId: string) => void;
   currentUser?: ERPUser | null;
@@ -76,6 +90,10 @@ export default function ProjectsView({
   customers,
   products,
   proformas,
+  packagingDeliveries = [],
+  transactions = [],
+  purchaseOrders = [],
+  afterSalesServices = [],
   addProject,
   updateProject,
   deleteProject,
@@ -87,6 +105,7 @@ export default function ProjectsView({
   addProjectActivity,
   completeProjectCategoryGroup,
   resumeProjectCategoryGroup,
+  deleteProjectCategoryGroup,
   updateProjectActivity,
   deleteProjectActivity,
   currentUser,
@@ -98,6 +117,8 @@ export default function ProjectsView({
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [customFieldFilters, setCustomFieldFilters] = useState<Record<string, string>>({});
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
+  const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
@@ -112,6 +133,11 @@ export default function ProjectsView({
 
   // Activities panel states
   const [selectedProjectForActivities, setSelectedProjectForActivities] = useState<Project | null>(null);
+  const [modalTab, setModalTab] = useState<'activities' | 'documents' | 'supply'>('activities');
+  const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
+  const [supplyFilter, setSupplyFilter] = useState<'ALL' | 'INVENTORY' | 'ORDER' | 'NONE'>('ALL');
+  const [isUploadingDoc, setIsUploadingDoc] = useState<boolean>(false);
+  const [activePreviewDoc, setActivePreviewDoc] = useState<any | null>(null);
 
   React.useEffect(() => {
     if (selectedProjectForActivities) {
@@ -121,6 +147,14 @@ export default function ProjectsView({
       }
     }
   }, [projects, selectedProjectForActivities]);
+
+  React.useEffect(() => {
+    if (!selectedProjectForActivities) {
+      setModalTab('activities');
+      setSelectedFolderName(null);
+      setActivePreviewDoc(null);
+    }
+  }, [selectedProjectForActivities]);
 
   React.useEffect(() => {
     if (initialSelectedProjectId) {
@@ -156,7 +190,7 @@ export default function ProjectsView({
   // Form states
   const [name, setName] = useState('');
   const [customerId, setCustomerId] = useState('');
-  const [expectedCloseDate, setExpectedCloseDate] = useState('');
+  
   const [status, setStatus] = useState<Project['status']>('جدید');
   const [description, setDescription] = useState('');
   const [itemsNeeded, setItemsNeeded] = useState<{
@@ -195,7 +229,7 @@ export default function ProjectsView({
   const [winningDate, setWinningDate] = useState('');
   const [agreedDeliveryDate, setAgreedDeliveryDate] = useState('');
   const [endUser, setEndUser] = useState('');
-  const [closingDate, setClosingDate] = useState('');
+  
   const [attachments, setAttachments] = useState<{ name: string; url: string; size: number; }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -221,6 +255,18 @@ export default function ProjectsView({
     return cust.customerType === 'حقوقی' ? cust.companyName : `${cust.firstName || ''} ${cust.lastName || ''}`.trim();
   };
 
+  const getProjectPrepaymentDate = (projectId: string) => {
+    const projectTx = transactions
+      .filter(tx => tx.projectId === projectId && tx.type === 'دریافت')
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return projectTx.length > 0 ? projectTx[0].date : null;
+  };
+
+  const getActualDeliveryDate = (projectId: string) => {
+    const delivery = packagingDeliveries.find(d => d.projectId === projectId);
+    return delivery?.actualDeliveryDate;
+  };
+  
   const getApprovedProformaDeliveryDate = (projectId: string) => {
     const approved = proformas.find(pf => {
       if (pf.projectId !== projectId) return false;
@@ -355,10 +401,10 @@ export default function ProjectsView({
     const today = getTodayShamsi();
     if (newStatus === 'برنده (موفق)' || newStatus === 'نیمه برنده') {
       if (!winningDate) setWinningDate(today);
-      if (!closingDate) setClosingDate(today);
+      //  
       if (!agreedDeliveryDate) setAgreedDeliveryDate(today);
     } else if (newStatus === 'باخته' || newStatus === 'لغو شده') {
-      if (!closingDate) setClosingDate(today);
+      
     }
   };
 
@@ -367,7 +413,7 @@ export default function ProjectsView({
     setEditingProject(null);
     setName('');
     setCustomerId(customers[0]?.id || '');
-    setExpectedCloseDate('');
+    
     setStatus('جدید');
     setDescription('');
     setCustomValues({});
@@ -387,7 +433,7 @@ export default function ProjectsView({
     setWinningDate('');
     setAgreedDeliveryDate('');
     setEndUser('');
-    setClosingDate('');
+    
     setAttachments([]);
 
     setShowModal(true);
@@ -398,7 +444,7 @@ export default function ProjectsView({
     setEditingProject(proj);
     setName(proj.name);
     setCustomerId(proj.customerId);
-    setExpectedCloseDate(proj.expectedCloseDate || '');
+    
     setStatus(proj.status);
     setDescription(proj.description);
     setCustomValues(proj.customValues || {});
@@ -418,7 +464,7 @@ export default function ProjectsView({
     setWinningDate(proj.winningDate || '');
     setAgreedDeliveryDate(proj.agreedDeliveryDate || '');
     setEndUser(proj.endUser || '');
-    setClosingDate(proj.closingDate || '');
+    
     setAttachments(proj.attachments || []);
 
     setShowModal(true);
@@ -446,7 +492,7 @@ export default function ProjectsView({
       name,
       customerId,
       customerName,
-      expectedCloseDate: expectedCloseDate || undefined,
+      
       status,
       description,
       customValues,
@@ -466,7 +512,6 @@ export default function ProjectsView({
       winningDate,
       agreedDeliveryDate,
       endUser,
-      closingDate,
       attachments
     };
 
@@ -564,10 +609,10 @@ export default function ProjectsView({
       'فرد کلیدی فنی',
       'شماره استعلام مشتری',
       'تاریخ ایجاد فرصت',
-      'تاریخ برنده شدن',
+      'تاریخ تایید',
       'تاریخ توافق‌شده تحویل',
-      'تاریخ بسته شدن',
-      'موعد مقرر تحویل عمومی',
+      'تاریخ دریافت پیش پرداخت',
+      'تاریخ تحویل قطعی',
       'اقلام درخواستی مشتری',
       'توضیحات'
     ];
@@ -591,13 +636,1145 @@ export default function ProjectsView({
       p.opportunityDate || p.creationDate || '',
       p.winningDate || '',
       p.agreedDeliveryDate || '',
-      p.closingDate || '',
-      p.expectedCloseDate || '',
+      getProjectPrepaymentDate(p.id) || '',
+      getActualDeliveryDate(p.id) || '',
       p.itemsNeeded?.map(item => `${item.name} (${item.quantity} عدد - ${item.supplyMethod === 'ORDER' ? 'سفارش' : item.supplyMethod === 'NONE' ? 'بدون نیاز به تامین' : 'انبار'})`).join(' - ') || '',
       p.description
     ]);
 
     exportToCSV('گزارش_پروژه‌ها', headers, rows);
+  };
+
+  const getProjectFoldersAndFiles = (p: Project) => {
+    const folders = [
+      { id: 'customer_inquiry', name: 'درخواست مشتری و استعلام اولیه', desc: 'اسناد درخواست اولیه، استعلام‌های فنی و مکاتبات مشتری', iconBg: 'bg-indigo-50 text-indigo-600 border-indigo-100', icon: Paperclip },
+      { id: 'sales_proforma', name: 'پیش‌فاکتورها و مهندسی فروش', desc: 'پیش‌فاکتورهای صادر شده فنی و مالی و پروپوزال‌ها', iconBg: 'bg-sky-50 text-sky-600 border-sky-100', icon: FileSpreadsheet },
+      { id: 'supplier_po', name: 'سفارشات خرید تامین‌کنندگان', desc: 'سفارش‌های خرید ارسالی به سازندگان و تامین‌کنندگان کالا', iconBg: 'bg-amber-50 text-amber-600 border-amber-100', icon: Briefcase },
+      { id: 'packaging_delivery', name: 'بسته‌بندی و تحویل کالا', desc: 'پکینگ لیست‌های صادر شده، عکس‌های بسته‌بندی و اسناد بارنامه', iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-100', icon: CheckCircle2 },
+      { id: 'financial_transactions', name: 'تراکنش‌های مالی و پرداخت‌ها', desc: 'فیش‌های پیش‌پرداخت، فاکتورهای رسمی و اسناد مالی پروژه', iconBg: 'bg-purple-50 text-purple-600 border-purple-100', icon: TrendingUp },
+      { id: 'after_sales', name: 'خدمات پس از فروش', desc: 'اسناد خدمات گارانتی، برگه ترخیص کالا برای تعمیر و گزارشات خرابی', iconBg: 'bg-teal-50 text-teal-600 border-teal-100', icon: Sliders },
+      { id: 'manual_other', name: 'سایر مدارک و فایل‌های دستی', desc: 'مدارک متفرقه و فایل‌هایی که به طور مستقیم در بالا طبقه‌بندی نشده‌اند', iconBg: 'bg-slate-50 text-slate-600 border-slate-150', icon: Folder }
+    ];
+
+    const folderFiles: Record<string, { id: string; name: string; url: string; size: string; date: string; type: 'system' | 'manual' | 'attachment'; originalEntity?: any }[]> = {};
+    folders.forEach(f => {
+      folderFiles[f.name] = [];
+    });
+
+    // 1. Customer Inquiry & Requests (attachments)
+    if (p.attachments && p.attachments.length > 0) {
+      p.attachments.forEach((att, idx) => {
+        folderFiles['درخواست مشتری و استعلام اولیه'].push({
+          id: `attachment-${idx}`,
+          name: att.name || `فایل درخواست ${idx + 1}`,
+          url: att.url,
+          size: 'پیوست پروژه',
+          date: p.creationDate || 'مشخص نشده',
+          type: 'attachment'
+        });
+      });
+    }
+
+    // 2. Proformas
+    const projectProformas = proformas.filter(pf => pf.projectId === p.id);
+    projectProformas.forEach(pf => {
+      folderFiles['پیش‌فاکتورها و مهندسی فروش'].push({
+        id: `proforma-${pf.id}`,
+        name: `پیش‌فاکتور ${pf.proformaNumber} - مشتری: ${pf.customerName}.pdf`,
+        url: '#',
+        size: `${pf.items?.length || 0} ردیف کالا`,
+        date: pf.issueDate,
+        type: 'system',
+        originalEntity: pf
+      });
+    });
+
+    // 3. POs
+    const projectPOs = (purchaseOrders || []).filter(po => po.projectId === p.id);
+    projectPOs.forEach(po => {
+      folderFiles['سفارشات خرید تامین‌کنندگان'].push({
+        id: `po-${po.id}`,
+        name: `سفارش خرید ${po.poNumber} - تامین‌کننده: ${po.supplierName}.pdf`,
+        url: '#',
+        size: `${po.items?.length || 0} ردیف کالا`,
+        date: po.orderDate,
+        type: 'system',
+        originalEntity: po
+      });
+    });
+
+    // 4. Packaging Deliveries
+    const projectDeliveries = (packagingDeliveries || []).filter(del => del.projectId === p.id);
+    projectDeliveries.forEach(del => {
+      folderFiles['بسته‌بندی و تحویل کالا'].push({
+        id: `delivery-pl-${del.id}`,
+        name: `پکینگ لیست ${del.packingListNumber} - روش ارسال: ${del.shippingMethod}.pdf`,
+        url: '#',
+        size: `${del.items?.length || 0} ردیف کالا`,
+        date: del.deliveryDate,
+        type: 'system',
+        originalEntity: del
+      });
+      if (del.photos && del.photos.length > 0) {
+        del.photos.forEach((photo, idx) => {
+          folderFiles['بسته‌بندی و تحویل کالا'].push({
+            id: `delivery-img-${del.id}-${idx}`,
+            name: `عکس بسته‌بندی ${idx + 1} - پکینگ لیست ${del.packingListNumber}.png`,
+            url: photo,
+            size: 'تصویر بسته‌بندی',
+            date: del.deliveryDate,
+            type: 'system',
+            originalEntity: del
+          });
+        });
+      }
+    });
+
+    // 5. Transactions
+    const projectTXs = (transactions || []).filter(tx => tx.projectId === p.id);
+    projectTXs.forEach(tx => {
+      folderFiles['تراکنش‌های مالی و پرداخت‌ها'].push({
+        id: `tx-${tx.id}`,
+        name: `رسید تراکنش مالی ${tx.documentNumber} (${tx.type}).pdf`,
+        url: '#',
+        size: `مبلغ: ${tx.amountRIYAL?.toLocaleString('fa-IR')} ریال`,
+        date: tx.date,
+        type: 'system',
+        originalEntity: tx
+      });
+    });
+
+    // 6. After Sales Services
+    const projectServices = (afterSalesServices || []).filter(as => as.projectId === p.id);
+    projectServices.forEach(as => {
+      folderFiles['خدمات پس از فروش'].push({
+        id: `service-${as.id}`,
+        name: `خدمات پس از فروش - تجهیز: ${as.itemName}.pdf`,
+        url: '#',
+        size: `وضعیت: ${as.status}`,
+        date: as.startDate,
+        type: 'system',
+        originalEntity: as
+      });
+    });
+
+    // 7. Manual Documents
+    if (p.manualDocuments && p.manualDocuments.length > 0) {
+      p.manualDocuments.forEach(doc => {
+        const targetFolderName = folders.some(f => f.name === doc.folderName) ? doc.folderName : 'سایر مدارک و فایل‌های دستی';
+        folderFiles[targetFolderName].push({
+          id: doc.id,
+          name: doc.name,
+          url: doc.url,
+          size: doc.size || 'بارگذاری دستی',
+          date: doc.createdAt,
+          type: 'manual'
+        });
+      });
+    }
+
+    return { folders, folderFiles };
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, folderName: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !selectedProjectForActivities) return;
+    setIsUploadingDoc(true);
+    try {
+      const p = selectedProjectForActivities;
+      const newDocs = [...(p.manualDocuments || [])];
+      const newAttachments = [...(p.attachments || [])];
+      let updated = false;
+      let attachmentsUpdated = false;
+
+      for (const file of Array.from(files) as File[]) {
+        const url = await uploadFile(file);
+        const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        
+        newDocs.push({
+          id: docId,
+          folderName,
+          name: file.name,
+          url,
+          createdAt: getTodayShamsi(),
+          size: `${(file.size / 1024).toFixed(1)} KB`
+        });
+        updated = true;
+
+        if (folderName === 'درخواست مشتری و استعلام اولیه') {
+          newAttachments.push({
+            name: file.name,
+            url
+          });
+          attachmentsUpdated = true;
+        }
+      }
+
+      if (updated) {
+        const updatedProject = {
+          ...p,
+          manualDocuments: newDocs,
+          attachments: attachmentsUpdated ? newAttachments : p.attachments
+        };
+        updateProject(updatedProject);
+        setSelectedProjectForActivities(updatedProject);
+        alert('فایل‌ها با موفقیت در پوشه مربوطه بارگذاری شدند.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'خطا در بارگذاری فایل');
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleFileDelete = (docId: string, docName: string, docType: 'manual' | 'attachment') => {
+    if (!confirm(`آیا از حذف فایل "${docName}" اطمینان دارید؟`)) return;
+    if (!selectedProjectForActivities) return;
+
+    const p = selectedProjectForActivities;
+    let updatedProject = { ...p };
+    if (docType === 'manual') {
+      updatedProject.manualDocuments = (p.manualDocuments || []).filter(doc => doc.id !== docId);
+    } else if (docType === 'attachment') {
+      // Deleting a customer attachment also deletes it from project.attachments
+      updatedProject.attachments = (p.attachments || []).filter((_, idx) => `attachment-${idx}` !== docId);
+      // and remove from manualDocuments if duplicate
+      updatedProject.manualDocuments = (p.manualDocuments || []).filter(doc => doc.id !== docId);
+    }
+
+    updateProject(updatedProject);
+    setSelectedProjectForActivities(updatedProject);
+    alert('فایل با موفقیت حذف شد.');
+  };
+
+  const handlePreviewOrDownload = (doc: any) => {
+    if (doc.url !== '#' && !doc.url.startsWith('data:image/') && !doc.name.endsWith('.png') && !doc.name.endsWith('.jpg') && !doc.name.endsWith('.jpeg')) {
+      window.open(doc.url, '_blank');
+    } else {
+      setActivePreviewDoc(doc);
+    }
+  };
+
+  const renderProjectSupplyStatus = (project: Project) => {
+    // 1. Get proformas of this project
+    const projectProformas = proformas.filter(pf => pf.projectId === project.id);
+    
+    // 2. Filter won or semi-won proformas
+    const wonProformas = projectProformas.filter(pf => {
+      const outcome = getProformaOutcomeStatus(pf);
+      return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+    });
+
+    // 3. Extract items
+    const allWonItems: {
+      id: string;
+      productName: string;
+      productCode: string;
+      brand: string;
+      quantity: number;
+      unitPriceRIYAL: number;
+      totalPriceRIYAL: number;
+      supplyMethod: 'INVENTORY' | 'ORDER' | 'NONE';
+      proformaNumber: string;
+      proformaId: string;
+      proformaStatus: string;
+      originalProforma: Proforma;
+    }[] = [];
+
+    wonProformas.forEach(pf => {
+      let wonItems = [];
+      const hasExplicitWon = pf.items?.some(item => item.status === 'برنده');
+      if (hasExplicitWon) {
+        wonItems = pf.items.filter(item => item.status === 'برنده');
+      } else {
+        wonItems = pf.items?.filter(item => item.status !== 'بازنده') || [];
+      }
+
+      wonItems.forEach(item => {
+        // Correctly resolve the supplyMethod: Check matching product from products list
+        const matchedProd = products?.find(p => p.id === item.productId || p.code === item.productCode);
+        
+        let resolvedSupplyMethod: 'INVENTORY' | 'ORDER' | 'NONE' = 'INVENTORY';
+        if (item.supplyMethod === 'ORDER' || item.supplyMethod === 'NONE') {
+          resolvedSupplyMethod = item.supplyMethod;
+        } else if (matchedProd && matchedProd.supplyType === 'ORDER') {
+          resolvedSupplyMethod = 'ORDER';
+        } else if (item.supplyMethod) {
+          resolvedSupplyMethod = item.supplyMethod;
+        } else if (matchedProd && matchedProd.supplyType) {
+          resolvedSupplyMethod = matchedProd.supplyType;
+        }
+
+        allWonItems.push({
+          id: item.id,
+          productName: item.productName,
+          productCode: item.productCode,
+          brand: item.brand,
+          quantity: item.quantity,
+          unitPriceRIYAL: item.unitPriceRIYAL || 0,
+          totalPriceRIYAL: item.totalPriceRIYAL || 0,
+          supplyMethod: resolvedSupplyMethod,
+          proformaNumber: pf.proformaNumber,
+          proformaId: pf.id,
+          proformaStatus: getProformaOutcomeStatus(pf),
+          originalProforma: pf
+        });
+      });
+    });
+
+    // Calculations for metrics
+    const totalCount = allWonItems.reduce((acc, item) => acc + item.quantity, 0);
+    const inventoryCount = allWonItems.filter(item => item.supplyMethod === 'INVENTORY').reduce((acc, item) => acc + item.quantity, 0);
+    const orderCount = allWonItems.filter(item => item.supplyMethod === 'ORDER').reduce((acc, item) => acc + item.quantity, 0);
+    const noneCount = allWonItems.filter(item => item.supplyMethod === 'NONE').reduce((acc, item) => acc + item.quantity, 0);
+
+    const filteredItems = allWonItems.filter(item => {
+      if (supplyFilter === 'ALL') return true;
+      return item.supplyMethod === supplyFilter;
+    });
+
+    return (
+      <div className="space-y-6 text-right" dir="rtl">
+        {/* Helper Banner */}
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span>
+              <span>گزارش هوشمند وضعیت تامین کالاهای تایید شده پروژه</span>
+            </h3>
+            <p className="text-slate-400 text-[10px] mt-1 leading-relaxed">
+              این گزارش تمامی اقلام تعهد شده در پیش‌فاکتورهای تایید شده (برنده یا نیمه‌برنده) مرتبط با این پروژه را تحلیل کرده و وضعیت تامین آن‌ها را (از موجودی انبار یا ثبت سفارش خارجی) نمایش می‌دهد.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <span className="text-[10px] font-bold text-slate-600 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>پیش‌فاکتورهای برنده شده: {wonProformas.length} عدد</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {/* Total */}
+          <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+            <div className="space-y-1">
+              <span className="text-slate-400 text-[10px] font-bold">کل اقلام تعهد شده</span>
+              <div className="text-lg font-bold font-mono text-slate-800">
+                {totalCount.toLocaleString('fa-IR')} <span className="text-[11px] font-sans font-medium text-slate-400">عدد</span>
+              </div>
+            </div>
+            <div className="p-2.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-100">
+              <Briefcase size={16} />
+            </div>
+          </div>
+
+          {/* Inventory */}
+          <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+            <div className="space-y-1">
+              <span className="text-emerald-600 text-[10px] font-bold">تامین از انبار (موجودی)</span>
+              <div className="text-lg font-bold font-mono text-emerald-600">
+                {inventoryCount.toLocaleString('fa-IR')}{" "}
+                <span className="text-[11px] font-sans font-medium text-slate-400">
+                  عدد ({totalCount > 0 ? Math.round((inventoryCount / totalCount) * 100) : 0}٪)
+                </span>
+              </div>
+            </div>
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
+              <CheckCircle2 size={16} />
+            </div>
+          </div>
+
+          {/* Foreign Order */}
+          <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+            <div className="space-y-1">
+              <span className="text-amber-600 text-[10px] font-bold">سفارش خارجی (سفارشی)</span>
+              <div className="text-lg font-bold font-mono text-amber-600">
+                {orderCount.toLocaleString('fa-IR')}{" "}
+                <span className="text-[11px] font-sans font-medium text-slate-400">
+                  عدد ({totalCount > 0 ? Math.round((orderCount / totalCount) * 100) : 0}٪)
+                </span>
+              </div>
+            </div>
+            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
+              <TrendingUp size={16} />
+            </div>
+          </div>
+
+          {/* No Supply Needed */}
+          <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+            <div className="space-y-1">
+              <span className="text-slate-500 text-[10px] font-bold">بدون نیاز به تامین</span>
+              <div className="text-lg font-bold font-mono text-slate-500">
+                {noneCount.toLocaleString('fa-IR')} <span className="text-[11px] font-sans font-medium text-slate-400">عدد</span>
+              </div>
+            </div>
+            <div className="p-2.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-100">
+              <XCircle size={16} />
+            </div>
+          </div>
+        </div>
+
+        {/* Filter and Content Table */}
+        <div className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2 bg-slate-100/70 p-1 rounded-xl w-fit border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setSupplyFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                supplyFilter === 'ALL' ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              همه اقلام ({allWonItems.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSupplyFilter('INVENTORY')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                supplyFilter === 'INVENTORY' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              تامین از انبار ({allWonItems.filter(i => i.supplyMethod === 'INVENTORY').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSupplyFilter('ORDER')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                supplyFilter === 'ORDER' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              سفارش خارجی ({allWonItems.filter(i => i.supplyMethod === 'ORDER').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSupplyFilter('NONE')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                supplyFilter === 'NONE' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              بدون نیاز به تامین ({allWonItems.filter(i => i.supplyMethod === 'NONE').length})
+            </button>
+          </div>
+
+          {/* Table */}
+          {filteredItems.length === 0 ? (
+            <div className="bg-white p-12 text-center rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center space-y-3">
+              <div className="p-4 bg-slate-50 rounded-full text-slate-400">
+                <Briefcase size={32} />
+              </div>
+              <p className="text-slate-700 text-xs font-bold">هیچ کالایی با شرایط فیلتر یافت نشد</p>
+              <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed">
+                در این پروژه اقلامی با این روش تامین هنوز مشخص یا تعهد نشده‌اند.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
+                      <th className="p-3 w-12 text-center">ردیف</th>
+                      <th className="p-3">نام کالا / پارت‌نامبر / برند</th>
+                      <th className="p-3 w-44">پیش‌فاکتور مرجع</th>
+                      <th className="p-3 w-28 text-center">تعداد جهت تامین</th>
+                      <th className="p-3 w-40">روش تامین کالا</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredItems.map((item, idx) => {
+                      return (
+                        <tr key={item.id || idx} className="hover:bg-slate-50/40 transition">
+                          <td className="p-3 text-center text-slate-400 font-mono text-[10px]">{idx + 1}</td>
+                          <td className="p-3">
+                            <div>
+                              <span className="font-bold text-slate-800 text-xs">{item.productName}</span>
+                              <span className="text-[10px] text-slate-400 font-medium block mt-1">
+                                کد کالا: <strong className="font-mono">{item.productCode}</strong> - برند: <strong className="text-slate-500">{item.brand}</strong>
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActivePreviewDoc({
+                                  id: `proforma-${item.proformaId}`,
+                                  name: `پیش‌فاکتور ${item.proformaNumber}.pdf`,
+                                  url: '#',
+                                  size: 'سند سیستم',
+                                  date: item.originalProforma.issueDate,
+                                  type: 'system',
+                                  originalEntity: item.originalProforma
+                                });
+                              }}
+                              className="text-sky-600 hover:text-sky-700 font-bold hover:underline flex items-center gap-1 w-fit"
+                              title="مشاهده پیش‌فاکتور رسمی مرجع"
+                            >
+                              <File size={13} className="shrink-0" />
+                              <span className="font-mono text-[11px]">{item.proformaNumber}</span>
+                              <span className="text-[9px] font-normal px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 leading-none">
+                                {item.proformaStatus}
+                              </span>
+                            </button>
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-700 text-xs">
+                            {item.quantity.toLocaleString('fa-IR')}
+                          </td>
+                          <td className="p-3">
+                            {item.supplyMethod === 'INVENTORY' ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold border bg-emerald-50 text-emerald-700 border-emerald-100 flex items-center gap-1.5 w-fit">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <span>تامین از انبار (موجودی)</span>
+                              </span>
+                            ) : item.supplyMethod === 'ORDER' ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold border bg-amber-50 text-amber-700 border-amber-100 flex items-center gap-1.5 w-fit">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                <span>سفارش خارجی</span>
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold border bg-slate-50 text-slate-500 border-slate-200 flex items-center gap-1.5 w-fit">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                <span>بدون نیاز به تامین</span>
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderProjectDocuments = (project: Project) => {
+    const { folders, folderFiles } = getProjectFoldersAndFiles(project);
+
+    if (selectedFolderName === null) {
+      return (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-150">
+            <div>
+              <h3 className="font-bold text-slate-800 text-xs">پوشه‌بندی هوشمند مدارک و اسناد پروژه</h3>
+              <p className="text-slate-400 text-[10px] mt-0.5">لیست زیر شامل پوشه‌های ثابت هماهنگ با ماژول‌های سیستم است. مستندات تولیدشده هر ماژول به صورت خودکار در پوشه خود بایگانی می‌شود.</p>
+            </div>
+            <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-1 rounded-md border border-slate-200">کل اسناد: {Object.values(folderFiles).reduce((acc, f) => acc + f.length, 0)} فایل</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {folders.map((folder) => {
+              const filesInFolder = folderFiles[folder.name] || [];
+              const FolderIcon = folder.icon;
+              return (
+                <div
+                  key={folder.id}
+                  onClick={() => setSelectedFolderName(folder.name)}
+                  className="bg-white p-5 rounded-2xl border border-slate-100 hover:border-sky-500 hover:shadow-lg hover:shadow-sky-500/5 transition duration-200 cursor-pointer flex flex-col justify-between group"
+                >
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className={`p-2.5 rounded-xl border ${folder.iconBg} transition-colors group-hover:bg-sky-500 group-hover:text-white group-hover:border-transparent flex items-center justify-center`}>
+                        <FolderIcon size={18} />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md group-hover:bg-sky-50 group-hover:text-sky-600 transition-colors">
+                        {filesInFolder.length} فایل
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs group-hover:text-sky-600 transition-colors">{folder.name}</h4>
+                      <p className="text-slate-400 text-[10px] mt-1 leading-relaxed line-clamp-2 h-7">{folder.desc}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-[10px] font-bold text-slate-400 group-hover:text-sky-600 transition-colors">
+                    <span>ورود به پوشه</span>
+                    <ChevronLeft size={12} className="transform group-hover:-translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    const currentFolderFiles = folderFiles[selectedFolderName] || [];
+    const folderDesc = folders.find(f => f.name === selectedFolderName)?.desc || '';
+
+    return (
+      <div className="space-y-4">
+        {/* Breadcrumbs / Back button */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedFolderName(null)}
+              className="text-[11px] font-bold text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
+            >
+              <ChevronRight size={13} className="rtl:rotate-180" />
+              <span>پوشه‌های پروژه</span>
+            </button>
+            <span className="text-slate-300 text-xs">/</span>
+            <span className="text-xs font-bold text-slate-800">{selectedFolderName}</span>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* File Upload Input */}
+            <div className="relative overflow-hidden flex-1 sm:flex-initial">
+              <input
+                type="file"
+                multiple
+                disabled={isUploadingDoc}
+                onChange={(e) => handleFileUpload(e, selectedFolderName)}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+              />
+              <button
+                type="button"
+                className={`w-full sm:w-auto px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/10 ${isUploadingDoc ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                {isUploadingDoc ? (
+                  <span className="flex items-center gap-1 animate-pulse">
+                    <Loader2 size={14} className="animate-spin" />
+                    درحال بارگذاری...
+                  </span>
+                ) : (
+                  <>
+                    <Upload size={14} />
+                    بارگذاری فایل جدید
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-slate-500 text-[10px] px-1 font-medium">{folderDesc}</p>
+
+        {/* Drag and Drop Zone / Empty State */}
+        {currentFolderFiles.length === 0 ? (
+          <div className="bg-white p-12 text-center rounded-2xl border-2 border-dashed border-slate-200 hover:border-sky-500 transition-colors relative flex flex-col items-center justify-center space-y-3">
+            <input
+              type="file"
+              multiple
+              disabled={isUploadingDoc}
+              onChange={(e) => handleFileUpload(e, selectedFolderName)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+            />
+            <div className="p-4 bg-slate-50 rounded-full text-slate-400">
+              <Folder size={32} />
+            </div>
+            <p className="text-slate-700 text-xs font-bold">این پوشه در حال حاضر خالی است</p>
+            <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed">فایل‌های خود را برای بارگذاری در این پوشه بکشید و رها کنید یا بر روی دکمه بارگذاری کلیک کنید.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
+                    <th className="p-3 w-12 text-center">ردیف</th>
+                    <th className="p-3">نام مدرک / سند</th>
+                    <th className="p-3 w-32">تاریخ ایجاد/ثبت</th>
+                    <th className="p-3 w-32">اندازه / منبع</th>
+                    <th className="p-3 w-36">نوع بایگانی</th>
+                    <th className="p-3 w-28 text-center">عملیات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {currentFolderFiles.map((doc, idx) => {
+                    const isSystem = doc.type === 'system';
+                    return (
+                      <tr key={doc.id || idx} className="hover:bg-slate-50/50 transition">
+                        <td className="p-3 text-center text-slate-400 font-mono text-[10px]">{idx + 1}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-1.5 rounded-lg ${isSystem ? 'bg-sky-50 text-sky-600' : 'bg-indigo-50 text-indigo-600'} flex items-center justify-center`}>
+                              {doc.name.endsWith('.png') || doc.name.endsWith('.jpg') || doc.name.endsWith('.jpeg') ? (
+                                <ImageIcon size={14} />
+                              ) : (
+                                <File size={14} />
+                              )}
+                            </div>
+                            <span className="font-semibold text-slate-700 hover:text-sky-600 transition-colors cursor-pointer text-xs" onClick={() => handlePreviewOrDownload(doc)}>
+                              {doc.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-slate-500 font-mono text-[10px]">{doc.date}</td>
+                        <td className="p-3 text-slate-500 text-[10px]">{doc.size}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${isSystem ? 'bg-sky-50 text-sky-700 border-sky-100' : doc.type === 'attachment' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                            {isSystem ? 'سیستمی (خودکار)' : doc.type === 'attachment' ? 'پیوست درخواست' : 'آپلود دستی'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex gap-1.5 justify-center">
+                            <button
+                              onClick={() => handlePreviewOrDownload(doc)}
+                              className="p-1.5 hover:bg-sky-50 rounded text-sky-600 hover:text-sky-700 transition"
+                              title="پیش‌نمایش مدرک"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            {!isSystem && (
+                              <button
+                                onClick={() => handleFileDelete(doc.id || '', doc.name, doc.type as any)}
+                                className="p-1.5 hover:bg-red-50 rounded text-red-600 hover:text-red-700 transition"
+                                title="حذف"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                            {doc.url !== '#' && (
+                              <a
+                                href={doc.url}
+                                download={doc.name}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-800 transition flex items-center"
+                                title="دانلود مستقیم"
+                              >
+                                <Download size={14} />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderDocumentPreviewModal = () => {
+    if (!activePreviewDoc) return null;
+
+    const doc = activePreviewDoc;
+    const isImage = doc.url && doc.url.startsWith('data:image/');
+
+    return (
+      <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8 max-h-[90vh]">
+          {/* Header */}
+          <div className="bg-slate-900 text-white p-4 flex justify-between items-center text-right">
+            <div className="flex items-center gap-2">
+              <File size={18} className="text-sky-400" />
+              <h3 className="font-bold text-sm">{doc.name}</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {doc.url !== '#' && (
+                <a
+                  href={doc.url}
+                  download={doc.name}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1"
+                >
+                  <Download size={13} />
+                  <span>دانلود فایل</span>
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const printContents = document.getElementById('printable-document-content')?.innerHTML;
+                  if (printContents) {
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                      printWindow.document.write(`
+                        <html>
+                          <head>
+                            <title>${doc.name}</title>
+                            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+                            <style>
+                              body { font-family: 'Tahoma', sans-serif; direction: rtl; text-align: right; }
+                              @media print {
+                                .no-print { display: none; }
+                              }
+                            </style>
+                          </head>
+                          <body class="p-8 bg-white text-slate-800">
+                            ${printContents}
+                            <script>
+                              window.onload = function() {
+                                window.print();
+                                window.close();
+                              }
+                            </script>
+                          </body>
+                        </html>
+                      `);
+                      printWindow.document.close();
+                    }
+                  }
+                }}
+                className="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1"
+              >
+                <span>چاپ سند</span>
+              </button>
+              <button
+                onClick={() => setActivePreviewDoc(null)}
+                className="p-1.5 hover:bg-slate-800 rounded-lg transition text-slate-400 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Content Scrollable area */}
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 text-right">
+            <div id="printable-document-content" className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm mx-auto max-w-3xl min-h-[500px] text-slate-800">
+              {isImage ? (
+                <div className="flex flex-col items-center justify-center space-y-4">
+                  <img src={doc.url} alt={doc.name} className="max-w-full max-h-[60vh] rounded-lg border border-slate-200 shadow-sm object-contain" referrerPolicy="no-referrer" />
+                  <p className="text-[10px] text-slate-400 font-mono">اندازه: {doc.size} - تاریخ ثبت: {doc.date}</p>
+                </div>
+              ) : doc.id?.startsWith('proforma-') ? (
+                // 1. Proforma Preview
+                <div className="space-y-6 text-xs">
+                  <div className="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+                    <div className="space-y-1">
+                      <h2 className="text-base font-bold text-slate-900">پیش‌فاکتور رسمی فروش کالا</h2>
+                      <p className="text-slate-400 text-[10px]">شرکت ابزار تامین عرشیا (واحد مالی و مهندسی فروش)</p>
+                    </div>
+                    <div className="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+                      <div>No: {doc.originalEntity?.proformaNumber}</div>
+                      <div>Date: {doc.originalEntity?.issueDate}</div>
+                      <div>Status: {doc.originalEntity?.status}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="text-slate-400 font-bold">خریدار / کارفرما:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.customerName}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold">کارشناس مسئول:</span>
+                      <span className="text-slate-800 font-bold mr-1">{selectedProjectForActivities?.salesExpert || 'مشخص نشده'}</span>
+                    </div>
+                  </div>
+
+                  <table className="w-full text-right border-collapse border border-slate-200">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                        <th className="p-2 border border-slate-200 text-center w-10">ردیف</th>
+                        <th className="p-2 border border-slate-200">شرح کالا / خدمات</th>
+                        <th className="p-2 border border-slate-200 text-center w-16">تعداد</th>
+                        <th className="p-2 border border-slate-200 text-left">قیمت واحد (ریال)</th>
+                        <th className="p-2 border border-slate-200 text-left">قیمت کل (ریال)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {doc.originalEntity?.items?.map((item: any, idx: number) => (
+                        <tr key={idx} className="border-b border-slate-150">
+                          <td className="p-2 border border-slate-200 text-center font-mono">{idx + 1}</td>
+                          <td className="p-2 border border-slate-200">
+                            <span className="font-bold text-slate-800">{item.name}</span>
+                            <span className="text-[10px] text-slate-500 block">برند: {item.brand || 'متفرقه'} - پارت‌نامبر: {item.partNumber || '-'}</span>
+                          </td>
+                          <td className="p-2 border border-slate-200 text-center font-mono">{item.quantity}</td>
+                          <td className="p-2 border border-slate-200 text-left font-mono">{item.unitPrice?.toLocaleString('fa-IR')}</td>
+                          <td className="p-2 border border-slate-200 text-left font-mono">{(item.unitPrice * item.quantity)?.toLocaleString('fa-IR')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="flex justify-end">
+                    <div className="w-64 space-y-1.5 text-[11px]">
+                      <div className="flex justify-between border-b border-slate-100 pb-1">
+                        <span className="text-slate-400 font-bold">مجموع ناخالص:</span>
+                        <span className="font-mono">{doc.originalEntity?.totalAmount?.toLocaleString('fa-IR')} ریال</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-1">
+                        <span className="text-slate-400 font-bold">تخفیف:</span>
+                        <span className="font-mono text-red-600">{(doc.originalEntity?.discountAmount || 0)?.toLocaleString('fa-IR')} ریال</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-1">
+                        <span className="text-slate-400 font-bold">مالیات بر ارزش افزوده (۱۰٪):</span>
+                        <span className="font-mono">{(doc.originalEntity?.vatAmount || 0)?.toLocaleString('fa-IR')} ریال</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-slate-900 border-b-2 border-slate-300 pb-1.5 text-xs">
+                        <span>مبلغ قابل پرداخت:</span>
+                        <span className="font-mono">{doc.originalEntity?.finalAmount?.toLocaleString('fa-IR')} ریال</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-10 text-center text-[10px] text-slate-400">
+                    <div>
+                      <p className="font-bold text-slate-700">مهر و امضای بخش مالی شرکت</p>
+                      <div className="h-20 w-32 mx-auto border-2 border-dashed border-slate-200 rounded-lg mt-2 flex items-center justify-center">
+                        <span className="text-[8px] rotate-12">امضا و مهر معتبر</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700">مهر و تایید خریدار</p>
+                      <div className="h-20 w-32 mx-auto border-2 border-dashed border-slate-200 rounded-lg mt-2 flex items-center justify-center">
+                        <span className="text-[8px]">محل امضای خریدار</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : doc.id?.startsWith('po-') ? (
+                // 2. PO Preview
+                <div className="space-y-6 text-xs">
+                  <div className="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">سفارش رسمی خرید کالا (PO)</h2>
+                      <p className="text-slate-400 text-[10px]">واحد تامین و بازرگانی خارجی/داخلی</p>
+                    </div>
+                    <div className="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+                      <div>PO No: {doc.originalEntity?.poNumber}</div>
+                      <div>Date: {doc.originalEntity?.orderDate}</div>
+                      <div>Status: {doc.originalEntity?.status}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="text-slate-400 font-bold">تامین‌کننده / سازنده:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.supplierName}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold">ارز مبادلاتی:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.currency}</span>
+                    </div>
+                  </div>
+
+                  <table className="w-full text-right border-collapse border border-slate-200">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                        <th className="p-2 border border-slate-200 text-center w-10">ردیف</th>
+                        <th className="p-2 border border-slate-200">نام کالا / پارت‌نامبر</th>
+                        <th className="p-2 border border-slate-200 text-center w-16">تعداد</th>
+                        <th className="p-2 border border-slate-200 text-left">قیمت ارزی واحد</th>
+                        <th className="p-2 border border-slate-200 text-left">قیمت ارزی کل</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {doc.originalEntity?.items?.map((item: any, idx: number) => (
+                        <tr key={idx} className="border-b border-slate-150">
+                          <td className="p-2 border border-slate-200 text-center font-mono">{idx + 1}</td>
+                          <td className="p-2 border border-slate-200">
+                            <span className="font-bold text-slate-800">{item.name}</span>
+                            <span className="text-[10px] text-slate-500 block">برند: {item.brand || '-'} - پارت‌نامبر: {item.partNumber || '-'}</span>
+                          </td>
+                          <td className="p-2 border border-slate-200 text-center font-mono">{item.quantity}</td>
+                          <td className="p-2 border border-slate-200 text-left font-mono">{item.foreignUnitPrice?.toLocaleString('fa-IR')} {doc.originalEntity?.currency}</td>
+                          <td className="p-2 border border-slate-200 text-left font-mono">{(item.foreignUnitPrice * item.quantity)?.toLocaleString('fa-IR')} {doc.originalEntity?.currency}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="flex justify-between items-center pt-8 text-[10px] text-slate-500">
+                    <div>
+                      <p><span className="font-bold">شرایط پرداخت:</span> {doc.originalEntity?.paymentTerms || 'طبق توافق'}</p>
+                      <p><span className="font-bold">مدت تحویل:</span> {doc.originalEntity?.deliveryLeadTime || 'مشخص نشده'}</p>
+                    </div>
+                    <div className="text-center font-bold text-slate-700 w-48">
+                      <p>امضا کارشناس بازرگانی</p>
+                      <div className="h-14"></div>
+                    </div>
+                  </div>
+                </div>
+              ) : doc.id?.startsWith('delivery-') ? (
+                // 3. Packaging & Packing List Preview
+                <div className="space-y-6 text-xs">
+                  <div className="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">سند رسمی پکینگ لیست (Packing List)</h2>
+                      <p className="text-slate-400 text-[10px]">واحد انبار و لجستیک کالا</p>
+                    </div>
+                    <div className="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+                      <div>Packing No: {doc.originalEntity?.packingListNumber}</div>
+                      <div>Delivery Date: {doc.originalEntity?.deliveryDate}</div>
+                      <div>Shipping Method: {doc.originalEntity?.shippingMethod}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 font-bold">تعداد کل کارتن/بسته:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.boxCount} عدد</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold">وزن ناخالص کل (کیلوگرم):</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.grossWeightKg} کیلوگرم</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold">ابعاد حدودی بسته‌ها:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.dimensionsCm || 'استاندارد'}</span>
+                    </div>
+                  </div>
+
+                  <table className="w-full text-right border-collapse border border-slate-200">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                        <th className="p-2 border border-slate-200 text-center w-10">ردیف</th>
+                        <th className="p-2 border border-slate-200">نام تجهیز / کالا</th>
+                        <th className="p-2 border border-slate-200 text-center">تعداد سفارش</th>
+                        <th className="p-2 border border-slate-200 text-center">تعداد آماده‌سازی</th>
+                        <th className="p-2 border border-slate-200 text-center">بسته‌بندی کامل؟</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {doc.originalEntity?.items?.map((item: any, idx: number) => (
+                        <tr key={idx} className="border-b border-slate-150">
+                          <td className="p-2 border border-slate-200 text-center font-mono">{idx + 1}</td>
+                          <td className="p-2 border border-slate-200 font-bold text-slate-800">{item.name}</td>
+                          <td className="p-2 border border-slate-200 text-center font-mono">{item.orderedQty}</td>
+                          <td className="p-2 border border-slate-200 text-center font-mono">{item.packedQty}</td>
+                          <td className="p-2 border border-slate-200 text-center text-emerald-600 font-bold">{item.isPacked ? '✓ بله' : '✗ خیر'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="grid grid-cols-2 gap-4 pt-8 text-center text-[10px] text-slate-500">
+                    <div>
+                      <p className="font-bold text-slate-700">تاییدکننده صحت بسته‌بندی (مسئول انبار)</p>
+                      <div className="h-14"></div>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700">گیرنده نهایی کالا / کارفرما</p>
+                      <div className="h-14"></div>
+                    </div>
+                  </div>
+                </div>
+              ) : doc.id?.startsWith('tx-') ? (
+                // 4. Financial Transaction Receipt Preview
+                <div className="space-y-6 text-xs">
+                  <div className="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">{doc.originalEntity?.type === 'دریافت' ? 'رسید دریافت وجه (سند بستانکار)' : 'سند پرداخت وجه (سند بدهکار)'}</h2>
+                      <p className="text-slate-400 text-[10px]">امور مالی و خزانه‌داری عرشیا</p>
+                    </div>
+                    <div className="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+                      <div>Voucher No: {doc.originalEntity?.documentNumber}</div>
+                      <div>Date: {doc.originalEntity?.date}</div>
+                      <div>Ref No: {doc.originalEntity?.referenceNumber || '-'}</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-slate-700 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 font-bold">مبلغ تراکنش:</span>
+                      <strong className="text-slate-900 text-sm font-mono mr-1">{doc.originalEntity?.amountRIYAL?.toLocaleString('fa-IR')} ریال</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold">نوع پرداخت/دریافت:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.paymentType}</span>
+                    </div>
+                    {doc.originalEntity?.bankName && (
+                      <div>
+                        <span className="text-slate-400 font-bold">نام بانک مبدا/مقصد:</span>
+                        <span className="text-slate-800 mr-1">{doc.originalEntity?.bankName}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-slate-400 font-bold">شرح تراکنش و بابت:</span>
+                      <p className="text-slate-800 mr-1 inline">{doc.originalEntity?.notes || 'بدون بابت'}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-12 text-center text-[10px] text-slate-400 flex justify-between">
+                    <div>
+                      <p className="font-bold text-slate-700">تحویل‌دهنده سند / پرداخت‌کننده</p>
+                      <div className="h-14"></div>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700">مدیر خزانه‌داری و امور مالی</p>
+                      <div className="h-14"></div>
+                    </div>
+                  </div>
+                </div>
+              ) : doc.id?.startsWith('service-') ? (
+                // 5. After-Sales Service Preview
+                <div className="space-y-6 text-xs">
+                  <div className="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">برگه گزارش خدمات پس از فروش و گارانتی</h2>
+                      <p className="text-slate-400 text-[10px]">دپارتمان مهندسی خدمات و پشتیبانی فنی</p>
+                    </div>
+                    <div className="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+                      <div>Service ID: {doc.originalEntity?.id}</div>
+                      <div>Start Date: {doc.originalEntity?.startDate}</div>
+                      <div>Status: {doc.originalEntity?.status}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 font-bold">تجهیز ارجاعی:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.itemName}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold">برند / مدل:</span>
+                      <span className="text-slate-800 font-bold mr-1">{doc.originalEntity?.itemBrand || 'مشخص نشده'}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="bg-white p-3 rounded-lg border border-slate-150">
+                      <span className="font-bold text-slate-800 block border-b border-slate-100 pb-1.5 mb-1.5">شرح ایراد گزارش شده توسط کارفرما:</span>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">{doc.originalEntity?.issueDescription}</p>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-lg border border-slate-150">
+                      <span className="font-bold text-emerald-800 block border-b border-slate-100 pb-1.5 mb-1.5">اقدامات انجام‌شده توسط دپارتمان فنی:</span>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">{doc.originalEntity?.actionsTaken || 'در حال عیب‌یابی کالا'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-8 text-center text-[10px] text-slate-500">
+                    <div>
+                      <p className="font-bold text-slate-700">تاییدکننده فنی و کارشناس پشتیبانی</p>
+                      <div className="h-14"></div>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700">امضای نماینده خریدار (تحویل‌گیرنده)</p>
+                      <div className="h-14"></div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-10 space-y-4">
+                  <div className="p-4 bg-slate-100 rounded-full text-slate-400 w-16 h-16 flex items-center justify-center mx-auto">
+                    <File size={32} />
+                  </div>
+                  <h4 className="font-bold text-slate-800">{doc.name}</h4>
+                  <p className="text-xs text-slate-500">این فایل با موفقیت به صورت دستی بارگذاری شده است.</p>
+                  <p className="text-[10px] text-slate-400 font-mono">اندازه: {doc.size} - تاریخ ثبت: {doc.date}</p>
+                  {doc.url && doc.url !== '#' && (
+                    <div className="pt-4">
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-sky-500/10"
+                      >
+                        دانلود و بازکردن مستقیم فایل
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const getStatusColor = (st: Project['status']) => {
@@ -885,29 +2062,22 @@ export default function ProjectsView({
                     {getPipelineValue(p.id).toLocaleString('fa-IR')}
                   </td>
 
-                  {/* Expected Close Date & Key Dates */}
+                  {/* Key Dates */}
                   <td className="p-3 text-[11px] text-slate-600 space-y-1">
                     <div className="flex justify-between gap-2 border-b border-dashed border-slate-100 pb-0.5">
                       <span className="text-slate-400">ثبت فرصت:</span>
                       <span className="font-mono">{p.opportunityDate || p.creationDate}</span>
                     </div>
-                    {getApprovedProformaDeliveryDate(p.id) ? (
-                      <div className="flex justify-between gap-2 text-emerald-600 font-bold border-b border-dashed border-emerald-100 pb-0.5">
-                        <span>موعد تحویل (تایید شده):</span>
-                        <span className="font-mono">{getApprovedProformaDeliveryDate(p.id)}</span>
-                      </div>
-                    ) : (
-                      p.expectedCloseDate && (
-                        <div className="flex justify-between gap-2 border-b border-dashed border-slate-100 pb-0.5">
-                          <span className="text-slate-400">موعد مقرر تحویل:</span>
-                          <span className="font-mono text-slate-500">{p.expectedCloseDate}</span>
-                        </div>
-                      )
-                    )}
                     {p.winningDate && (
                       <div className="flex justify-between gap-2 text-emerald-600 font-bold border-b border-dashed border-emerald-100 pb-0.5">
-                        <span>تاریخ برد:</span>
+                        <span>تاریخ تایید:</span>
                         <span className="font-mono">{p.winningDate}</span>
+                      </div>
+                    )}
+                    {getProjectPrepaymentDate(p.id) && (
+                      <div className="flex justify-between gap-2 text-indigo-600 font-bold border-b border-dashed border-indigo-100 pb-0.5">
+                        <span>دریافت پیش‌پرداخت:</span>
+                        <span className="font-mono">{getProjectPrepaymentDate(p.id)}</span>
                       </div>
                     )}
                     {p.agreedDeliveryDate && (
@@ -916,10 +2086,10 @@ export default function ProjectsView({
                         <span className="font-mono">{p.agreedDeliveryDate}</span>
                       </div>
                     )}
-                    {p.closingDate && (
-                      <div className="flex justify-between gap-2 text-slate-500 font-bold">
-                        <span>بسته شدن:</span>
-                        <span className="font-mono">{p.closingDate}</span>
+                    {getActualDeliveryDate(p.id) && (
+                      <div className="flex justify-between gap-2 text-amber-600 font-bold">
+                        <span>تحویل قطعی:</span>
+                        <span className="font-mono">{getActualDeliveryDate(p.id)}</span>
                       </div>
                     )}
                   </td>
@@ -1037,7 +2207,7 @@ export default function ProjectsView({
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">نام مشتری / کارفرما *</label>
                     <div className="flex gap-1.5 items-center">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={customerId}
                       onChange={(val) => setCustomerId(val)}
                       required
@@ -1067,7 +2237,7 @@ export default function ProjectsView({
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">مصرف‌کننده نهایی</label>
                     <div className="flex gap-1.5 items-center">
-                    <SearchableSelect
+                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={endUser}
                       onChange={(val) => setEndUser(val)}
                       options={[
@@ -1290,13 +2460,7 @@ export default function ProjectsView({
                   </div>
 
                   {/* Target Delivery date */}
-                  <div className="space-y-1.5" id="project-expected-close-date-picker-wrapper">
-                    <ShamsiDatePicker
-                      label="موعد مقرر تحویل عمومی (تعهد تحویل کالا)"
-                      value={expectedCloseDate}
-                      onChange={(val) => setExpectedCloseDate(val)}
-                    />
-                  </div>
+                  
                 </div>
               </div>
 
@@ -1340,7 +2504,7 @@ export default function ProjectsView({
                   {(status === 'برنده (موفق)' || status === 'نیمه برنده') && (
                     <div className="space-y-1.5">
                       <ShamsiDatePicker
-                        label="تاریخ برنده شدن (ابلاغ قرارداد) *"
+                        label="تاریخ تایید (ابلاغ قرارداد) *"
                         required
                         value={winningDate}
                         onChange={(val) => setWinningDate(val)}
@@ -1360,17 +2524,7 @@ export default function ProjectsView({
                     </div>
                   )}
 
-                  {/* Close Date */}
-                  {(status === 'برنده (موفق)' || status === 'نیمه برنده' || status === 'باخته' || status === 'لغو شده') && (
-                    <div className="space-y-1.5">
-                      <ShamsiDatePicker
-                        label="تاریخ بسته شدن پرونده *"
-                        required
-                        value={closingDate}
-                        onChange={(val) => setClosingDate(val)}
-                      />
-                    </div>
-                  )}
+
                 </div>
               </div>
 
@@ -1504,7 +2658,7 @@ export default function ProjectsView({
                               ) : (
                                 <div className="col-span-10 space-y-1">
                                   <label className="text-[10px] font-bold text-slate-500 block">انتخاب کالا از انبار *</label>
-                                  <SearchableSelect
+                                  <SearchableSelect wrapperClassName="flex-1 min-w-0"
                                     value={item.productId}
                                     onChange={(val) => handleItemProductChange(index, val)}
                                     options={products.map(p => {
@@ -1710,7 +2864,48 @@ export default function ProjectsView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Tab Selector */}
+              <div className="flex border-b border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setModalTab('activities')}
+                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+                    modalTab === 'activities'
+                      ? 'border-sky-500 text-sky-600 font-extrabold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <History size={15} />
+                  <span>فعالیت‌ها و شرح اقدامات</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalTab('documents')}
+                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+                    modalTab === 'documents'
+                      ? 'border-sky-500 text-sky-600 font-extrabold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <FolderOpen size={15} />
+                  <span>پوشه‌بندی و مدیریت مدارک</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalTab('supply')}
+                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+                    modalTab === 'supply'
+                      ? 'border-sky-500 text-sky-600 font-extrabold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Briefcase size={15} />
+                  <span>وضعیت تامین کالاها (انبار / سفارش)</span>
+                </button>
+              </div>
+
+              {modalTab === 'activities' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Right Side: Activate/Open Category Group form */}
                 <div className="space-y-4">
@@ -1877,6 +3072,21 @@ export default function ProjectsView({
                                     <span>شروع: {group.startDate}</span>
                                     {group.endDate && <span className="text-rose-500 font-bold">پایان: {group.endDate}</span>}
                                   </div>
+                                  
+                                  {/* Delete Category Group Button (only for non-system) */}
+                                  {!group.categoryId.startsWith('cat-fact-') && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setGroupToDelete(group.id);
+                                      }}
+                                      className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded transition border border-rose-100 flex items-center gap-1 shadow-sm ml-1"
+                                      title="حذف دسته"
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  )}
                                   
                                   {/* Toggle Button */}
                                   {canManageCompletion && (isGroupClosed ? (
@@ -2273,6 +3483,14 @@ export default function ProjectsView({
                 </div>
 
               </div>
+              ) : modalTab === 'documents' ? (
+                renderProjectDocuments(selectedProjectForActivities)
+              ) : (
+                renderProjectSupplyStatus(selectedProjectForActivities)
+              )}
+
+              {/* Render the Document Preview Modal when active */}
+              {renderDocumentPreviewModal()}
 
             </div>
 
@@ -2372,6 +3590,46 @@ export default function ProjectsView({
         />
       )}
 
-    </div>
+    
+      {/* Delete Confirmation Modal */}
+      {groupToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-slate-100 overflow-hidden flex flex-col animate-scale-in">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-rose-50/50">
+              <div className="flex items-center gap-2 text-rose-600">
+                <Trash2 size={20} />
+                <h3 className="font-extrabold text-sm">حذف دسته فعالیت</h3>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-slate-700 text-sm font-medium leading-relaxed">
+                آیا از حذف این دسته فعالیت و تمام سوابق آن اطمینان دارید؟ این عمل غیرقابل بازگشت است.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-100 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setGroupToDelete(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (deleteProjectCategoryGroup && groupToDelete) {
+                    deleteProjectCategoryGroup(groupToDelete);
+                  }
+                  setGroupToDelete(null);
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition"
+              >
+                بله، حذف شود
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+</div>
   );
 }

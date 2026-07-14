@@ -1755,11 +1755,13 @@ export function useERPStore() {
     autoLogFactActivity(delivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
     logAction('CREATE', 'بسته‌بندی و ارسال', newDelivery.id, `ثبت پکینگ لیست و تحویل کالا به شماره ${packingListNumber}`, undefined, newDelivery);
     
-    setCompletionPrompt({
-      projectId: delivery.projectId,
-      categoryName: 'بسته‌بندی و تحویل کالا',
-      message: `پکینگ لیست ${packingListNumber} صادر شد. آیا می‌خواهید وضعیت دسته فعالیت بسته‌بندی را به «اتمام کار» تغییر دهید؟`
-    });
+    if (delivery.actualDeliveryDate) {
+      setCompletionPrompt({
+        projectId: delivery.projectId,
+        categoryName: 'بسته‌بندی و تحویل کالا',
+        message: `تاریخ تحویل کالا به مشتری (${delivery.actualDeliveryDate}) ثبت شد. آیا می‌خواهید وضعیت دسته فعالیت بسته‌بندی را به «اتمام کار» تغییر دهید؟`
+      });
+    }
 
     return newDelivery;
   };
@@ -1772,6 +1774,17 @@ export function useERPStore() {
     const logText = `بروزرسانی پکینگ لیست و تحویل کالا به شماره ${updatedDelivery.packingListNumber}`;
     autoLogFactActivity(updatedDelivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
     logAction('UPDATE', 'بسته‌بندی و ارسال', updatedDelivery.id, `بروزرسانی پکینگ لیست شماره ${updatedDelivery.packingListNumber}`, before, updatedDelivery);
+
+    const wasDeliveredBefore = before ? !!before.actualDeliveryDate : false;
+    const isNowDelivered = !!updatedDelivery.actualDeliveryDate;
+
+    if (isNowDelivered && !wasDeliveredBefore) {
+      setCompletionPrompt({
+        projectId: updatedDelivery.projectId,
+        categoryName: 'بسته‌بندی و تحویل کالا',
+        message: `تاریخ تحویل کالا به مشتری (${updatedDelivery.actualDeliveryDate}) ثبت گردید. آیا می‌خواهید وضعیت دسته فعالیت بسته‌بندی را به «اتمام کار» تغییر دهید؟`
+      });
+    }
   };
 
   const deletePackagingDelivery = (id: string, deleteLogs: boolean = false) => {
@@ -2359,7 +2372,22 @@ export function useERPStore() {
       });
     },
 
-    resumeProjectCategoryGroup: (categoryGroupId: string, createdBy?: string) => {
+    
+    deleteProjectCategoryGroup: (categoryGroupId: string) => {
+      let categoryName = '';
+      setProjectCategoryGroups(prev => {
+        const groupToDelete = prev.find(g => g.id === categoryGroupId);
+        if (!groupToDelete) return prev;
+        categoryName = groupToDelete.categoryName;
+        const updated = prev.filter(g => g.id !== categoryGroupId);
+        saveToServer('erp_project_category_groups', updated);
+        return updated;
+      });
+      if (categoryName) {
+        logAction('DELETE', 'فعالیت‌های پروژه', categoryGroupId, `حذف کامل دسته‌بندی فعالیت: ${categoryName}`);
+      }
+    },
+resumeProjectCategoryGroup: (categoryGroupId: string, createdBy?: string) => {
       setProjectCategoryGroups(prev => {
         const updated = prev.map(g => {
           if (g.id === categoryGroupId) {

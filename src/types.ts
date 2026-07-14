@@ -220,7 +220,9 @@ export interface Project {
   agreedDeliveryDate?: string;      // تاریخ توافق‌شده تحویل
   endUser?: string;                 // مصرف‌کننده نهایی
   closingDate?: string;             // تاریخ بسته شدن
+  
   attachments?: { name: string; url: string; }[]; // فایل‌های درخواست
+  manualDocuments?: { id: string; folderName: string; name: string; url: string; createdAt: string; size?: string; }[]; // مدارک آپلود شده دستی در پوشه‌ها
 }
 
 export interface Transaction {
@@ -516,7 +518,8 @@ export interface PackagingDelivery {
   proformaId?: string; // پیش‌فاکتور تایید شده مرتبط
   proformaNumber?: string;
   packingListNumber: string; // شماره پکینگ لیست
-  deliveryDate: string; // تاریخ تحویل
+  deliveryDate: string; // تاریخ صدور پکینگ لیست
+  actualDeliveryDate?: string; // تاریخ تحویل به مشتری
   shippingMethod: string; // نحوه ارسال کالا
   preDeliveryTestNotes: string; // گزارش تست قبل از تحویل تجهیز
   checklist: DeliveryChecklistItem[]; // چک‌لیست تحویل تیک‌خورده
