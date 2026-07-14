@@ -124,7 +124,7 @@ export default function SettingsView({
 
   // Delete confirm state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteType, setDeleteType] = useState<'dropdownItem' | 'activityCategory' | 'lossReason' | 'customField' | 'clearData' | null>(null);
+  const [deleteType, setDeleteType] = useState<'dropdownItem' | 'activityCategory' | 'lossReason' | 'customField' | 'clearData' | 'workflow' | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string>('');
   const [deleteTargetName, setDeleteTargetName] = useState<string>('');
   const [deleteTargetExtra, setDeleteTargetExtra] = useState<any>(null);
@@ -312,11 +312,12 @@ export default function SettingsView({
 
   const handleDeleteWorkflowRule = (ruleId: string) => {
     const rules = settings.workflows || [];
-    const updated = rules.filter(r => r.id !== ruleId);
-    updateSettings({
-      ...settings,
-      workflows: updated
-    });
+    const rule = rules.find(r => r.id === ruleId);
+    if (!rule) return;
+    setDeleteType('workflow');
+    setDeleteTargetId(ruleId);
+    setDeleteTargetName(rule.name);
+    setDeleteConfirmOpen(true);
   };
 
   const handleSaveWorkflowRule = (e: React.FormEvent) => {
@@ -520,6 +521,13 @@ export default function SettingsView({
       updateSettings({
         ...settings,
         customFields: currentFields.filter(f => f.id !== deleteTargetId)
+      });
+    } else if (deleteType === 'workflow') {
+      const rules = settings.workflows || [];
+      const updated = rules.filter(r => r.id !== deleteTargetId);
+      updateSettings({
+        ...settings,
+        workflows: updated
       });
     } else if (deleteType === "clearData") {
       const keysToClear = [
@@ -2988,11 +2996,7 @@ export default function SettingsView({
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                if (confirm('آیا از حذف این قانون مطمئن هستید؟')) {
-                                  handleDeleteWorkflowRule(rule.id);
-                                }
-                              }}
+                              onClick={() => handleDeleteWorkflowRule(rule.id)}
                               className="p-2 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-500 hover:text-rose-700"
                               title="حذف"
                             >
@@ -3024,14 +3028,16 @@ export default function SettingsView({
           deleteType === 'activityCategory' ? 'حذف دسته‌بندی فعالیت' :
           deleteType === 'lossReason' ? 'حذف علت باخت' :
           deleteType === 'customField' ? 'حذف فیلد سفارشی' : 
-          deleteType === 'clearData' ? 'هشدار: پاکسازی کامل داده‌ها' : 'تایید حذف'
+          deleteType === 'clearData' ? 'هشدار: پاکسازی کامل داده‌ها' : 
+           deleteType === 'workflow' ? 'حذف گردش کار' : 'تایید حذف'
         }
         message={
           deleteType === 'dropdownItem' ? `آیا از حذف گزینه "${deleteTargetName}" از لیست کشویی "${dropdownLabels[selectedDropdownKey] || ''}" اطمینان دارید؟` :
           deleteType === 'activityCategory' ? `آیا از حذف دسته‌بندی فعالیت "${deleteTargetName}" اطمینان دارید؟` :
           deleteType === 'lossReason' ? `آیا از حذف علت باخت "${deleteTargetName}" اطمینان دارید؟` :
           deleteType === 'customField' ? `آیا از حذف فیلد سفارشی "${deleteTargetName}" اطمینان دارید؟ تمامی مقادیر ذخیره شده برای این فیلد در رکوردهای موجود حذف خواهند شد.` : 
-          deleteType === 'clearData' ? 'آیا مطمئن هستید که می‌خواهید تمامی داده‌های نرم‌افزار (شامل مشتریان، کالاها، پروژه‌ها و ...) را به طور کامل پاک کنید؟ این عملیات غیرقابل بازگشت است.' : ''
+          deleteType === 'clearData' ? 'آیا مطمئن هستید که می‌خواهید تمامی داده‌های نرم‌افزار (شامل مشتریان، کالاها، پروژه‌ها و ...) را به طور کامل پاک کنید؟ این عملیات غیرقابل بازگشت است.' :
+           deleteType === 'workflow' ? `آیا از حذف گردش کار "${deleteTargetName}" اطمینان دارید؟` : ''
         }
       />
 
