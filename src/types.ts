@@ -292,7 +292,7 @@ export interface ExchangeRate {
 
 export interface CustomField {
   id: string;
-  module: 'customers' | 'projects' | 'products' | 'proformas' | 'suppliers' | 'purchaseOrders' | 'transactions' | 'tasks' | 'supplierInquiries' | 'packagingDelivery' | 'afterSalesServices';
+  module: 'customers' | 'projects' | 'products' | 'proformas' | 'suppliers' | 'purchaseOrders' | 'transactions' | 'tasks' | 'packagingDelivery' | 'afterSalesServices';
   name: string;
   type: 'text' | 'textarea' | 'number' | 'select' | 'date' | 'file' | 'boolean';
   options?: string[];
@@ -364,7 +364,6 @@ export interface ERPSettings {
     purchaseOrderStatuses: string[];
     positions?: string[];
     receiptTypes?: string[];
-    supplierInquiryActionTypes?: string[];
     shippingMethods?: string[];
     packageTypes?: string[];
     returnReasons?: string[];
@@ -443,60 +442,15 @@ export interface User {
     referrals: boolean;
     settings: boolean;
     users: boolean;
-    supplierInquiries?: boolean;
     packagingDelivery?: boolean;
   };
 }
 
-export interface InquiryStep {
-  id: string;
-  date: string;
-  title: string;
-  description: string;
-  type: 'creation' | 'sent' | 'response' | 'winner' | 'update' | 'other';
-  sentMethod?: string;
-  sentTo?: string;
-}
 
-export interface SupplierInquiryItem {
-  id: string;
-  requestItemId?: string; // The ID of the item needed from the project (optional)
-  productName: string;
-  quantity: number;
-  priceForeign?: number;
-  priceRIYAL?: number;
-  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';
-  deliveryTime?: string;
-  notes?: string;
-}
 
-export interface SupplierInquiry {
-  id: string;
-  projectId?: string;
-  projectName?: string;
-  items?: SupplierInquiryItem[]; // New field for multiple items
-  proformaId?: string;
-  proformaNumber?: string;
-  proformaItemId?: string; // ID of the ProformaItem
-  proformaItemName?: string; // name of the proforma item (product name or combined specs)
-  supplierId: string;
-  supplierName: string;
-  inquiryDate: string;
-  status: 'پیش‌نویس' | 'ارسال شده' | 'در انتظار پاسخ' | 'پاسخ داده شده' | 'لغو شده' | 'برنده' | 'بازنده';
-  priceRIYAL?: number;
-  priceForeign?: number;
-  currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';
-  deliveryTime?: string;
-  technicalProposalFile?: string;
-  financialProposalFile?: string;
-  technicalProposalFileSize?: string;
-  financialProposalFileSize?: string;
-  notes?: string;
-  steps: InquiryStep[];
-  createdAt: string;
-  winnerSelectedDate?: string;
-  isWinner?: boolean;
-}
+
+
+
 
 export interface PackingItem {
   id: string;
@@ -582,7 +536,7 @@ export interface WorkflowRule {
   id: string;
   name: string;
   active: boolean;
-  triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change' | 'packaging_delivery_created' | 'supplier_inquiry_status_change' | 'after_sales_service_status_change';
+  triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change' | 'packaging_delivery_created' | 'after_sales_service_status_change';
   conditions: {
     field: string; // e.g. 'newOutcome', 'newStatus'
     operator: 'equals' | 'not_equals' | 'greater_than' | 'less_than';

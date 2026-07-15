@@ -17,8 +17,6 @@ import {
   ProjectReferral,
   ProjectReferralResponse,
   User,
-  SupplierInquiry,
-  InquiryStep,
   PackingItem,
   DeliveryChecklistItem,
   PackagingDelivery,
@@ -111,7 +109,6 @@ export const SEED_USERS: User[] = [
       referrals: true,
       settings: true,
       users: true,
-      supplierInquiries: true,
       packagingDelivery: true
     }
   },
@@ -135,7 +132,6 @@ export const SEED_USERS: User[] = [
       referrals: true,
       settings: false,
       users: false,
-      supplierInquiries: true,
       packagingDelivery: true
     }
   },
@@ -159,7 +155,6 @@ export const SEED_USERS: User[] = [
       referrals: true,
       settings: false,
       users: false,
-      supplierInquiries: true,
       packagingDelivery: true
     }
   }
@@ -187,7 +182,6 @@ export function useERPStore() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [inventoryTransactions, setInventoryTransactions] = useState<InventoryTransaction[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [supplierInquiries, setSupplierInquiries] = useState<SupplierInquiry[]>([]);
   const [packagingDeliveries, setPackagingDeliveries] = useState<PackagingDelivery[]>([]);
   const [afterSalesServices, setAfterSalesServices] = useState<AfterSalesService[]>([]);
   const [moduleNotifications, setModuleNotifications] = useState<ModuleNotification[]>([]);
@@ -329,7 +323,6 @@ export function useERPStore() {
           fetchKey('erp_tasks', setTasks, []),
           fetchKey('erp_settings', setSettings, DEFAULT_SETTINGS),
           fetchKey('erp_project_category_groups', setProjectCategoryGroups, []),
-          fetchKey('erp_supplier_inquiries', setSupplierInquiries, []),
           fetchKey('erp_packaging_deliveries', setPackagingDeliveries, []),
           fetchKey('erp_after_sales_services', setAfterSalesServices, []),
           fetchKey('erp_users', setUsers, []),
@@ -1582,148 +1575,6 @@ export function useERPStore() {
     }
   };
 
-  // --- Supplier Inquiries CRUD ---
-  const addSupplierInquiry = (inquiry: Omit<SupplierInquiry, 'id' | 'createdAt' | 'steps'> & { steps?: InquiryStep[] }) => {
-    const today = getTodayShamsi();
-    const creationTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-    const creationStep: InquiryStep = {
-      id: `step-${Date.now()}-init`,
-      date: today + ' ' + creationTime,
-      title: 'ایجاد استعلام',
-      description: `استعلام اولیه ایجاد شد. پروژه: ${inquiry.projectName}${inquiry.proformaNumber ? `، پیش‌فاکتور: ${inquiry.proformaNumber}` : ''}${inquiry.proformaItemName ? `، ردیف: ${inquiry.proformaItemName}` : ''}`,
-      type: 'creation'
-    };
-    
-    const newInquiry: SupplierInquiry = {
-      ...inquiry,
-      id: `inq-${Date.now()}`,
-      createdAt: today + ' ' + creationTime,
-      steps: inquiry.steps || [creationStep]
-    };
-    
-    const updated = [newInquiry, ...supplierInquiries];
-    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
-    
-    const logText = `ثبت استعلام جدید از تامین‌کننده ${inquiry.supplierName} بابت پروژه ${inquiry.projectName}${inquiry.proformaNumber ? ` (پیش‌فاکتور ${inquiry.proformaNumber})` : ''}${inquiry.proformaItemName ? ` - ردیف: ${inquiry.proformaItemName}` : ''}`;
-    autoLogFactActivity(inquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
-    
-    return newInquiry;
-  };
-
-  const updateSupplierInquiry = (updatedInquiry: SupplierInquiry) => {
-    const updated = supplierInquiries.map(inq => inq.id === updatedInquiry.id ? updatedInquiry : inq);
-    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
-    
-    const logText = `بروزرسانی استعلام تامین‌کننده ${updatedInquiry.supplierName} - وضعیت جدید: ${updatedInquiry.status}`;
-    
-    const oldInquiry = supplierInquiries.find(i => i.id === updatedInquiry.id);
-    if (oldInquiry && oldInquiry.status !== updatedInquiry.status) {
-       runWorkflows('supplier_inquiry_status_change', {
-         projectId: updatedInquiry.projectId,
-         newStatus: updatedInquiry.status,
-         oldStatus: oldInquiry.status,
-         inquiryId: updatedInquiry.id
-       });
-    }
-    autoLogFactActivity(updatedInquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
-  };
-
-  const deleteSupplierInquiry = (id: string, deleteLogs: boolean = false) => {
-    const inq = supplierInquiries.find(i => i.id === id);
-    const updated = supplierInquiries.filter(i => i.id !== id);
-    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
-    
-    if (inq) {
-      if (deleteLogs) {
-        const normalize = (str: string) => str.replace(/[\s\u200c]/g, '').trim();
-        const targetCategory = 'استعلام قیمت از تامین کننده ها';
-        setProjectCategoryGroups(prevGroups => {
-          const updatedGroups = prevGroups.filter(g => 
-            !(g.projectId === inq.projectId && normalize(g.categoryName) === normalize(targetCategory))
-          );
-          saveToServer('erp_project_category_groups', updatedGroups);
-          return updatedGroups;
-        });
-      } else {
-        const logText = `حذف استعلام تامین‌کننده ${inq.supplierName} بابت پروژه ${inq.projectName}`;
-        autoLogFactActivity(inq.projectId, 'استعلام قیمت از تامین کننده ها', logText);
-      }
-    }
-  };
-
-  const addSupplierInquiryStep = (inquiryId: string, step: Omit<InquiryStep, 'id'>) => {
-    const newStep: InquiryStep = {
-      ...step,
-      id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`
-    };
-    
-    const inq = supplierInquiries.find(i => i.id === inquiryId);
-    if (!inq) return;
-    
-    const updatedSteps = [...inq.steps, newStep];
-    const updatedInquiry: SupplierInquiry = {
-      ...inq,
-      steps: updatedSteps,
-      status: step.type === 'sent' ? 'ارسال شده' : (step.type === 'response' ? 'پاسخ داده شده' : (step.type === 'winner' ? 'برنده' : inq.status))
-    };
-    
-    const updated = supplierInquiries.map(i => i.id === inquiryId ? updatedInquiry : i);
-    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
-    
-    const logText = `اقدام استعلام تامین‌کننده ${inq.supplierName}: ${step.title} - ${step.description}`;
-    autoLogFactActivity(inq.projectId, 'استعلام قیمت از تامین کننده ها', logText);
-  };
-
-  const selectSupplierInquiryWinner = (inquiryId: string, isWinner: boolean) => {
-    const inq = supplierInquiries.find(i => i.id === inquiryId);
-    if (!inq) return;
-
-    const updated = supplierInquiries.map(i => {
-      if (i.id === inquiryId) {
-        const today = getTodayShamsi();
-        const winnerStep: InquiryStep = {
-          id: `step-${Date.now()}-winner`,
-          date: today + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
-          title: isWinner ? 'انتخاب به عنوان برنده' : 'خروج از وضعیت برنده',
-          description: isWinner ? 'این پیشنهاد به عنوان آفر برنده برای این کالا انتخاب شد.' : 'انتخاب برنده لغو شد.',
-          type: 'winner'
-        };
-        return {
-          ...i,
-          isWinner,
-          status: (isWinner ? 'برنده' : 'پاسخ داده شده') as any,
-          winnerSelectedDate: isWinner ? today : undefined,
-          steps: [...i.steps, winnerStep]
-        };
-      }
-      if (isWinner && i.projectId === inq.projectId && i.proformaId === inq.proformaId && i.proformaItemId === inq.proformaItemId && i.id !== inquiryId) {
-        return {
-          ...i,
-          isWinner: false,
-          status: 'بازنده' as any
-        };
-      }
-      return i;
-    });
-
-    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
-
-
-    const logText = isWinner 
-      ? `انتخاب پیشنهاد تامین‌کننده ${inq.supplierName} به عنوان برنده بابت پروژه ${inq.projectName}` 
-      : `لغو وضعیت برنده برای پیشنهاد تامین‌کننده ${inq.supplierName}`;
-    autoLogFactActivity(inq.projectId, 'استعلام قیمت از تامین کننده ها', logText);
-    
-    if (isWinner) {
-      setCompletionPrompt({
-        projectId: inq.projectId,
-        categoryName: 'استعلام قیمت از تامین کننده ها',
-        message: `پیشنهاد تامین‌کننده ${inq.supplierName} به عنوان برنده انتخاب شد. آیا می‌خواهید وضعیت این دسته فعالیت را به «اتمام کار» تغییر دهید؟`
-      });
-    }
-
-  };
-
   // --- Tasks CRUD ---
   const addTask = (task: Omit<Task, 'id'>) => {
     const newTask: Task = {
@@ -1918,7 +1769,7 @@ export function useERPStore() {
   };
 
   const runWorkflows = (
-    triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change' | 'packaging_delivery_created' | 'supplier_inquiry_status_change' | 'after_sales_service_status_change',
+    triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change' | 'packaging_delivery_created' | 'after_sales_service_status_change',
     context: {
       projectId?: string;
       projectName?: string;
@@ -2016,7 +1867,7 @@ export function useERPStore() {
           const taskToCreate: Omit<Task, 'id'> = {
             title,
             description,
-            relatedToType: triggerType === 'proforma_outcome_change' ? 'پیش‌فاکتور' : triggerType === 'project_status_change' ? 'پروژه' : triggerType === 'packaging_delivery_created' ? 'بسته‌بندی و تحویل' : triggerType === 'supplier_inquiry_status_change' ? 'استعلام تامین‌کننده' : triggerType === 'after_sales_service_status_change' ? 'خدمات پس از فروش' : 'سفارش خرید',
+            relatedToType: triggerType === 'proforma_outcome_change' ? 'پیش‌فاکتور' : triggerType === 'project_status_change' ? 'پروژه' : triggerType === 'packaging_delivery_created' ? 'بسته‌بندی و تحویل' : triggerType === 'after_sales_service_status_change' ? 'خدمات پس از فروش' : 'سفارش خرید',
             relatedToId: context.projectId,
             relatedToName: context.projectName,
             priority: config.priority || 'متوسط',
@@ -2115,7 +1966,6 @@ export function useERPStore() {
     transactions,
     inventoryTransactions,
     tasks,
-    supplierInquiries,
     packagingDeliveries,
     moduleNotifications,
     settings,
@@ -2164,13 +2014,6 @@ export function useERPStore() {
     updateTask,
     deleteTask,
     
-    addSupplierInquiry,
-    updateSupplierInquiry,
-    deleteSupplierInquiry,
-    addSupplierInquiryStep,
-    selectSupplierInquiryWinner,
-
-
     afterSalesServices,
     addAfterSalesService,
     updateAfterSalesService,

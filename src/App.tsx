@@ -12,7 +12,6 @@ import TasksView from './components/TasksView';
 import SettingsView from './components/SettingsView';
 import ReferralsView from './components/ReferralsView';
 import UsersView from './components/UsersView';
-import SupplierInquiriesView from './components/SupplierInquiriesView';
 import AfterSalesServicesView from './components/AfterSalesServicesView';
 import PackagingDeliveryView from './components/PackagingDeliveryView';
 import LoginView from './components/LoginView';
@@ -223,7 +222,6 @@ export default function App() {
               activeView === 'users' ? 'مدیریت کاربران' : 
               activeView === 'settings' ? 'تنظیمات سیستم' : 
               activeView === 'transactions' ? 'دریافت و پرداخت ریالی' :
-              activeView === 'supplierInquiries' ? 'استعلام از تأمین‌کنندگان' :
               
               activeView === 'packagingDelivery' ? 'بسته‌بندی و تحویل کالا' :
               activeView === 'afterSalesServices' ? 'خدمات پس از فروش' :
@@ -352,7 +350,6 @@ export default function App() {
             customers={store.customers}
             products={store.products}
             proformas={store.proformas}
-            supplierInquiries={store.supplierInquiries}
             addProject={store.addProject}
             updateProject={store.updateProject}
             deleteProject={store.deleteProject}
@@ -436,25 +433,6 @@ export default function App() {
             currentUser={store.currentUser}
             addCustomer={store.addCustomer}
             addProject={store.addProject}
-          />
-        );
-      case 'supplierInquiries':
-        return (
-          <SupplierInquiriesView 
-            initialPrintDocId={printDocumentRequest?.module === 'supplierInquiries' ? printDocumentRequest.docId : undefined}
-            onClearInitialPrintDocId={handleClearPrintDoc}
-            projects={store.projects}
-            proformas={store.proformas}
-            suppliers={store.suppliers}
-            supplierInquiries={store.supplierInquiries}
-            addSupplierInquiry={store.addSupplierInquiry}
-            updateSupplierInquiry={store.updateSupplierInquiry}
-            deleteSupplierInquiry={store.deleteSupplierInquiry}
-            addSupplierInquiryStep={store.addSupplierInquiryStep}
-            selectSupplierInquiryWinner={store.selectSupplierInquiryWinner}
-            settings={store.settings}
-            currentUser={store.currentUser}
-            exchangeRates={store.exchangeRates}
           />
         );
       case 'packagingDelivery':
