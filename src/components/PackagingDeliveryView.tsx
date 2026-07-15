@@ -16,7 +16,11 @@ import {
   Info,
   AlertCircle,
   FileCheck,
-  Edit
+  Edit,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { 
   Project, 
@@ -34,6 +38,8 @@ import ShamsiDatePicker from './ShamsiDatePicker';
 import { uploadFile } from '../imageUtils';
 
 interface PackagingDeliveryViewProps {
+  initialPrintDocId?: string;
+  onClearInitialPrintDocId?: () => void;
   projects: Project[];
   proformas: Proforma[];
   products: Product[];
@@ -46,6 +52,8 @@ interface PackagingDeliveryViewProps {
 }
 
 export default function PackagingDeliveryView({
+  initialPrintDocId,
+  onClearInitialPrintDocId,
   projects,
   proformas,
   products,
@@ -58,6 +66,16 @@ export default function PackagingDeliveryView({
 }: PackagingDeliveryViewProps) {
   const activeTemplate = settings.proformaTemplates?.find(t => t.name === settings.activeTemplateId) || settings.proformaTemplates?.[0];
   const [activeTab, setActiveTab] = useState<'list' | 'new'>('list');
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    if (initialPrintDocId) {
+      const pd = packagingDeliveries.find(p => p.id === initialPrintDocId);
+      if (pd) {
+        setSelectedDelivery(pd);
+      }
+    }
+  }, [initialPrintDocId, packagingDeliveries]);
 
   // Filter States
   const [filterProject, setFilterProject] = useState<string>('');
@@ -69,6 +87,7 @@ export default function PackagingDeliveryView({
   const [selectedProformaId, setSelectedProformaId] = useState<string>('');
   const [deliveryDate, setDeliveryDate] = useState<string>(getTodayShamsi());
   const [actualDeliveryDate, setActualDeliveryDate] = useState<string>('');
+  const [useItemizedDeliveryDates, setUseItemizedDeliveryDates] = useState<boolean>(false);
   const [shippingMethod, setShippingMethod] = useState<string>(settings.dropdownItems.shippingMethods?.[0] || 'باربری');
   const [preDeliveryTestNotes, setPreDeliveryTestNotes] = useState<string>('');
   const [packingItems, setPackingItems] = useState<PackingItem[]>([]);
@@ -87,6 +106,7 @@ export default function PackagingDeliveryView({
 
   // Selected Packing List Detail Modal
   const [selectedDelivery, setSelectedDelivery] = useState<PackagingDelivery | null>(null);
+  const [isDetailModalFullscreen, setIsDetailModalFullscreen] = useState(false);
   const [overrideShowBrand, setOverrideShowBrand] = useState(false);
 
   React.useEffect(() => {
@@ -94,6 +114,107 @@ export default function PackagingDeliveryView({
       setOverrideShowBrand(!!settings.showProductBrandInDocuments);
     }
   }, [selectedDelivery, settings.showProductBrandInDocuments]);
+
+  const getDeliveryActualDateLabel = (del: PackagingDelivery) => {
+    if (del.actualDeliveryDate) return del.actualDeliveryDate;
+    const dates = del.items?.map(item => item.actualDeliveryDate).filter(Boolean) || [];
+    if (dates.length === 0) return 'در انتظار تحویل';
+    const uniqueDates = Array.from(new Set(dates));
+    if (uniqueDates.length === 1) return uniqueDates[0];
+    return 'تفکیکی (تاریخ‌های متفاوت)';
+  };
+
+  const getRemainingPackingItems = (projId: string, profId: string, wonItems: any[]): PackingItem[] => {
+    const previousDeliveries = packagingDeliveries.filter(
+      d => d.projectId === projId && d.id !== editingDeliveryId
+    );
+
+    const shippedQtyMap: Record<string, number> = {};
+    previousDeliveries.forEach(d => {
+      d.items.forEach(item => {
+        const key = item.productId || item.itemOrDocName.trim();
+        shippedQtyMap[key] = (shippedQtyMap[key] || 0) + item.quantity;
+      });
+    });
+
+    const items: PackingItem[] = [];
+    
+    wonItems.forEach((item, idx) => {
+      const key = item.productId || item.productName.trim();
+      const totalQty = item.quantity;
+      let alreadyShipped = 0;
+
+      if (shippedQtyMap[key] !== undefined) {
+        const remainingShipped = shippedQtyMap[key];
+        if (remainingShipped >= totalQty) {
+          alreadyShipped = totalQty;
+          shippedQtyMap[key] = remainingShipped - totalQty;
+        } else {
+          alreadyShipped = remainingShipped;
+          shippedQtyMap[key] = 0;
+        }
+      }
+
+      const remainingQty = totalQty - alreadyShipped;
+      if (remainingQty > 0) {
+        items.push({
+          id: `pack-item-auto-${idx}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          itemOrDocName: item.productName,
+          productId: item.productId,
+          quantity: remainingQty,
+          packageType: 'کارتن',
+          dimensions: '50x40x30 سانتی‌متر',
+          weight: 1
+        });
+      }
+    });
+
+    return items;
+  };
+
+  const getMaxAllowedQty = (item: PackingItem) => {
+    if (!selectedProjectId) return Infinity;
+    
+    const key = item.productId || item.itemOrDocName.trim();
+    
+    let totalProformaQty = 0;
+    
+    const targetProformas = selectedProformaId 
+      ? proformas.filter(p => p.id === selectedProformaId)
+      : proformas.filter(p => {
+          if (p.projectId !== selectedProjectId) return false;
+          const status = getProformaOutcomeStatus(p);
+          return status === 'تأیید شده (برنده)' || status === 'نیمه برنده';
+        });
+
+    targetProformas.forEach(p => {
+      const wonItems = getWonItemsOfProforma(p, true);
+      wonItems.forEach(wi => {
+        const wiKey = wi.productId || wi.productName.trim();
+        if (wiKey === key) {
+          totalProformaQty += wi.quantity;
+        }
+      });
+    });
+
+    if (totalProformaQty === 0) return Infinity;
+
+    const otherDeliveries = packagingDeliveries.filter(
+      d => d.projectId === selectedProjectId && d.id !== editingDeliveryId
+    );
+    
+    let alreadyShipped = 0;
+    otherDeliveries.forEach(d => {
+      d.items.forEach(di => {
+        const diKey = di.productId || di.itemOrDocName.trim();
+        if (diKey === key) {
+          alreadyShipped += di.quantity;
+        }
+      });
+    });
+
+    return Math.max(0, totalProformaQty - alreadyShipped);
+  };
 
   // Delete Modal State
   const [deleteDeliveryId, setDeleteDeliveryId] = useState<string | null>(null);
@@ -130,15 +251,7 @@ export default function PackagingDeliveryView({
     if (firstProf) {
       setSelectedProformaId(firstProf.id);
       const wonItems = getWonItemsOfProforma(firstProf, true);
-      const defaultPackingItems: PackingItem[] = wonItems.map((item, idx) => ({
-        id: `pack-item-auto-${idx}-${Date.now()}`,
-        itemOrDocName: item.productName,
-        productId: item.productId,
-        quantity: item.quantity,
-        packageType: 'کارتن',
-        dimensions: '50x40x30 سانتی‌متر',
-        weight: 1
-      }));
+      const defaultPackingItems = getRemainingPackingItems(projectId, firstProf.id, wonItems);
       setPackingItems(defaultPackingItems);
     } else {
       setSelectedProformaId('');
@@ -157,15 +270,7 @@ export default function PackagingDeliveryView({
     const prof = proformas.find(p => p.id === proformaId);
     if (prof) {
       const wonItems = getWonItemsOfProforma(prof, true);
-      const defaultPackingItems: PackingItem[] = wonItems.map((item, idx) => ({
-        id: `pack-item-auto-${idx}-${Date.now()}`,
-        itemOrDocName: item.productName,
-        productId: item.productId,
-        quantity: item.quantity,
-        packageType: 'کارتن',
-        dimensions: '50x40x30 سانتی‌متر',
-        weight: 1
-      }));
+      const defaultPackingItems = getRemainingPackingItems(selectedProjectId, proformaId, wonItems);
       setPackingItems(defaultPackingItems);
     }
   };
@@ -281,6 +386,7 @@ export default function PackagingDeliveryView({
           <td style="padding: 12px; text-align: center;">${item.packageType}</td>
           <td style="padding: 12px; text-align: left; font-family: monospace;" dir="ltr">${item.dimensions}</td>
           <td style="padding: 12px; text-align: center; font-family: monospace;">${item.weight} Kg</td>
+          <td style="padding: 12px; text-align: center; font-family: monospace; font-weight: bold; color: #059669;">${item.actualDeliveryDate || delivery.actualDeliveryDate || 'در انتظار تحویل'}</td>
         </tr>
         `;
       }).join('');
@@ -299,6 +405,7 @@ export default function PackagingDeliveryView({
                 <th style="padding: 12px; width: 100px;">نوع بسته‌بندی</th>
                 <th style="padding: 12px; width: 140px;">ابعاد بسته‌بندی</th>
                 <th style="padding: 12px; text-align: center; width: 100px;">وزن (کیلوگرم)</th>
+                <th style="padding: 12px; text-align: center; width: 120px;">تاریخ تحویل قطعی</th>
               </tr>
             </thead>
             <tbody>
@@ -601,6 +708,12 @@ export default function PackagingDeliveryView({
     setPackingItems(delivery.items);
     setChecklist(delivery.checklist);
     setPhotos(delivery.photos || []);
+
+    const hasItemizedDates = delivery.items?.some(
+      item => item.actualDeliveryDate && item.actualDeliveryDate !== delivery.actualDeliveryDate
+    );
+    setUseItemizedDeliveryDates(!!hasItemizedDates);
+
     setActiveTab('new');
   };
 
@@ -616,8 +729,24 @@ export default function PackagingDeliveryView({
       return;
     }
 
+    // Validate quantities against maximum allowed remaining quantities from proformas
+    for (const item of packingItems) {
+      const maxAllowed = getMaxAllowedQty(item);
+      if (item.quantity > maxAllowed && maxAllowed !== Infinity) {
+        alert(`خطا: تعداد وارد شده برای "${item.itemOrDocName}" (${item.quantity} عدد) بیشتر از مقدار مجاز باقی‌مانده پیش‌فاکتور (${maxAllowed} عدد) است. امکان ثبت وجود ندارد.`);
+        return;
+      }
+    }
+
     const proj = projects.find(p => p.id === selectedProjectId);
     const prof = proformas.find(p => p.id === selectedProformaId);
+
+    const cleanItems = packingItems.map(item => ({
+      ...item,
+      actualDeliveryDate: useItemizedDeliveryDates ? (item.actualDeliveryDate || '') : ''
+    }));
+
+    const finalActualDeliveryDate = useItemizedDeliveryDates ? '' : actualDeliveryDate;
 
     if (editingDeliveryId) {
       const existingDelivery = packagingDeliveries.find(d => d.id === editingDeliveryId);
@@ -629,11 +758,11 @@ export default function PackagingDeliveryView({
           proformaId: selectedProformaId || undefined,
           proformaNumber: prof?.proformaNumber || undefined,
           deliveryDate,
-          actualDeliveryDate,
+          actualDeliveryDate: finalActualDeliveryDate,
           shippingMethod,
           preDeliveryTestNotes,
           checklist,
-          items: packingItems,
+          items: cleanItems,
           photos
         });
       }
@@ -644,11 +773,11 @@ export default function PackagingDeliveryView({
         proformaId: selectedProformaId || undefined,
         proformaNumber: prof?.proformaNumber || undefined,
         deliveryDate,
-        actualDeliveryDate,
+        actualDeliveryDate: finalActualDeliveryDate,
         shippingMethod,
         preDeliveryTestNotes,
         checklist,
-        items: packingItems,
+        items: cleanItems,
         photos
       };
       addPackagingDelivery(deliveryData);
@@ -660,12 +789,10 @@ export default function PackagingDeliveryView({
     setSelectedProformaId('');
     setDeliveryDate(getTodayShamsi());
     setActualDeliveryDate('');
+    setUseItemizedDeliveryDates(false);
     setShippingMethod(settings.dropdownItems.shippingMethods?.[0] || 'باربری');
     setPreDeliveryTestNotes('');
     setPackingItems([]);
-    setChecklist([]);
-    setPhotos([]);
-
     setChecklist([]);
     setPhotos([]);
 
@@ -788,114 +915,184 @@ export default function PackagingDeliveryView({
                 صدور اولین پکینگ لیست کالا
               </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredDeliveries.map(delivery => {
-                const checkedCount = delivery.checklist.filter(c => c.completed).length;
-                const totalChecklist = delivery.checklist.length;
-                
-                return (
-                  <div 
-                    key={delivery.id}
-                    className="bg-white p-5 rounded-2xl border border-slate-150 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 hover:border-emerald-200"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <span className="text-xs font-extrabold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
-                          {delivery.packingListNumber}
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
-                          <Calendar size={13} />
-                          {delivery.deliveryDate}
-                        </span>
-                      </div>
+          ) : (() => {
+            const groupedDeliveriesMap: Record<string, { projectId: string; projectName: string; deliveries: PackagingDelivery[] }> = {};
+            
+            filteredDeliveries.forEach(delivery => {
+              const pId = delivery.projectId;
+              if (!groupedDeliveriesMap[pId]) {
+                groupedDeliveriesMap[pId] = {
+                  projectId: pId,
+                  projectName: delivery.projectName,
+                  deliveries: []
+                };
+              }
+              groupedDeliveriesMap[pId].deliveries.push(delivery);
+            });
+            
+            const groupedDeliveriesList = Object.values(groupedDeliveriesMap);
 
-                      <div>
-                        <h3 className="font-bold text-slate-800 text-sm leading-snug">{delivery.projectName}</h3>
-                        {delivery.proformaNumber && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">پیش‌فاکتور: {delivery.proformaNumber}</div>
+            return (
+              <div className="space-y-4 w-full">
+                {groupedDeliveriesList.map(projectGroup => {
+                  const totalItemsPacked = projectGroup.deliveries.reduce((sum, d) => sum + d.items.length, 0);
+                  const isCollapsed = !!collapsedProjects[projectGroup.projectId];
+                  
+                  const toggleCollapse = () => {
+                    setCollapsedProjects(prev => ({
+                      ...prev,
+                      [projectGroup.projectId]: !prev[projectGroup.projectId]
+                    }));
+                  };
+
+                  return (
+                    <div 
+                      key={projectGroup.projectId}
+                      className="bg-white p-5 rounded-2xl border border-slate-150 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col hover:border-emerald-200 w-full"
+                    >
+                      <div className="w-full">
+                        {/* Project Name Header */}
+                        <div 
+                          onClick={toggleCollapse}
+                          className={`flex items-center justify-between cursor-pointer select-none gap-3 group/header ${
+                            isCollapsed ? '' : 'border-b border-slate-100 pb-3'
+                          }`}
+                        >
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <h3 className="font-bold text-slate-800 text-sm leading-snug flex items-center gap-1.5 truncate group-hover/header:text-emerald-600 transition-colors">
+                              <Briefcase className="text-emerald-500 shrink-0" size={16} />
+                              {projectGroup.projectName}
+                            </h3>
+                            <div className="text-[10px] text-slate-400 font-medium">
+                              تعداد پکینگ لیست‌ها: {projectGroup.deliveries.length} عدد
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg border border-emerald-150 font-bold">
+                              {totalItemsPacked} ردیف کالا
+                            </span>
+                            {isCollapsed ? (
+                              <ChevronDown size={16} className="text-slate-400 group-hover/header:text-slate-600 transition-colors" />
+                            ) : (
+                              <ChevronUp size={16} className="text-slate-400 group-hover/header:text-slate-600 transition-colors" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Deliveries / Packings List within this Project */}
+                        {!isCollapsed && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
+                            {projectGroup.deliveries.map((delivery) => {
+                              const checkedCount = delivery.checklist.filter(c => c.completed).length;
+                              const totalChecklist = delivery.checklist.length;
+                              return (
+                                <div 
+                                  key={delivery.id} 
+                                  className="bg-slate-50/40 hover:bg-slate-50 rounded-xl p-3.5 border border-slate-150 hover:border-emerald-200 hover:shadow-2xs transition-all duration-150 flex flex-col justify-between space-y-3"
+                                >
+                                  <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-[11px] font-extrabold bg-white text-slate-800 border border-slate-200 px-2.5 py-0.5 rounded-md font-mono shadow-3xs">
+                                        {delivery.packingListNumber}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                                        <Calendar size={12} />
+                                        {delivery.deliveryDate}
+                                      </span>
+                                    </div>
+
+                                    {delivery.proformaNumber && (
+                                      <div className="text-[10px] text-slate-500 font-medium">
+                                        پیش‌فاکتور: <span className="font-mono text-slate-700">{delivery.proformaNumber}</span>
+                                      </div>
+                                    )}
+
+                                    {/* Dates Timeline */}
+                                    <div className="bg-white p-2 rounded-lg border border-slate-100 space-y-1 text-[10px]">
+                                      <div className="flex justify-between text-slate-500">
+                                        <span>📦 صدور پکینگ لیست:</span>
+                                        <span className="font-mono font-bold text-slate-700">{delivery.deliveryDate}</span>
+                                      </div>
+                                      <div className="flex justify-between text-slate-500">
+                                        <span>🤝 تحویل به مشتری:</span>
+                                        <span className="font-mono font-bold text-emerald-600">
+                                          {getDeliveryActualDateLabel(delivery)}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-1.5 text-[10px] text-slate-600">
+                                      <span className="bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded border border-sky-100 flex items-center gap-1">
+                                        <Truck size={10} />
+                                        {delivery.shippingMethod}
+                                      </span>
+                                      <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
+                                        {delivery.items.length} قلم کالا
+                                      </span>
+                                    </div>
+
+                                    {totalChecklist > 0 && (
+                                      <div className="space-y-1 pt-1">
+                                        <div className="flex justify-between items-center text-[9px] text-slate-500">
+                                          <span>پیشرفت بازرسی تحویل:</span>
+                                          <span className="font-bold">{checkedCount} از {totalChecklist}</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                                          <div 
+                                            className="bg-emerald-500 h-1 transition-all"
+                                            style={{ width: `${(checkedCount / totalChecklist) * 100}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Actions for this specific delivery */}
+                                  <div className="flex justify-between items-center pt-2 border-t border-slate-100/60 mt-auto">
+                                    <button
+                                      onClick={() => setSelectedDelivery(delivery)}
+                                      className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-[10px] px-2.5 py-1 rounded-lg transition flex items-center gap-1"
+                                    >
+                                      <Info size={12} />
+                                      مشاهده و چاپ
+                                    </button>
+
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEditDelivery(delivery);
+                                        }}
+                                        className="text-sky-500 hover:text-sky-600 hover:bg-sky-50 p-1 rounded transition-all"
+                                        title="ویرایش پکینگ لیست"
+                                      >
+                                        <Edit size={13} />
+                                      </button>
+
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeleteDeliveryId(delivery.id);
+                                        }}
+                                        className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 p-1 rounded transition-all"
+                                        title="حذف پکینگ لیست"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
-
-                      {/* Display Dates Timeline */}
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1.5 text-[10px]">
-                        <div className="flex justify-between text-slate-500">
-                          <span>📦 تاریخ صدور پکینگ لیست:</span>
-                          <span className="font-mono font-bold text-slate-700">{delivery.deliveryDate}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-500">
-                          <span>🤝 تاریخ تحویل به مشتری:</span>
-                          <span className="font-mono font-bold text-emerald-600">
-                            {delivery.actualDeliveryDate || 'در انتظار تحویل'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 text-xs text-slate-600 pt-1">
-                        <span className="bg-sky-50 text-sky-700 px-2 py-0.5 rounded-md border border-sky-100 flex items-center gap-1 text-[11px]">
-                          <Truck size={12} />
-                          {delivery.shippingMethod}
-                        </span>
-                        <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1 text-[11px]">
-                          <Package size={12} />
-                          {delivery.items.length} ردیف کالا
-                        </span>
-                      </div>
-
-                      {totalChecklist > 0 && (
-                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                          <div className="flex justify-between items-center text-[10px] text-slate-500">
-                            <span>پیشرفت بازرسی تحویل:</span>
-                            <span className="font-bold">{checkedCount} از {totalChecklist}</span>
-                          </div>
-                          <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-emerald-500 h-1 transition-all"
-                              style={{ width: `${(checkedCount / totalChecklist) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
                     </div>
-
-                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                      <button
-                        onClick={() => setSelectedDelivery(delivery)}
-                        className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1"
-                      >
-                        <Info size={14} />
-                        مشاهده جزئیات و چاپ
-                      </button>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditDelivery(delivery);
-                          }}
-                          className="text-sky-500 hover:text-sky-600 hover:bg-sky-50 p-1.5 rounded-xl transition-all"
-                          title="ویرایش پکینگ لیست"
-                        >
-                          <Edit size={15} />
-                        </button>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteDeliveryId(delivery.id);
-                          }}
-                          className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-xl transition-all"
-                          title="حذف پکینگ لیست"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -950,14 +1147,44 @@ export default function PackagingDeliveryView({
               />
             </div>
 
-            {/* Actual Delivery Date */}
-            <div className="space-y-1">
-              <ShamsiDatePicker
-                label="تاریخ تحویل به مشتری"
-                value={actualDeliveryDate}
-                onChange={setActualDeliveryDate}
-                placeholder="انتخاب تاریخ"
-              />
+            {/* Delivery Date Configuration Type & Picker */}
+            <div className="space-y-2 md:col-span-2 bg-slate-50/50 p-3 rounded-xl border border-slate-200/60">
+              <label className="block text-xs font-bold text-slate-700">نحوه ثبت تاریخ تحویل به مشتری</label>
+              <div className="flex gap-4 mb-2 text-[11px] font-medium text-slate-600">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="delivery_date_type"
+                    checked={!useItemizedDeliveryDates}
+                    onChange={() => setUseItemizedDeliveryDates(false)}
+                    className="text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>یکسان برای همه اقلام (کلی)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="delivery_date_type"
+                    checked={useItemizedDeliveryDates}
+                    onChange={() => setUseItemizedDeliveryDates(true)}
+                    className="text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>مجزا برای هر ردیف (تفکیکی)</span>
+                </label>
+              </div>
+
+              {!useItemizedDeliveryDates ? (
+                <ShamsiDatePicker
+                  label="تاریخ تحویل به مشتری"
+                  value={actualDeliveryDate}
+                  onChange={setActualDeliveryDate}
+                  placeholder="انتخاب تاریخ"
+                />
+              ) : (
+                <div className="p-2 bg-amber-50 text-amber-800 rounded-lg text-[10px] border border-amber-100 font-medium">
+                  ⚠️ تاریخ تحویل قطعی برای هر کالا به طور مستقیم در جدول اقلام زیر ثبت می‌شود.
+                </div>
+              )}
             </div>
 
             {/* Shipping Method */}
@@ -1038,7 +1265,7 @@ export default function PackagingDeliveryView({
                   آیتمی در پکینگ لیست ثبت نشده است. از کادر زیر برای اضافه کردن استفاده کنید.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className={`overflow-x-auto ${useItemizedDeliveryDates ? 'min-h-[280px]' : ''}`}>
                   <table className="w-full text-xs text-right border-collapse">
                     <thead>
                       <tr className="border-b border-slate-150 text-slate-400 font-bold bg-slate-50/40">
@@ -1049,6 +1276,7 @@ export default function PackagingDeliveryView({
                         <th className="p-2 w-44">ابعاد (طولxعرضxارتفاع)</th>
                         <th className="p-2 w-24">وزن (کیلوگرم)</th>
                         <th className="p-2 w-24">شماره جعبه</th>
+                        {useItemizedDeliveryDates && <th className="p-2 w-32">تاریخ تحویل قطعی</th>}
                         <th className="p-2 w-10 text-center">حذف</th>
                       </tr>
                     </thead>
@@ -1065,12 +1293,29 @@ export default function PackagingDeliveryView({
                             />
                           </td>
                           <td className="p-2">
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={e => handleUpdateItemField(item.id, 'quantity', Number(e.target.value))}
-                              className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center"
-                            />
+                            {(() => {
+                              const maxAllowed = getMaxAllowedQty(item);
+                              const isOver = item.quantity > maxAllowed && maxAllowed !== Infinity;
+                              return (
+                                <>
+                                  <input
+                                    type="number"
+                                    value={item.quantity}
+                                    onChange={e => handleUpdateItemField(item.id, 'quantity', Number(e.target.value))}
+                                    className={`w-full border rounded px-1.5 py-1 text-xs text-center transition-colors ${
+                                      isOver 
+                                        ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-500 focus:ring-1 focus:ring-rose-500' 
+                                        : 'border-slate-200 focus:border-emerald-500'
+                                    }`}
+                                  />
+                                  {maxAllowed !== Infinity && (
+                                    <div className={`text-[9px] mt-1 text-center font-bold ${isOver ? 'text-rose-600' : 'text-slate-400'}`}>
+                                      حداکثر مجاز: {maxAllowed}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td className="p-2">
                             <select
@@ -1110,6 +1355,16 @@ export default function PackagingDeliveryView({
                               className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center"
                             />
                           </td>
+                          {useItemizedDeliveryDates && (
+                            <td className="p-2">
+                              <ShamsiDatePicker
+                                value={item.actualDeliveryDate || ''}
+                                onChange={val => handleUpdateItemField(item.id, 'actualDeliveryDate', val)}
+                                placeholder="۱۴۰۵/۰۵/۱۲"
+                                compact
+                              />
+                            </td>
+                          )}
                           <td className="p-2 text-center">
                             <button
                               type="button"
@@ -1297,8 +1552,12 @@ export default function PackagingDeliveryView({
 
       {/* DETAIL MODAL WITH PRINT CAPABILITY */}
       {selectedDelivery && (
-        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
-          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col justify-between overflow-hidden animate-fade-in relative max-h-[90vh]">
+        <div className={`fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 overflow-y-auto ${isDetailModalFullscreen ? 'p-0' : 'p-4'}`} dir="rtl">
+          <div className={`bg-white shadow-2xl flex flex-col justify-between overflow-hidden animate-fade-in relative transition-all duration-300 ${
+            isDetailModalFullscreen 
+              ? 'w-screen h-screen rounded-none max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-4xl max-h-[90vh]'
+          }`}>
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-150 flex justify-between items-center bg-slate-50/80 no-print">
               <div className="flex items-center gap-2">
@@ -1307,16 +1566,25 @@ export default function PackagingDeliveryView({
                   پکینگ لیست کالا - {selectedDelivery.packingListNumber}
                 </h3>
               </div>
-              <button
-                onClick={() => setSelectedDelivery(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl transition hover:bg-slate-200/55"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setIsDetailModalFullscreen(!isDetailModalFullscreen)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl transition hover:bg-slate-200/55 flex items-center justify-center"
+                  title={isDetailModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isDetailModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button
+                  onClick={() => { setSelectedDelivery(null); setIsDetailModalFullscreen(false); onClearInitialPrintDocId?.(); }}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl transition hover:bg-slate-200/55 flex items-center justify-center"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body / Printable Content */}
-            <div className="p-6 md:p-8 overflow-y-auto space-y-6 printable-container select-text">
+            <div className={`p-6 md:p-8 overflow-y-auto space-y-6 printable-container select-text ${isDetailModalFullscreen ? 'flex-1' : ''}`}>
               {/* PRINT SPECIAL PAGE HEADER (Displays on UI and Print) */}
               <div className="flex flex-col md:flex-row justify-between items-center md:items-start pb-4 border-b border-slate-300 gap-4">
                 <div className="flex flex-col gap-2 text-center md:text-right">
@@ -1358,12 +1626,16 @@ export default function PackagingDeliveryView({
                     <span className="text-slate-400">تاریخ صدور پکینگ لیست:</span>
                     <strong className="text-slate-800 font-mono font-bold">{selectedDelivery.deliveryDate}</strong>
                   </div>
-                  {selectedDelivery.actualDeliveryDate && (
-                    <div className="text-xs text-emerald-600 flex items-center gap-1.5 border-b border-emerald-50 pb-1">
-                      <span className="text-emerald-500/80">تاریخ تحویل نهایی:</span>
-                      <strong className="font-mono font-bold">{selectedDelivery.actualDeliveryDate}</strong>
-                    </div>
-                  )}
+                  {(() => {
+                    const actualDateLabel = getDeliveryActualDateLabel(selectedDelivery);
+                    if (actualDateLabel === 'در انتظار تحویل') return null;
+                    return (
+                      <div className="text-xs text-emerald-600 flex items-center gap-1.5 border-b border-emerald-50 pb-1">
+                        <span className="text-emerald-500/80">تاریخ تحویل نهایی:</span>
+                        <strong className="font-mono font-bold">{actualDateLabel}</strong>
+                      </div>
+                    );
+                  })()}
                   <div className="text-xs text-slate-600 flex items-center gap-1.5">
                     <span className="text-slate-400">روش حمل و ارسال:</span>
                     <strong className="text-slate-800 font-extrabold">{selectedDelivery.shippingMethod}</strong>
@@ -1526,7 +1798,7 @@ export default function PackagingDeliveryView({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedDelivery(null)}
+                  onClick={() => { setSelectedDelivery(null); onClearInitialPrintDocId?.(); }}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-2.5 rounded-xl transition"
                 >
                   بستن پنجره

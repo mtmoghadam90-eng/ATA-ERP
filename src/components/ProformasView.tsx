@@ -21,7 +21,9 @@ import {
   DollarSign,
   Copy,
   Package,
-  ChevronDown
+  ChevronDown,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { Proforma, Customer, Project, Product, ProformaItem, ERPSettings, ExchangeRate, User } from '../types';
 import { getTodayShamsi, addDaysToShamsi } from '../dateUtils';
@@ -30,7 +32,114 @@ import { getProformaOutcomeStatus } from '../useERPStore';
 import ConfirmModal from './ConfirmModal';
 import { SearchableSelect } from './SearchableSelect';
 import QuickAddModal from './QuickAddModal';
+import { toPersianDigits } from '../numUtils';
+
+// Helper functions for dynamic delivery time notes generation
+const generateDeliveryNotes = (itemsList: any[], isEqualDelivery: boolean = true) => {
+  if (!itemsList || itemsList.length === 0) {
+    return 'زمان تحویل:\nفوری';
+  }
+
+  const first = itemsList[0];
+  const firstRange = first.deliveryRange || '۳-۴';
+  const firstUnit = first.deliveryUnit || 'هفته';
+  const firstType = first.deliveryType || 'کاری';
+  const firstPostfix = first.deliveryPostfix || 'پس از تایید پیش فاکتور و دریافت پیش پرداخت';
+
+  const allEqual = itemsList.every(item => {
+    const range = item.deliveryRange || '۳-۴';
+    const unit = item.deliveryUnit || 'هفته';
+    const type = item.deliveryType || 'کاری';
+    const postfix = item.deliveryPostfix || 'پس از تایید پیش فاکتور و دریافت پیش پرداخت';
+    return range === firstRange && unit === firstUnit && type === firstType && postfix === firstPostfix;
+  });
+
+  if (isEqualDelivery && allEqual) {
+    return toPersianDigits(`زمان تحویل:\n${firstRange} ${firstUnit} ${firstType} ${firstPostfix}`);
+  }
+
+  const lines = itemsList.map((item, index) => {
+    const range = item.deliveryRange || '۳-۴';
+    const unit = item.deliveryUnit || 'هفته';
+    const type = item.deliveryType || 'کاری';
+    const postfix = item.deliveryPostfix || 'پس از تایید پیش فاکتور و دریافت پیش پرداخت';
+    return `ردیف ${index + 1} : ${range} ${unit} ${type} ${postfix}`;
+  });
+  return toPersianDigits(`زمان تحویل:\n${lines.join('\n')}`);
+};
+
+const updateNotesWithDelivery = (currentNotes: string, itemsList: any[], isEqualDelivery: boolean = true) => {
+  const deliverySection = generateDeliveryNotes(itemsList, isEqualDelivery);
+  const notesStr = currentNotes || '';
+  const lines = notesStr.split('\n');
+  const startIndex = lines.findIndex(line => line.trim().startsWith('زمان تحویل:'));
+  
+  if (startIndex !== -1) {
+    // Find where the delivery section ends
+    let endIndex = startIndex + 1;
+    
+    // Check if the next lines contain any line starting with "ردیف"
+    let hasRowLines = false;
+    for (let i = startIndex + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line === '') continue;
+      if (line.startsWith('ردیف')) {
+        hasRowLines = true;
+        break;
+      }
+      if (line.endsWith(':') && !line.startsWith('ردیف')) {
+        break;
+      }
+    }
+
+    if (hasRowLines) {
+      while (endIndex < lines.length) {
+        const line = lines[endIndex].trim();
+        if (line !== '' && !line.startsWith('ردیف')) {
+          break;
+        }
+        endIndex++;
+      }
+    } else {
+      // Consume the single line after "زمان تحویل:" if it is not empty and not another heading
+      if (endIndex < lines.length && lines[endIndex].trim() !== '' && !lines[endIndex].trim().endsWith(':')) {
+        endIndex++;
+      }
+    }
+    const before = lines.slice(0, startIndex);
+    const after = lines.slice(endIndex);
+    return [...before, deliverySection, ...after].join('\n');
+  } else {
+    if (notesStr.trim() === '') {
+      return deliverySection;
+    }
+    return `${notesStr.trim()}\n\n${deliverySection}`;
+  }
+};
+
+const getDeliverySummary = (itemsList: any[]) => {
+  if (!itemsList || itemsList.length === 0) return 'فوری';
+  const first = itemsList[0];
+  const range = first.deliveryRange || '۳-۴';
+  const unit = first.deliveryUnit || 'هفته';
+  const type = first.deliveryType || 'کاری';
+  
+  const allEqual = itemsList.every(item => {
+    const itemRange = item.deliveryRange || '۳-۴';
+    const itemUnit = item.deliveryUnit || 'هفته';
+    const itemType = item.deliveryType || 'کاری';
+    return itemRange === range && itemUnit === unit && itemType === type;
+  });
+
+  if (allEqual) {
+    return `${range} ${unit} ${type}`;
+  }
+  return `${range} ${unit} ${type} (ردیف‌های دیگر متفاوت)`;
+};
+
 interface ProformasViewProps {
+  initialPrintDocId?: string;
+  onClearInitialPrintDocId?: () => void;
   proformas: Proforma[];
   customers: Customer[];
   projects: Project[];
@@ -52,6 +161,8 @@ interface ProformasViewProps {
   packagingDeliveries?: any;
 }
 export default function ProformasView({
+  initialPrintDocId,
+  onClearInitialPrintDocId,
   proformas,
   customers,
   projects,
@@ -77,8 +188,10 @@ export default function ProformasView({
   const [isQuickAddingContact, setIsQuickAddingContact] = useState(false);
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreateModalFullscreen, setIsCreateModalFullscreen] = useState(false);
   const [editingProforma, setEditingProforma] = useState<Proforma | null>(null);
   const [showPrintView, setShowPrintView] = useState(false);
+  const [isPrintViewFullscreen, setIsPrintViewFullscreen] = useState(false);
   const [selectedProforma, setSelectedProforma] = useState<Proforma | null>(null);
   const [overrideShowBrand, setOverrideShowBrand] = useState(false);
   // Status change helper state
@@ -88,6 +201,7 @@ export default function ProformasView({
   const [lossReason, setLossReason] = useState('');
   // Individual items status states
   const [showItemsModal, setShowItemsModal] = useState(false);
+  const [isItemsModalFullscreen, setIsItemsModalFullscreen] = useState(false);
   const [selectedProformaForItems, setSelectedProformaForItems] = useState<Proforma | null>(null);
   const [editingItemsList, setEditingItemsList] = useState<ProformaItem[]>([]);
   // Bulk project proformas status change state
@@ -105,7 +219,16 @@ export default function ProformasView({
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelProjectId, setCancelProjectId] = useState('');
   const [cancelProjectName, setCancelProjectName] = useState('');
-  // Expanded project sections state
+  React.useEffect(() => {
+    if (initialPrintDocId) {
+      const pf = proformas.find(p => p.id === initialPrintDocId);
+      if (pf) {
+        handleOpenPrint(pf);
+      }
+    }
+  }, [initialPrintDocId, proformas]);
+
+  // Expand Project sections state
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const toggleProjectExpand = (projId: string) => {
     setExpandedProjects(prev => ({
@@ -178,6 +301,7 @@ export default function ProformasView({
   const [taxPercent, setTaxPercent] = useState<number>(10); // Standard Iranian VAT is 10% since 1403
   const [notes, setNotes] = useState(settings?.proformaTemplates?.[0]?.termsAndConditions || '');
   const [items, setItems] = useState<Omit<ProformaItem, 'id' | 'totalPriceRIYAL'>[]>([]);
+  const [isEqualDelivery, setIsEqualDelivery] = useState(true);
   // Quick Customer Creation States
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
   const [quickCustType, setQuickCustType] = useState<'حقوقی' | 'حقیقی'>('حقوقی');
@@ -217,14 +341,8 @@ export default function ProformasView({
     setProformaType('FINANCIAL');
     setIssueDate(getTodayShamsi());
     setExpiryDate(addDaysToShamsi(getTodayShamsi(), 30));
-    setDeliveryDate('۳ هفته کاری پس از پیش پرداخت');
-    setStatus('پیش‌نویس');
-    setCurrency('ریال');
-    setHistoricalExchangeRate(0);
-    setDiscountPercent(0);
-    setTaxPercent(10);
-    setNotes(settings?.proformaTemplates?.[0]?.termsAndConditions || '');
-    setItems([{ 
+    
+    const defaultItems = [{ 
       productId: products[0]?.id || '', 
       productName: products[0]?.displayName || '', 
       productCode: products[0]?.code || '', 
@@ -232,8 +350,22 @@ export default function ProformasView({
       quantity: 1, 
       unitPriceRIYAL: products[0]?.basePriceRIYAL || 0, 
       techSpecs: '',
-      selectedImage: products[0]?.images && products[0]?.images.length > 0 ? products[0]?.images[0] : undefined
-    }]);
+      selectedImage: products[0]?.images && products[0]?.images.length > 0 ? products[0]?.images[0] : undefined,
+      deliveryRange: '۳-۴',
+      deliveryUnit: 'هفته' as const,
+      deliveryType: 'کاری' as const,
+      deliveryPostfix: 'پس از تایید پیش فاکتور و دریافت پیش پرداخت'
+    }];
+    setItems(defaultItems);
+    setIsEqualDelivery(true);
+    setStatus('پیش‌نویس');
+    setCurrency('ریال');
+    setHistoricalExchangeRate(0);
+    setDiscountPercent(0);
+    setTaxPercent(10);
+    const initialNotes = settings?.proformaTemplates?.[0]?.termsAndConditions || '';
+    setNotes(updateNotesWithDelivery(initialNotes, defaultItems, true));
+    setDeliveryDate(getDeliverySummary(defaultItems));
     setShowCreateModal(true);
   };
   // Open Edit Modal
@@ -246,14 +378,13 @@ export default function ProformasView({
     setProjectId(pf.projectId || '');
     setIssueDate(pf.issueDate);
     setExpiryDate(pf.expiryDate);
-    setDeliveryDate(pf.deliveryDate || '');
     setStatus(pf.status);
     setCurrency(pf.currency || 'ریال');
     setHistoricalExchangeRate(pf.historicalExchangeRate || 0);
     setDiscountPercent(pf.discountPercent);
     setTaxPercent(pf.taxPercent);
-    setNotes(pf.notes);
-    setItems(pf.items.map(item => ({
+    
+    const loadedItems = pf.items.map(item => ({
       productId: item.productId,
       productName: item.productName,
       productCode: item.productCode,
@@ -261,8 +392,22 @@ export default function ProformasView({
       quantity: item.quantity,
       unitPriceRIYAL: item.unitPriceRIYAL,
       techSpecs: item.techSpecs || '',
-      selectedImage: item.selectedImage
-    })));
+      selectedImage: item.selectedImage,
+      deliveryRange: item.deliveryRange || '۳-۴',
+      deliveryUnit: item.deliveryUnit || 'هفته',
+      deliveryType: item.deliveryType || 'کاری',
+      deliveryPostfix: item.deliveryPostfix || 'پس از تایید پیش فاکتور و دریافت پیش پرداخت'
+    }));
+    setItems(loadedItems);
+    const allEqual = loadedItems.length > 0 ? loadedItems.every(it => 
+      it.deliveryRange === loadedItems[0].deliveryRange &&
+      it.deliveryUnit === loadedItems[0].deliveryUnit &&
+      it.deliveryType === loadedItems[0].deliveryType &&
+      it.deliveryPostfix === loadedItems[0].deliveryPostfix
+    ) : true;
+    setIsEqualDelivery(allEqual);
+    setNotes(updateNotesWithDelivery(pf.notes || '', loadedItems, allEqual));
+    setDeliveryDate(getDeliverySummary(loadedItems));
     setShowCreateModal(true);
   };
   // Handle Currency selection conversion
@@ -310,7 +455,13 @@ export default function ProformasView({
       }
     }
 
-    setItems([...items, {
+    const firstItem = items[0];
+    const range = isEqualDelivery && firstItem ? firstItem.deliveryRange : '۳-۴';
+    const unit = isEqualDelivery && firstItem ? firstItem.deliveryUnit : ('هفته' as const);
+    const dtype = isEqualDelivery && firstItem ? firstItem.deliveryType : ('کاری' as const);
+    const postfix = isEqualDelivery && firstItem ? firstItem.deliveryPostfix : 'پس از تایید پیش فاکتور و دریافت پیش پرداخت';
+
+    const newItems = [...items, {
       productId: firstProd.id,
       productName: firstProd.displayName,
       productCode: firstProd.code,
@@ -318,13 +469,61 @@ export default function ProformasView({
       quantity: qty,
       unitPriceRIYAL: Math.round(basePriceInSelectedCurrency * 100) / 100,
       techSpecs: '',
-      selectedImage: firstProd.images && firstProd.images.length > 0 ? firstProd.images[0] : undefined
-    }]);
+      selectedImage: firstProd.images && firstProd.images.length > 0 ? firstProd.images[0] : undefined,
+      deliveryRange: range,
+      deliveryUnit: unit,
+      deliveryType: dtype,
+      deliveryPostfix: postfix
+    }];
+    setItems(newItems);
+    setNotes(prevNotes => updateNotesWithDelivery(prevNotes, newItems, isEqualDelivery));
+    setDeliveryDate(getDeliverySummary(newItems));
   };
   // Remove Item line
   const handleRemoveItemLine = (index: number) => {
     if (items.length === 1) return;
-    setItems(items.filter((_, i) => i !== index));
+    const newItems = items.filter((_, i) => i !== index);
+    setItems(newItems);
+    setNotes(prevNotes => updateNotesWithDelivery(prevNotes, newItems, isEqualDelivery));
+    setDeliveryDate(getDeliverySummary(newItems));
+  };
+  // Handle Item delivery fields change
+  const handleItemDeliveryFieldChange = (index: number, field: string, value: any) => {
+    let newItems = [...items];
+    if (isEqualDelivery) {
+      newItems = newItems.map(item => ({
+        ...item,
+        [field]: value
+      }));
+    } else {
+      newItems[index] = {
+        ...newItems[index],
+        [field]: value
+      };
+    }
+    setItems(newItems);
+    setNotes(prevNotes => updateNotesWithDelivery(prevNotes, newItems, isEqualDelivery));
+    setDeliveryDate(getDeliverySummary(newItems));
+  };
+
+  // Toggle Equal Delivery Time Checkbox
+  const handleToggleEqualDelivery = (checked: boolean) => {
+    setIsEqualDelivery(checked);
+    if (checked && items.length > 0) {
+      const firstItem = items[0];
+      const updatedItems = items.map(item => ({
+        ...item,
+        deliveryRange: firstItem.deliveryRange || '۳-۴',
+        deliveryUnit: firstItem.deliveryUnit || 'هفته',
+        deliveryType: firstItem.deliveryType || 'کاری',
+        deliveryPostfix: firstItem.deliveryPostfix || 'پس از تایید پیش فاکتور و دریافت پیش پرداخت'
+      }));
+      setItems(updatedItems);
+      setNotes(prevNotes => updateNotesWithDelivery(prevNotes, updatedItems, checked));
+      setDeliveryDate(getDeliverySummary(updatedItems));
+    } else if (!checked && items.length > 0) {
+      setNotes(prevNotes => updateNotesWithDelivery(prevNotes, items, checked));
+    }
   };
   // Handle Item Select product
   const handleItemProductChange = (index: number, prodId: string) => {
@@ -960,7 +1159,6 @@ export default function ProformasView({
         <div class="${pf.proformaType === 'TECHNICAL' ? '' : 'financial-grid'}">
             <div class="notes-card" style="${pf.proformaType === 'TECHNICAL' ? 'width: 100%;' : ''}">
                 <div style="font-weight: bold; color: #334155; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">توضیحات و شرایط فروش</div>
-                <div style="font-weight: bold; margin-bottom: 8px; font-size: 11px; color: #0284c7;">📅 زمان تحویل: ${pf.deliveryDate || 'فوری'}</div>
                 <div style="white-space: pre-line; line-height: 1.6; font-size: 12px;">${pf.notes}</div>
             </div>
             ${pf.proformaType !== 'TECHNICAL' ? `
@@ -1117,7 +1315,7 @@ export default function ProformasView({
                 </label>
               </div>
               <button 
-                onClick={() => setShowPrintView(false)}
+                onClick={() => { setShowPrintView(false); onClearInitialPrintDocId?.(); }}
                 className="px-4 py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-sm font-semibold text-slate-600 transition"
               >
                 بستن پیش‌نمایش
@@ -1253,7 +1451,6 @@ export default function ProformasView({
               <div className={selectedProforma.proformaType === 'TECHNICAL' ? "grid grid-cols-1" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
                 <div className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-150 text-slate-600 space-y-2">
                   <p className="font-bold text-slate-700 border-b border-slate-200 pb-1.5">توضیحات و شرایط فروش</p>
-                  <p className="font-bold text-sky-600">📅 زمان تحویل: {selectedProforma.deliveryDate || 'فوری'}</p>
                   <p className="whitespace-pre-line leading-relaxed text-[11px]">{selectedProforma.notes}</p>
                 </div>
                 {selectedProforma.proformaType !== 'TECHNICAL' && (
@@ -1720,18 +1917,36 @@ export default function ProformasView({
       )}
       {/* Manage Individual Items Status Modal */}
       {showItemsModal && selectedProformaForItems && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-4xl overflow-hidden animate-scale-in my-8">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isItemsModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in transition-all duration-300 flex flex-col ${
+            isItemsModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full' 
+              : 'rounded-2xl w-full max-w-4xl my-8'
+          }`}>
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
                 <h3 className="font-bold text-slate-800">مدیریت و ثبت علت باخت ردیف‌های پیش‌فاکتور</h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">شماره سند: {selectedProformaForItems.proformaNumber} | مشتری: {selectedProformaForItems.customerName}</p>
               </div>
-              <button onClick={() => setShowItemsModal(false)} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsItemsModalFullscreen(!isItemsModalFullscreen)} 
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isItemsModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isItemsModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowItemsModal(false); setIsItemsModalFullscreen(false); }} 
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
-            <form onSubmit={handleSaveItemsStatus} className="p-6 space-y-4">
+            <form onSubmit={handleSaveItemsStatus} className={`p-6 space-y-4 overflow-y-auto ${isItemsModalFullscreen ? 'max-h-[calc(100vh-140px)] flex-1' : ''}`}>
               <p className="text-slate-500 text-xs">
                 چنانچه بعضی از ردیف‌های پیش‌فاکتور برنده و بعضی دیگر بازنده شده‌اند، وضعیت هر ردیف را به صورت مستقل به همراه علت باخت ثبت کنید. این کار به صورت اتوماتیک وضعیت کل پروژه مادری را نیز همگام‌سازی خواهد کرد.
               </p>
@@ -1827,17 +2042,35 @@ export default function ProformasView({
       )}
       {/* Create / Edit Proforma Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-4xl overflow-hidden animate-scale-in my-8">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isCreateModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in transition-all duration-300 flex flex-col ${
+            isCreateModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full' 
+              : 'rounded-2xl w-full max-w-4xl my-8'
+          }`}>
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800">
                 {editingProforma ? `ویرایش پیش‌فاکتور ${editingProforma.proformaNumber}` : 'صدور پیش‌فاکتور اتوماتیک جدید'}
               </h3>
-              <button onClick={() => { setShowCreateModal(false); setEditingProforma(null); }} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsCreateModalFullscreen(!isCreateModalFullscreen)} 
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isCreateModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isCreateModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowCreateModal(false); setEditingProforma(null); setIsCreateModalFullscreen(false); }} 
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
-            <form onSubmit={handleSaveProforma} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleSaveProforma} className={`p-6 space-y-6 overflow-y-auto ${isCreateModalFullscreen ? 'max-h-[calc(100vh-140px)] flex-1' : 'max-h-[80vh]'}`}>
               {/* Proforma Type Selection */}
               <div className="bg-slate-100 p-1.5 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
@@ -1918,10 +2151,16 @@ export default function ProformasView({
                                   productCode: prod?.code || '',
                                   brand: prod?.brand || '',
                                   quantity: qty,
-                                  unitPriceRIYAL: prod?.basePriceRIYAL || 0
+                                  unitPriceRIYAL: prod?.basePriceRIYAL || 0,
+                                  deliveryRange: '۳-۴',
+                                  deliveryUnit: 'هفته' as const,
+                                  deliveryType: 'کاری' as const,
+                                  deliveryPostfix: 'پس از تایید پیش فاکتور و دریافت پیش پرداخت'
                                 };
                               });
                               setItems(newItems);
+                              setNotes(prev => updateNotesWithDelivery(prev, newItems, isEqualDelivery));
+                              setDeliveryDate(getDeliverySummary(newItems));
                               if (hasTruncated) {
                                 alert('تعداد برخی از اقلام پروژه از موجودی انبار بیشتر بود و با موجودی فعلی جایگزین شدند. لطفاً برای مابقی نیاز، ردیف مجزا به صورت سفارشی ثبت کنید.');
                               }
@@ -2102,18 +2341,6 @@ export default function ProformasView({
                     onChange={(val) => setExpiryDate(val)}
                   />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2 lg:col-span-2" id="proforma-delivery-date-picker-wrapper">
-                  <label className="text-xs font-semibold text-slate-500">مدت و زمان تحویل کالا (تعهد تحویل) *</label>
-                  <input
-                    type="text"
-                    required
-                    value={deliveryDate}
-                    onChange={(e) => setDeliveryDate(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                    placeholder="مثال: ۳ هفته کاری پس از پیش پرداخت"
-                  />
-                  <span className="text-[10px] text-slate-400 block mt-1">مدت تحویل به صورت متنی (مثال: ۳ هفته کاری، ۱۰ روز تقویمی، فوری)</span>
-                </div>
                 {/* Status */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">وضعیت سند</label>
@@ -2168,17 +2395,88 @@ export default function ProformasView({
               </div>
               {/* Items multi-row block */}
               <div className="space-y-3">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100 flex-wrap gap-3">
                   <h4 className="font-bold text-xs text-slate-700">اقلام پیشنهاد تجهیزات ابزاردقیق</h4>
-                  <button
-                    type="button"
-                    onClick={handleAddItemLine}
-                    className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
-                  >
-                    <PlusCircle size={14} />
-                    افزودن ردیف کالا
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1.5 rounded-lg border border-slate-200 transition">
+                      <input
+                        type="checkbox"
+                        checked={isEqualDelivery}
+                        onChange={(e) => handleToggleEqualDelivery(e.target.checked)}
+                        className="rounded border-slate-300 text-sky-500 focus:ring-sky-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span>زمان تحویل یکسان برای همه ردیف‌ها</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAddItemLine}
+                      className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+                    >
+                      <PlusCircle size={14} />
+                      افزودن ردیف کالا
+                    </button>
+                  </div>
                 </div>
+
+                {isEqualDelivery && items.length > 0 && (
+                  <div className="bg-sky-50/50 p-4 rounded-xl border border-sky-100/80 space-y-2 text-right">
+                    <span className="text-[11px] font-extrabold text-sky-800 block">⏱️ تعیین زمان تحویل کلیه اقلام پیش‌فاکتور (یکسان برای همه ردیف‌ها):</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      {/* Field 1: Numerical Range */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 block">بازه عددی</label>
+                        <input
+                          type="text"
+                          required
+                          value={items[0]?.deliveryRange || '۳-۴'}
+                          onChange={(e) => handleItemDeliveryFieldChange(0, 'deliveryRange', e.target.value)}
+                          placeholder="مثال: ۳-۴"
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-center font-bold bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                        />
+                      </div>
+
+                      {/* Field 2: Unit */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 block">واحد زمانی</label>
+                        <select
+                          value={items[0]?.deliveryUnit || 'هفته'}
+                          onChange={(e) => handleItemDeliveryFieldChange(0, 'deliveryUnit', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-center font-bold bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                        >
+                          <option value="روز">روز</option>
+                          <option value="هفته">هفته</option>
+                          <option value="ماه">ماه</option>
+                        </select>
+                      </div>
+
+                      {/* Field 3: Type */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 block">نوع روزها</label>
+                        <select
+                          value={items[0]?.deliveryType || 'کاری'}
+                          onChange={(e) => handleItemDeliveryFieldChange(0, 'deliveryType', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-center font-bold bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                        >
+                          <option value="کاری">کاری</option>
+                          <option value="تقویمی">تقویمی</option>
+                        </select>
+                      </div>
+
+                      {/* Field 4: Text postfix */}
+                      <div className="space-y-1 col-span-1">
+                        <label className="text-[10px] font-bold text-slate-500 block">توضیح تکمیلی پس‌وند</label>
+                        <input
+                          type="text"
+                          required
+                          value={items[0]?.deliveryPostfix || 'پس از تایید پیش فاکتور و دریافت پیش پرداخت'}
+                          onChange={(e) => handleItemDeliveryFieldChange(0, 'deliveryPostfix', e.target.value)}
+                          placeholder="توضیح تکمیلی..."
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none text-right"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* Grid headers */}
                 <div className="hidden md:grid grid-cols-12 gap-3 px-3 py-1 text-slate-400 font-bold text-[10px]">
                   <div className={proformaType === 'TECHNICAL' ? "col-span-9" : "col-span-5"}>انتخاب کالا</div>
@@ -2450,6 +2748,67 @@ export default function ProformasView({
                         }
                         return null;
                       })()}
+                      
+                      {/* Delivery Time Fields (4 inputs side-by-side) */}
+                      {!isEqualDelivery && (
+                        <div className="bg-sky-50/40 p-3 rounded-lg border border-sky-100 space-y-2 mt-2 text-right">
+                          <span className="text-[10px] font-extrabold text-sky-700 block">⏱️ تعیین زمان تحویل ردیف {idx + 1}:</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            {/* Field 1: Numerical Range */}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-slate-500 block">بازه عددی</label>
+                              <input
+                                type="text"
+                                required
+                                value={item.deliveryRange || '۳-۴'}
+                                onChange={(e) => handleItemDeliveryFieldChange(idx, 'deliveryRange', e.target.value)}
+                                placeholder="مثال: ۳-۴"
+                                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center font-bold bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                              />
+                            </div>
+
+                            {/* Field 2: Unit */}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-slate-500 block">واحد زمانی</label>
+                              <select
+                                value={item.deliveryUnit || 'هفته'}
+                                onChange={(e) => handleItemDeliveryFieldChange(idx, 'deliveryUnit', e.target.value)}
+                                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center font-bold bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                              >
+                                <option value="روز">روز</option>
+                                <option value="هفته">هفته</option>
+                                <option value="ماه">ماه</option>
+                              </select>
+                            </div>
+
+                            {/* Field 3: Type */}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-slate-500 block">نوع روزها</label>
+                              <select
+                                value={item.deliveryType || 'کاری'}
+                                onChange={(e) => handleItemDeliveryFieldChange(idx, 'deliveryType', e.target.value)}
+                                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center font-bold bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                              >
+                                <option value="کاری">کاری</option>
+                                <option value="تقویمی">تقویمی</option>
+                              </select>
+                            </div>
+
+                            {/* Field 4: Text postfix */}
+                            <div className="space-y-1 col-span-1">
+                              <label className="text-[9px] font-bold text-slate-500 block">توضیح تکمیلی پس‌وند</label>
+                              <input
+                                type="text"
+                                required
+                                value={item.deliveryPostfix || 'پس از تایید پیش فاکتور و دریافت پیش پرداخت'}
+                                onChange={(e) => handleItemDeliveryFieldChange(idx, 'deliveryPostfix', e.target.value)}
+                                placeholder="توضیح تکمیلی..."
+                                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none text-right"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

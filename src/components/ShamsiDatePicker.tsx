@@ -9,6 +9,7 @@ interface ShamsiDatePickerProps {
   required?: boolean;
   placeholder?: string;
   className?: string;
+  compact?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -46,7 +47,8 @@ export default function ShamsiDatePicker({
   label,
   required = false,
   placeholder = "YYYY/MM/DD",
-  className = ""
+  className = "",
+  compact = false
 }: ShamsiDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -179,16 +181,22 @@ export default function ShamsiDatePicker({
           title="فرمت مجاز: YYYY/MM/DD (مثال: ۱۴۰۵/۰۴/۱۴)"
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setIsOpen(true)}
-          className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-left font-mono"
+          className={compact 
+            ? "w-full border border-slate-200 rounded pl-7 pr-1.5 py-1 text-xs text-center font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-emerald-50/10 focus:bg-white"
+            : "w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-left font-mono"
+          }
           id="shamsi-datepicker-input"
         />
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 outline-none"
+          className={compact
+            ? "absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 outline-none"
+            : "absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 outline-none"
+          }
           id="shamsi-datepicker-toggle-btn"
         >
-          <CalendarIcon className="w-4.5 h-4.5" />
+          <CalendarIcon className={compact ? "w-3.5 h-3.5" : "w-4.5 h-4.5"} />
         </button>
       </div>
 

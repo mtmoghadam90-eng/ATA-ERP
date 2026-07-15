@@ -1,5 +1,11 @@
 import { gregorianToJalali } from './dateUtils';
 
+export function toPersianDigits(str: string | number): string {
+  if (str === undefined || str === null) return '';
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  return str.toString().replace(/[0-9]/g, (match) => persianDigits[parseInt(match, 10)]);
+}
+
 /**
  * Advanced Document and Code Generator for Abzar Tamin Arshia ERP
  * Parses dynamic templates with multiple custom placeholders to construct professional coding systems.

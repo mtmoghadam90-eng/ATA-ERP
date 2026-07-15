@@ -34,10 +34,12 @@ import {
   Upload,
   ChevronRight,
   Loader2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { Project, Customer, ERPSettings, Product, Proforma, ProjectCategoryGroup, ProjectActivity, User as ERPUser, PackagingDelivery, Transaction } from '../types';
-import { getTodayShamsi } from '../dateUtils';
+import { getTodayShamsi, addDaysToShamsi, addWorkingDaysToShamsi } from '../dateUtils';
 import { getProformaOutcomeStatus } from '../useERPStore';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
@@ -50,10 +52,12 @@ import { SearchableSelect } from './SearchableSelect';
 import { compressImage } from '../imageUtils';
 
 interface ProjectsViewProps {
+  onOpenDocument?: (module: string, docId: string) => void;
   projects: Project[];
   customers: Customer[];
   products: Product[];
   proformas: Proforma[];
+  supplierInquiries?: any[];
   packagingDeliveries?: PackagingDelivery[];
   transactions?: Transaction[];
   purchaseOrders?: any[];
@@ -86,10 +90,12 @@ interface ProjectsViewProps {
 }
 
 export default function ProjectsView({
+  onOpenDocument,
   projects,
   customers,
   products,
   proformas,
+  supplierInquiries = [],
   packagingDeliveries = [],
   transactions = [],
   purchaseOrders = [],
@@ -120,6 +126,7 @@ export default function ProjectsView({
 
   const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [isProjectModalFullscreen, setIsProjectModalFullscreen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
@@ -133,6 +140,7 @@ export default function ProjectsView({
 
   // Activities panel states
   const [selectedProjectForActivities, setSelectedProjectForActivities] = useState<Project | null>(null);
+  const [isActivitiesModalFullscreen, setIsActivitiesModalFullscreen] = useState(false);
   const [modalTab, setModalTab] = useState<'activities' | 'documents' | 'supply'>('activities');
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
   const [supplyFilter, setSupplyFilter] = useState<'ALL' | 'INVENTORY' | 'ORDER' | 'NONE'>('ALL');
@@ -274,6 +282,122 @@ export default function ProjectsView({
       return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
     });
     return approved?.deliveryDate;
+  };
+
+  const faToEnDigits = (str: string): string => {
+    const faDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    const arDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    let result = str;
+    for (let i = 0; i < 10; i++) {
+      result = result.replace(new RegExp(faDigits[i], 'g'), i.toString());
+      result = result.replace(new RegExp(arDigits[i], 'g'), i.toString());
+    }
+    return result;
+  };
+
+  const parseItemDeliveryToDays = (range: string, unit: string): number => {
+    if (!range) return 0;
+    const normalizedRange = faToEnDigits(range.trim());
+    const matches = normalizedRange.match(/\d+/g);
+    if (!matches || matches.length === 0) return 0;
+    // Use the maximum value in the range
+    const lastNum = parseInt(matches[matches.length - 1], 10);
+    
+    if (unit === 'هفته') return lastNum * 7;
+    if (unit === 'ماه') return lastNum * 30;
+    return lastNum; // days
+  };
+
+  const getProjectDeliveryDetails = (projectId: string) => {
+    // 1. Agreed Delivery Dates per item from won proformas
+    const projectProformas = proformas.filter(pf => pf.projectId === projectId);
+    const wonProformas = projectProformas.filter(pf => {
+      const outcome = getProformaOutcomeStatus(pf);
+      return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+    });
+
+    const prepaymentDate = getProjectPrepaymentDate(projectId);
+    const proj = projects.find(p => p.id === projectId);
+    const baseDate = prepaymentDate || proj?.winningDate || proj?.opportunityDate || proj?.creationDate || getTodayShamsi();
+
+    const agreedItems: { id: string; productName: string; deliveryText: string; calculatedDate: string }[] = [];
+
+    wonProformas.forEach(pf => {
+      let wonItems = [];
+      const hasExplicitWon = pf.items?.some(item => item.status === 'برنده');
+      if (hasExplicitWon) {
+        wonItems = pf.items.filter(item => item.status === 'برنده');
+      } else {
+        wonItems = pf.items?.filter(item => item.status !== 'بازنده') || [];
+      }
+
+      wonItems.forEach(item => {
+        // If the item has individual delivery details
+        if (item.deliveryRange && item.deliveryUnit) {
+          const range = item.deliveryRange;
+          const unit = item.deliveryUnit;
+          const type = item.deliveryType || 'کاری';
+          const postfix = item.deliveryPostfix || '';
+
+          // Parse to days
+          const offsetDays = parseItemDeliveryToDays(range, unit);
+          const isWorkingDays = type === 'کاری';
+          const calculatedDate = isWorkingDays
+            ? addWorkingDaysToShamsi(baseDate, offsetDays)
+            : addDaysToShamsi(baseDate, offsetDays);
+
+          agreedItems.push({
+            id: item.id,
+            productName: item.productName,
+            deliveryText: `${range} ${unit} ${type}${postfix ? ` ${postfix}` : ''}`,
+            calculatedDate
+          });
+        } else {
+          // Fallback if no item specific delivery fields, but wonPf has overall deliveryDate
+          const pfDeliveryDate = pf.deliveryDate || proj?.agreedDeliveryDate || '';
+          agreedItems.push({
+            id: item.id,
+            productName: item.productName,
+            deliveryText: pfDeliveryDate || 'فوری',
+            calculatedDate: proj?.agreedDeliveryDate || baseDate
+          });
+        }
+      });
+    });
+
+    // 2. Actual Delivery Dates per item from Packaging Deliveries
+    const projectDeliveries = packagingDeliveries.filter(d => d.projectId === projectId);
+    const actualItems: { id: string; productName: string; actualDate: string; boxNumber?: string }[] = [];
+
+    projectDeliveries.forEach(del => {
+      const mainActualDate = del.actualDeliveryDate || '';
+      del.items.forEach(item => {
+        const itemActualDate = item.actualDeliveryDate || mainActualDate || '';
+        if (itemActualDate) {
+          actualItems.push({
+            id: item.id,
+            productName: item.itemOrDocName,
+            actualDate: itemActualDate,
+            boxNumber: item.boxNumber
+          });
+        }
+      });
+    });
+
+    // Check if agreed delivery dates differ among the items
+    const uniqueAgreedDates = new Set(agreedItems.map(x => x.calculatedDate).filter(Boolean));
+    const uniqueActualDates = new Set(actualItems.map(x => x.actualDate).filter(Boolean));
+    const singleAgreedDate = uniqueAgreedDates.size === 1 ? Array.from(uniqueAgreedDates)[0] : '';
+    const singleActualDate = uniqueActualDates.size === 1 ? Array.from(uniqueActualDates)[0] : '';
+
+    return {
+      agreedItems,
+      actualItems,
+      hasMultipleAgreed: uniqueAgreedDates.size > 1,
+      hasMultipleActual: uniqueActualDates.size > 1,
+      singleAgreedDate,
+      singleActualDate
+    };
   };
 
   // Items lines management helpers
@@ -654,7 +778,8 @@ export default function ProjectsView({
       { id: 'financial_transactions', name: 'تراکنش‌های مالی و پرداخت‌ها', desc: 'فیش‌های پیش‌پرداخت، فاکتورهای رسمی و اسناد مالی پروژه', iconBg: 'bg-purple-50 text-purple-600 border-purple-100', icon: TrendingUp },
       { id: 'after_sales', name: 'خدمات پس از فروش', desc: 'اسناد خدمات گارانتی، برگه ترخیص کالا برای تعمیر و گزارشات خرابی', iconBg: 'bg-teal-50 text-teal-600 border-teal-100', icon: Sliders },
       { id: 'manual_other', name: 'سایر مدارک و فایل‌های دستی', desc: 'مدارک متفرقه و فایل‌هایی که به طور مستقیم در بالا طبقه‌بندی نشده‌اند', iconBg: 'bg-slate-50 text-slate-600 border-slate-150', icon: Folder }
-    ];
+    ,
+      { id: 'supplier_inquiry', name: 'استعلام از تامین‌کنندگان', desc: 'اسناد و فرم‌های استعلام از تامین‌کنندگان خارجی و داخلی', iconBg: 'bg-orange-50 text-orange-600 border-orange-100', icon: Briefcase }];
 
     const folderFiles: Record<string, { id: string; name: string; url: string; size: string; date: string; type: 'system' | 'manual' | 'attachment'; originalEntity?: any }[]> = {};
     folders.forEach(f => {
@@ -700,6 +825,20 @@ export default function ProjectsView({
         date: po.orderDate,
         type: 'system',
         originalEntity: po
+      });
+    });
+
+    // 3.5. Supplier Inquiries
+    const projectInquiries = (supplierInquiries || []).filter(inq => inq.projectId === p.id);
+    projectInquiries.forEach(inq => {
+      folderFiles['استعلام از تامین‌کنندگان'].push({
+        id: `inquiry-${inq.id}`,
+        name: `فرم استعلام تامین‌کننده - ${inq.supplierName || 'نامشخص'}.pdf`,
+        url: '#',
+        size: `${inq.items?.length || 0} ردیف کالا`,
+        date: inq.createdAt || 'نامشخص',
+        type: 'system',
+        originalEntity: inq
       });
     });
 
@@ -848,7 +987,22 @@ export default function ProjectsView({
     alert('فایل با موفقیت حذف شد.');
   };
 
-  const handlePreviewOrDownload = (doc: any) => {
+    const handlePreviewOrDownload = (doc: any) => {
+    if (doc.type === 'system') {
+      if (doc.id?.startsWith('proforma-') && onOpenDocument) {
+        onOpenDocument('proformas', doc.id.replace('proforma-', ''));
+      } else if (doc.id?.startsWith('po-') && onOpenDocument) {
+        onOpenDocument('purchaseOrders', doc.id.replace('po-', ''));
+      } else if (doc.id?.startsWith('inquiry-') && onOpenDocument) {
+        onOpenDocument('supplierInquiries', doc.id.replace('inquiry-', ''));
+      } else if (doc.id?.startsWith('delivery-') && onOpenDocument) {
+        onOpenDocument('packagingDelivery', doc.id.replace('delivery-', ''));
+      } else {
+        setActivePreviewDoc(doc);
+      }
+      return;
+    }
+
     if (doc.url !== '#' && !doc.url.startsWith('data:image/') && !doc.name.endsWith('.png') && !doc.name.endsWith('.jpg') && !doc.name.endsWith('.jpeg')) {
       window.open(doc.url, '_blank');
     } else {
@@ -2085,18 +2239,52 @@ export default function ProjectsView({
                         <span className="font-mono">{getProjectPrepaymentDate(p.id)}</span>
                       </div>
                     )}
-                    {p.agreedDeliveryDate && (
-                      <div className="flex justify-between gap-2 text-sky-600 font-bold border-b border-dashed border-sky-100 pb-0.5">
-                        <span>توافق‌شده تحویل:</span>
-                        <span className="font-mono">{p.agreedDeliveryDate}</span>
-                      </div>
-                    )}
-                    {getActualDeliveryDate(p.id) && (
-                      <div className="flex justify-between gap-2 text-amber-600 font-bold">
-                        <span>تحویل قطعی:</span>
-                        <span className="font-mono">{getActualDeliveryDate(p.id)}</span>
-                      </div>
-                    )}
+                    {(() => {
+                      const details = getProjectDeliveryDetails(p.id);
+                      return (
+                        <>
+                          {/* Agreed Delivery Date display */}
+                          {details.hasMultipleAgreed ? (
+                            <div className="border-b border-dashed border-sky-100 pb-1 space-y-0.5 bg-sky-50/20 p-1.5 rounded">
+                              <div className="text-sky-600 font-bold text-[9px] mb-0.5">زمان تحویل توافقی اقلام:</div>
+                              {details.agreedItems.map((item, i) => (
+                                <div key={i} className="flex justify-between gap-1 text-[9px] text-sky-700 bg-sky-50/50 px-1 py-0.5 rounded">
+                                  <span className="truncate max-w-[100px] font-medium" title={item.productName}>{item.productName}:</span>
+                                  <span className="font-mono font-semibold">{item.calculatedDate}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            (details.singleAgreedDate || p.agreedDeliveryDate) && (
+                              <div className="flex justify-between gap-2 text-sky-600 font-bold border-b border-dashed border-sky-100 pb-0.5">
+                                <span>توافق‌شده تحویل:</span>
+                                <span className="font-mono">{details.singleAgreedDate || p.agreedDeliveryDate}</span>
+                              </div>
+                            )
+                          )}
+
+                          {/* Actual Delivery Date display */}
+                          {details.hasMultipleActual ? (
+                            <div className="space-y-0.5 bg-amber-50/20 p-1.5 rounded mt-1">
+                              <div className="text-amber-600 font-bold text-[9px] mb-0.5">تحویل قطعی اقلام:</div>
+                              {details.actualItems.map((item, i) => (
+                                <div key={i} className="flex justify-between gap-1 text-[9px] text-amber-700 bg-amber-50/50 px-1 py-0.5 rounded">
+                                  <span className="truncate max-w-[100px] font-medium" title={item.productName}>{item.productName}:</span>
+                                  <span className="font-mono font-semibold">{item.actualDate}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            (details.singleActualDate || getActualDeliveryDate(p.id)) && (
+                              <div className="flex justify-between gap-2 text-amber-600 font-bold">
+                                <span>تحویل قطعی:</span>
+                                <span className="font-mono">{details.singleActualDate || getActualDeliveryDate(p.id)}</span>
+                              </div>
+                            )
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
 
                   {/* Status Badge */}
@@ -2178,18 +2366,36 @@ export default function ProjectsView({
 
       {/* Add / Edit Project Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-4xl overflow-hidden animate-scale-in">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isProjectModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in transition-all duration-300 flex flex-col ${
+            isProjectModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full' 
+              : 'rounded-2xl w-full max-w-4xl my-8'
+          }`}>
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800">
                 {editingProject ? `ویرایش اطلاعات پروژه: ${editingProject.name}` : 'ثبت پروژه صنعتی / فرصت تجاری جدید'}
               </h3>
-              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsProjectModalFullscreen(!isProjectModalFullscreen)} 
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isProjectModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isProjectModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowModal(false); setEditingProject(null); setIsProjectModalFullscreen(false); }} 
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto text-right">
+            <form onSubmit={handleSave} className={`p-6 space-y-6 overflow-y-auto text-right ${isProjectModalFullscreen ? 'max-h-[calc(100vh-140px)] flex-1' : 'max-h-[80vh]'}`}>
               
               {/* Section 1: General Info */}
               <div className="border-b border-slate-100 pb-4">
@@ -2806,7 +3012,7 @@ export default function ProjectsView({
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setIsProjectModalFullscreen(false); }}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-medium transition"
                 >
                   انصراف
@@ -2826,8 +3032,12 @@ export default function ProjectsView({
 
       {/* Project Activities Drawer/Modal */}
       {selectedProjectForActivities && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" dir="rtl">
-          <div className="bg-slate-50 w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8 max-h-[90vh]">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto ${isActivitiesModalFullscreen ? 'p-0' : 'p-4'}`} dir="rtl">
+          <div className={`bg-slate-50 w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col transition-all duration-300 ${
+            isActivitiesModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-5xl my-8 max-h-[90vh]'
+          }`}>
             
             {/* Modal Header */}
             <div className="bg-slate-900 text-white p-6 flex justify-between items-center text-right">
@@ -2840,12 +3050,23 @@ export default function ProjectsView({
                   <h2 className="text-lg font-bold">{selectedProjectForActivities.name}</h2>
                 </div>
               </div>
-              <button 
-                onClick={() => setSelectedProjectForActivities(null)}
-                className="p-1.5 hover:bg-slate-800 rounded-lg transition text-slate-400 hover:text-white"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsActivitiesModalFullscreen(!isActivitiesModalFullscreen)} 
+                  className="p-1.5 hover:bg-slate-800 rounded-lg transition text-slate-400 hover:text-white flex items-center justify-center"
+                  title={isActivitiesModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isActivitiesModalFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setSelectedProjectForActivities(null); setIsActivitiesModalFullscreen(false); }}
+                  className="p-1.5 hover:bg-slate-800 rounded-lg transition text-slate-400 hover:text-white flex items-center justify-center"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* Modal Content */}
@@ -2868,6 +3089,69 @@ export default function ProjectsView({
                   </span>
                 </div>
               </div>
+
+              {/* Delivery Details Block */}
+              {(() => {
+                const details = getProjectDeliveryDetails(selectedProjectForActivities.id);
+                const hasAgreed = details.agreedItems.length > 0;
+                const hasActual = details.actualItems.length > 0 || getActualDeliveryDate(selectedProjectForActivities.id);
+                if (!hasAgreed && !hasActual) return null;
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 text-xs">
+                    {/* Agreed Delivery Section */}
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-sky-800 flex items-center gap-1.5 border-b border-sky-100 pb-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                        <span>تعهدات زمان تحویل توافقی</span>
+                      </h4>
+                      {details.agreedItems.length > 0 ? (
+                        <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                          {details.agreedItems.map((item, i) => (
+                            <div key={i} className="flex justify-between items-center gap-2 bg-white p-1.5 rounded border border-slate-100 shadow-sm">
+                              <span className="text-slate-600 font-medium truncate max-w-[200px]" title={item.productName}>{item.productName}</span>
+                              <div className="flex items-center gap-2 font-mono">
+                                <span className="text-[10px] text-slate-400">({item.deliveryText})</span>
+                                <span className="text-sky-600 font-bold">{item.calculatedDate}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-slate-400 italic text-[10px] pr-2">تاریخ توافق‌شده ثبت نشده است.</div>
+                      )}
+                    </div>
+
+                    {/* Actual Delivery Section */}
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-amber-800 flex items-center gap-1.5 border-b border-amber-100 pb-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        <span>تاریخ تحویل قطعی (لجستیک)</span>
+                      </h4>
+                      {details.actualItems.length > 0 ? (
+                        <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                          {details.actualItems.map((item, i) => (
+                            <div key={i} className="flex justify-between items-center gap-2 bg-white p-1.5 rounded border border-slate-100 shadow-sm">
+                              <span className="text-slate-600 font-medium truncate max-w-[200px]" title={item.productName}>{item.productName}</span>
+                              <div className="flex items-center gap-2 font-mono">
+                                {item.boxNumber && <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">{item.boxNumber}</span>}
+                                <span className="text-amber-600 font-bold">{item.actualDate}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : getActualDeliveryDate(selectedProjectForActivities.id) ? (
+                        <div className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm font-mono text-amber-600 font-bold">
+                          <span>تحویل کلی پروژه:</span>
+                          <span>{getActualDeliveryDate(selectedProjectForActivities.id)}</span>
+                        </div>
+                      ) : (
+                        <div className="text-slate-400 italic text-[10px] pr-2">تحویل کالاها هنوز نهایی یا ثبت نشده است.</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Tab Selector */}
               <div className="flex border-b border-slate-200">

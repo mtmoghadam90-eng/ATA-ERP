@@ -100,6 +100,10 @@ export interface ProformaItem {
   lossReason?: string;
   techSpecs?: string;
   selectedImage?: string;
+  deliveryRange?: string;
+  deliveryUnit?: 'روز' | 'هفته' | 'ماه';
+  deliveryType?: 'کاری' | 'تقویمی';
+  deliveryPostfix?: string;
 }
 
 export interface Proforma {
@@ -503,6 +507,7 @@ export interface PackingItem {
   dimensions: string; // e.g. 50x40x30 سانتی‌متر
   weight: number; // وزن به کیلوگرم
   boxNumber?: string;
+  actualDeliveryDate?: string; // تاریخ تحویل قطعی این ردیف کالا به مشتری
 }
 
 export interface DeliveryChecklistItem {

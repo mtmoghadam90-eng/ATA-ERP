@@ -20,7 +20,9 @@ import {
   MinusCircle,
   RefreshCw,
   TrendingUp,
-  Award
+  Award,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { PurchaseOrder, Supplier, Project, Product, PurchaseOrderItem, ExchangeRate, ERPSettings, Proforma, Customer } from '../types';
 import { getTodayShamsi, addDaysToShamsi } from '../dateUtils';
@@ -33,6 +35,8 @@ import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
 
 interface PurchaseOrdersViewProps {
+  initialPrintDocId?: string;
+  onClearInitialPrintDocId?: () => void;
   purchaseOrders: PurchaseOrder[];
   suppliers: Supplier[];
   projects: Project[];
@@ -52,6 +56,8 @@ interface PurchaseOrdersViewProps {
 }
 
 export default function PurchaseOrdersView({
+  initialPrintDocId,
+  onClearInitialPrintDocId,
   purchaseOrders,
   suppliers,
   projects,
@@ -76,8 +82,11 @@ export default function PurchaseOrdersView({
   
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreateModalFullscreen, setIsCreateModalFullscreen] = useState(false);
   const [showLandedModal, setShowLandedModal] = useState(false);
+  const [isLandedModalFullscreen, setIsLandedModalFullscreen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
+  const [isPOModalFullscreen, setIsPOModalFullscreen] = useState(false);
 
   // Editing state
   const [editingPO, setEditingPO] = useState<PurchaseOrder | null>(null);
@@ -89,6 +98,16 @@ export default function PurchaseOrdersView({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [poToDeleteId, setPoToDeleteId] = useState<string | null>(null);
   const [poToDeleteNumber, setPoToDeleteNumber] = useState<string>('');
+
+  React.useEffect(() => {
+    if (initialPrintDocId) {
+      const po = purchaseOrders.find(p => p.id === initialPrintDocId);
+      if (po) {
+        setSelectedPO(po);
+        setShowLandedModal(true);
+      }
+    }
+  }, [initialPrintDocId, purchaseOrders]);
 
   // Status Change State
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -743,16 +762,34 @@ export default function PurchaseOrdersView({
           (selectedPO.totalForeignAmount + selRemittanceFeeForeign + selShippingCostForeign + (selectedPO.exchangeRate > 0 ? (selectedPO.customsDutyRIYAL / selectedPO.exchangeRate) : 0));
         
         return (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-lg overflow-hidden animate-scale-in">
+          <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 ${isLandedModalFullscreen ? 'p-0' : 'p-4'}`}>
+            <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in transition-all duration-300 flex flex-col ${
+              isLandedModalFullscreen 
+                ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+                : 'rounded-2xl w-full max-w-lg'
+            }`}>
               <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <h3 className="font-bold text-slate-800">برگه تسهیم هزینه و بهای تمام شده نهایی</h3>
-                <button onClick={() => setShowLandedModal(false)} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition">
-                  <X size={18} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    type="button"
+                    onClick={() => setIsLandedModalFullscreen(!isLandedModalFullscreen)} 
+                    className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                    title={isLandedModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                  >
+                    {isLandedModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => { setShowLandedModal(false); setIsLandedModalFullscreen(false); onClearInitialPrintDocId?.(); }} 
+                    className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
-              <div className="p-6 space-y-4 text-xs font-sans">
+              <div className={`p-6 space-y-4 text-xs font-sans overflow-y-auto ${isLandedModalFullscreen ? 'flex-1 max-h-[calc(100vh-80px)]' : ''}`}>
                 <div className="bg-slate-900 text-white p-4 rounded-xl font-mono text-center space-y-1">
                   <p className="text-[10px] text-sky-400 uppercase">سند خرید مادری</p>
                   <h4 className="text-base font-bold">{selectedPO.poNumber}</h4>
@@ -874,16 +911,36 @@ export default function PurchaseOrdersView({
 
       {/* Create / Edit PO Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-4xl overflow-hidden animate-scale-in my-8">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isCreateModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in transition-all duration-300 flex flex-col ${
+            isCreateModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full' 
+              : 'rounded-2xl w-full max-w-4xl my-8'
+          }`}>
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">ثبت پروفرما / سفارش خرید خارجی جدید</h3>
-              <button onClick={() => setShowCreateModal(false)} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition">
-                <X size={18} />
-              </button>
+              <h3 className="font-bold text-slate-800">
+                {editingPO ? `ویرایش پروفرما / سفارش خرید خارجی` : 'ثبت پروفرما / سفارش خرید خارجی جدید'}
+              </h3>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsCreateModalFullscreen(!isCreateModalFullscreen)} 
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isCreateModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isCreateModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowCreateModal(false); setEditingPO(null); setIsCreateModalFullscreen(false); }} 
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSavePO} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleSavePO} className={`p-6 space-y-6 overflow-y-auto ${isCreateModalFullscreen ? 'max-h-[calc(100vh-140px)] flex-1' : 'max-h-[80vh]'}`}>
               
               {/* Top Row Fields */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

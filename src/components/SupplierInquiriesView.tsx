@@ -24,7 +24,9 @@ import {
   DollarSign,
   FileSpreadsheet,
   AlertCircle,
-  Upload
+  Upload,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { 
   Project, 
@@ -41,6 +43,8 @@ import {
 import { getTodayShamsi } from '../dateUtils';
 
 interface SupplierInquiriesViewProps {
+  initialPrintDocId?: string;
+  onClearInitialPrintDocId?: () => void;
   projects: Project[];
   proformas: Proforma[];
   suppliers: Supplier[];
@@ -57,6 +61,8 @@ interface SupplierInquiriesViewProps {
 }
 
 export default function SupplierInquiriesView({
+  initialPrintDocId,
+  onClearInitialPrintDocId,
   projects,
   proformas,
   suppliers,
@@ -285,6 +291,7 @@ export default function SupplierInquiriesView({
 
   // Edit Inquiry Modal States
   const [editingInquiry, setEditingInquiry] = useState<SupplierInquiry | null>(null);
+  const [isEditInquiryFullscreen, setIsEditInquiryFullscreen] = useState(false);
   const [editProjectId, setEditProjectId] = useState<string>('');
   const [editProformaId, setEditProformaId] = useState<string>('');
   const [editProformaItemId, setEditProformaItemId] = useState<string>('');
@@ -301,6 +308,30 @@ export default function SupplierInquiriesView({
   const [editNotes, setEditNotes] = useState<string>('');
   const [editStatus, setEditStatus] = useState<string>('پیش‌نویس');
   const [editItems, setEditItems] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (initialPrintDocId) {
+      const inq = supplierInquiries.find(p => p.id === initialPrintDocId);
+      if (inq) {
+        setEditingInquiry(inq);
+        setEditProjectId(inq.projectId || '');
+        setEditProformaId(inq.proformaId || '');
+        setEditProformaItemId(inq.proformaItemId || '');
+        setEditSupplierId(inq.supplierId);
+        setEditInquiryDate(inq.inquiryDate);
+        setEditPriceRIYAL(inq.priceRIYAL || 0);
+        setEditPriceForeign(inq.priceForeign || 0);
+        setEditCurrency(inq.currency || 'یورو');
+        setEditDeliveryTime(inq.deliveryTime || '');
+        setEditTechFileName(inq.technicalProposalFile || '');
+        setEditFinFileName(inq.financialProposalFile || '');
+        setEditTechFileSize(inq.technicalProposalFileSize || '');
+        setEditFinFileSize(inq.financialProposalFileSize || '');
+        setEditNotes(inq.notes || '');
+        setEditStatus(inq.status);
+      }
+    }
+  }, [initialPrintDocId, supplierInquiries]);
 
   const [isUploadingEditTech, setIsUploadingEditTech] = useState<boolean>(false);
   const [uploadProgressEditTech, setUploadProgressEditTech] = useState<number>(0);
@@ -2088,11 +2119,15 @@ export default function SupplierInquiriesView({
 
       {/* MODAL 5: EDIT SUPPLIER INQUIRY */}
       {editingInquiry && (
-        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
-          <div className="bg-white rounded-2xl border border-slate-100 w-full max-w-4xl shadow-2xl text-right flex flex-col max-h-[90vh] overflow-hidden animate-fade-in">
+        <div className={`fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 overflow-y-auto ${isEditInquiryFullscreen ? 'p-0' : 'p-4'}`} dir="rtl">
+          <div className={`bg-white border border-slate-100 shadow-2xl text-right flex flex-col overflow-hidden animate-fade-in transition-all duration-300 ${
+            isEditInquiryFullscreen 
+              ? 'w-screen h-screen rounded-none max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-4xl max-h-[90vh]'
+          }`}>
             <form 
               onSubmit={handleEditInquirySubmit}
-              className="flex flex-col max-h-[90vh] overflow-hidden"
+              className="flex flex-col h-full max-h-full overflow-hidden flex-1"
             >
             {/* Modal Header */}
             <div className="flex justify-between items-center border-b border-slate-100 px-5 py-4 bg-slate-50/50">
@@ -2100,13 +2135,23 @@ export default function SupplierInquiriesView({
                 <Edit size={18} className="text-sky-500" />
                 ویرایش پرونده استعلام از تامین‌کننده
               </h3>
-              <button 
-                type="button"
-                onClick={() => setEditingInquiry(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsEditInquiryFullscreen(!isEditInquiryFullscreen)} 
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isEditInquiryFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isEditInquiryFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setEditingInquiry(null); setIsEditInquiryFullscreen(false); onClearInitialPrintDocId?.(); }}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition flex items-center justify-center"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Modal Scrollable Body */}
@@ -2413,7 +2458,7 @@ export default function SupplierInquiriesView({
               </button>
               <button
                 type="button"
-                onClick={() => setEditingInquiry(null)}
+                onClick={() => { setEditingInquiry(null); setIsEditInquiryFullscreen(false); onClearInitialPrintDocId?.(); }}
                 className="bg-slate-100 text-slate-600 text-xs font-bold px-5 py-2.5 rounded-lg hover:bg-slate-200 transition"
               >
                 انصراف

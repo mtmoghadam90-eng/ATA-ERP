@@ -35,6 +35,22 @@ export default function App() {
   const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
   const [triggeredReminders, setTriggeredReminders] = useState<string[]>([]);
   const [activeReminderTask, setActiveReminderTask] = useState<any>(null);
+  const [printDocumentRequest, setPrintDocumentRequest] = useState<{ module: string, docId: string } | null>(null);
+  const [previousView, setPreviousView] = useState<string | null>(null);
+
+  const handleOpenDocument = (module: string, docId: string) => {
+    setPreviousView(activeView);
+    setPrintDocumentRequest({ module, docId });
+    setActiveView(module);
+  };
+
+  const handleClearPrintDoc = () => {
+    setPrintDocumentRequest(null);
+    if (previousView) {
+      setActiveView(previousView as any);
+      setPreviousView(null);
+    }
+  };
 
   // Project confirmation upload state
   const [projectToUploadDoc, setProjectToUploadDoc] = useState<Project | null>(null);
@@ -272,6 +288,8 @@ export default function App() {
       case 'proformas':
         return (
           <ProformasView 
+            initialPrintDocId={printDocumentRequest?.module === 'proformas' ? printDocumentRequest.docId : undefined}
+            onClearInitialPrintDocId={handleClearPrintDoc}
             proformas={store.proformas}
             customers={store.customers}
             projects={store.projects}
@@ -296,6 +314,8 @@ export default function App() {
       case 'purchaseOrders':
         return (
           <PurchaseOrdersView 
+            initialPrintDocId={printDocumentRequest?.module === 'purchaseOrders' ? printDocumentRequest.docId : undefined}
+            onClearInitialPrintDocId={handleClearPrintDoc}
             purchaseOrders={store.purchaseOrders}
             suppliers={store.suppliers}
             projects={store.projects}
@@ -327,10 +347,12 @@ export default function App() {
       case 'projects':
         return (
           <ProjectsView 
+            onOpenDocument={handleOpenDocument}
             projects={store.projects}
             customers={store.customers}
             products={store.products}
             proformas={store.proformas}
+            supplierInquiries={store.supplierInquiries}
             addProject={store.addProject}
             updateProject={store.updateProject}
             deleteProject={store.deleteProject}
@@ -419,6 +441,8 @@ export default function App() {
       case 'supplierInquiries':
         return (
           <SupplierInquiriesView 
+            initialPrintDocId={printDocumentRequest?.module === 'supplierInquiries' ? printDocumentRequest.docId : undefined}
+            onClearInitialPrintDocId={handleClearPrintDoc}
             projects={store.projects}
             proformas={store.proformas}
             suppliers={store.suppliers}
@@ -436,6 +460,8 @@ export default function App() {
       case 'packagingDelivery':
         return (
           <PackagingDeliveryView 
+            initialPrintDocId={printDocumentRequest?.module === 'packagingDelivery' ? printDocumentRequest.docId : undefined}
+            onClearInitialPrintDocId={handleClearPrintDoc}
             projects={store.projects}
             proformas={store.proformas}
             products={store.products}
