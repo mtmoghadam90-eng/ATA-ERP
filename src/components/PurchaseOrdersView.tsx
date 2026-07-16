@@ -691,7 +691,12 @@ export default function PurchaseOrdersView({
                     <div key={i} className="flex flex-wrap items-center justify-between text-xs bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 gap-2">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-800">{it.productName}</span>
-                        <span className="text-[10px] text-slate-500 font-mono mt-0.5">کد کالا: {it.productCode} ({it.quantity} عدد)</span>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span className="text-[10px] text-slate-500 font-mono">کد کالا: {it.productCode} ({it.quantity} عدد)</span>
+                          {it.tagNumber && (
+                            <span className="font-sans text-rose-600 bg-rose-50 border border-rose-100 px-1 py-0.2 rounded font-bold text-[9px]">تگ: {it.tagNumber}</span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-col items-end">
                         {it.proformaItemName ? (
@@ -800,8 +805,13 @@ export default function PurchaseOrdersView({
                 <div className="space-y-1.5 border border-slate-200 rounded-lg p-3">
                   <p className="font-bold text-slate-700 pb-1 border-b border-dashed">کالاهای سفارش داده شده</p>
                   {selectedPO.items.map((it, i) => (
-                    <div key={i} className="flex justify-between py-1 text-slate-600 font-mono">
-                      <span>{it.productName} ({it.quantity} عدد)</span>
+                    <div key={i} className="flex justify-between py-1 text-slate-600 font-mono flex-wrap gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-sans font-medium text-slate-700">{it.productName} ({it.quantity} عدد)</span>
+                        {it.tagNumber && (
+                          <span className="font-sans text-rose-600 bg-rose-50 border border-rose-100 px-1 py-0.2 rounded font-bold text-[9px]">تگ: {it.tagNumber}</span>
+                        )}
+                      </div>
                       <span>{it.totalPriceForeignCurrency.toLocaleString()} {selectedPO.currency}</span>
                     </div>
                   ))}
@@ -977,7 +987,8 @@ export default function PurchaseOrdersView({
                                   unitPriceForeignCurrency: basePriceForeign,
                                   totalPriceForeignCurrency: pfItem.quantity * basePriceForeign,
                                   proformaItemId: pfItem.id,
-                                  proformaItemName: `${pfItem.productName} (تعداد: ${pfItem.quantity})`
+                                  proformaItemName: `${pfItem.productName} (تعداد: ${pfItem.quantity})`,
+                                  tagNumber: pfItem.tagNumber
                                 };
                               });
                               setItems(poItems);
@@ -997,7 +1008,8 @@ export default function PurchaseOrdersView({
                                   brand: prod?.brand || '',
                                   quantity: neededItem.quantity,
                                   unitPriceForeignCurrency: basePriceForeign,
-                                  totalPriceForeignCurrency: neededItem.quantity * basePriceForeign
+                                  totalPriceForeignCurrency: neededItem.quantity * basePriceForeign,
+                                  tagNumber: neededItem.tagNumber
                                 };
                               });
                               setItems(poItems);
@@ -1079,7 +1091,8 @@ export default function PurchaseOrdersView({
                               unitPriceForeignCurrency: basePriceForeign,
                               totalPriceForeignCurrency: pfItem.quantity * basePriceForeign,
                               proformaItemId: pfItem.id,
-                              proformaItemName: `${pfItem.productName} (تعداد: ${pfItem.quantity})`
+                              proformaItemName: `${pfItem.productName} (تعداد: ${pfItem.quantity})`,
+                              tagNumber: pfItem.tagNumber
                             };
                           });
                           setItems(poItems);
@@ -1305,6 +1318,21 @@ export default function PurchaseOrdersView({
                             </select>
                           </div>
                         )}
+
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[9px] text-slate-500 whitespace-nowrap">تگ نامبر:</span>
+                          <input
+                            type="text"
+                            value={item.tagNumber || ''}
+                            onChange={(e) => {
+                              const newItems = [...items];
+                              newItems[idx] = { ...newItems[idx], tagNumber: e.target.value };
+                              setItems(newItems);
+                            }}
+                            placeholder="مثال: PIT-101"
+                            className="w-full border border-slate-200 rounded-md px-2 py-0.5 text-[9px] bg-white text-right font-mono"
+                          />
+                        </div>
                       </div>
 
                       {/* Quantity */}

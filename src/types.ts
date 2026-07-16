@@ -104,6 +104,7 @@ export interface ProformaItem {
   deliveryUnit?: 'روز' | 'هفته' | 'ماه';
   deliveryType?: 'کاری' | 'تقویمی';
   deliveryPostfix?: string;
+  tagNumber?: string;
 }
 
 export interface Proforma {
@@ -149,6 +150,7 @@ export interface PurchaseOrderItem {
   totalPriceForeignCurrency: number;
   proformaItemId?: string; // شناسه ردیف پیش‌فاکتور مرتبط
   proformaItemName?: string; // نام/عنوان ردیف پیش‌فاکتور مرتبط
+  tagNumber?: string;
 }
 
 export interface PurchaseOrder {
@@ -205,6 +207,7 @@ export interface Project {
     category?: 'FLOW' | 'TEMPERATURE' | 'PRESSURE' | 'LEVEL';
     equipmentType?: string;
     size?: string;
+    tagNumber?: string;
   }[];
   description: string;
   customValues?: Record<string, any>;
@@ -463,6 +466,7 @@ export interface PackingItem {
   weight: number; // وزن به کیلوگرم
   boxNumber?: string;
   actualDeliveryDate?: string; // تاریخ تحویل قطعی این ردیف کالا به مشتری
+  tagNumber?: string;
 }
 
 export interface DeliveryChecklistItem {
@@ -581,6 +585,7 @@ export interface SupplierInquiryItem {
   priceRiyal: number; // معادل ریالی
   deliveryTime?: string; // زمان تحویل
   notes?: string;
+  tagNumber?: string;
 }
 
 export interface SupplierInquiry {

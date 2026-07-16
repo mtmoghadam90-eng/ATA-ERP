@@ -164,7 +164,8 @@ export default function PackagingDeliveryView({
           quantity: remainingQty,
           packageType: 'کارتن',
           dimensions: '50x40x30 سانتی‌متر',
-          weight: 1
+          weight: 1,
+          tagNumber: item.tagNumber
         });
       }
     });
@@ -377,7 +378,8 @@ export default function PackagingDeliveryView({
       const itemsRows = items.map((item, index) => {
         const prod = item.productId ? products.find(p => p.id === item.productId) : undefined;
         const brandStr = overrideShowBrand && prod?.brand ? ` (${prod.brand})` : '';
-        const displayedName = `${item.itemOrDocName}${brandStr}`;
+        const tagStr = item.tagNumber ? ` <span style="font-family: monospace; font-size: 10px; color: #dc2626; background-color: #fef2f2; border: 1px solid #fee2e2; padding: 2px 6px; border-radius: 4px; margin-right: 8px;">تگ: ${item.tagNumber}</span>` : '';
+        const displayedName = `${item.itemOrDocName}${brandStr}${tagStr}`;
         return `
         <tr style="border-bottom: 1px solid #e2e8f0;">
           <td style="padding: 12px; text-align: center; font-family: monospace;">${index + 1}</td>
@@ -1291,6 +1293,16 @@ export default function PackagingDeliveryView({
                               onChange={e => handleUpdateItemField(item.id, 'itemOrDocName', e.target.value)}
                               className="w-full bg-transparent border-b border-transparent hover:border-slate-200 focus:border-emerald-500 focus:bg-white rounded px-1.5 py-1 text-xs font-medium"
                             />
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[9px] text-slate-500 whitespace-nowrap">تگ نامبر:</span>
+                              <input
+                                type="text"
+                                value={item.tagNumber || ''}
+                                onChange={e => handleUpdateItemField(item.id, 'tagNumber', e.target.value)}
+                                placeholder="مثال: PIT-101"
+                                className="w-full border border-slate-200 rounded-md px-1.5 py-0.5 text-[9px] bg-white font-mono text-right"
+                              />
+                            </div>
                           </td>
                           <td className="p-2">
                             {(() => {
@@ -1696,13 +1708,20 @@ export default function PackagingDeliveryView({
                           <tr key={item.id} className="hover:bg-slate-50/50">
                             <td className="p-3 text-slate-400 font-mono font-semibold">{idx + 1}</td>
                             <td className="p-3 font-bold text-slate-800">
-                              {item.itemOrDocName}
-                              {overrideShowBrand && (() => {
-                                const prod = item.productId ? products.find(p => p.id === item.productId) : undefined;
-                                return prod?.brand ? (
-                                  <span className="text-xs text-indigo-600 font-semibold mr-1">({prod.brand})</span>
-                                ) : null;
-                              })()}
+                              <div className="flex flex-col">
+                                <span>{item.itemOrDocName}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap mt-1 font-normal">
+                                  {overrideShowBrand && (() => {
+                                    const prod = item.productId ? products.find(p => p.id === item.productId) : undefined;
+                                    return prod?.brand ? (
+                                      <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded font-semibold">برند: {prod.brand}</span>
+                                    ) : null;
+                                  })()}
+                                  {item.tagNumber && (
+                                    <span className="font-sans text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded font-bold text-[10px]">تگ: {item.tagNumber}</span>
+                                  )}
+                                </div>
+                              </div>
                             </td>
                             <td className="p-3 font-extrabold text-slate-700 text-center font-mono">{item.quantity}</td>
                             <td className="p-3 font-medium text-slate-600">{item.packageType}</td>

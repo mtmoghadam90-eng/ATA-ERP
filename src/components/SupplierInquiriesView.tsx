@@ -456,7 +456,12 @@ export default function SupplierInquiriesView({
                                   {inq.items.map((item, index) => (
                                     <div key={item.id || index} className="p-2 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-xl space-y-1 text-[11px]">
                                       <div className="flex justify-between items-start">
-                                        <span className="font-bold text-slate-700 truncate max-w-[180px]">{item.name}</span>
+                                        <div className="flex flex-col min-w-0">
+                                          <span className="font-bold text-slate-700 truncate max-w-[180px]">{item.name}</span>
+                                          {item.tagNumber && (
+                                            <span className="font-sans text-rose-600 bg-rose-50 border border-rose-100 px-1 py-0.2 rounded font-bold text-[8px] mt-0.5 w-max">تگ: {item.tagNumber}</span>
+                                          )}
+                                        </div>
                                         <span className="text-slate-500 font-mono">({item.quantity} عدد)</span>
                                       </div>
                                       <div className="flex justify-between text-[10px] text-slate-500">
@@ -882,7 +887,8 @@ function InquiryFormInner({
         priceForeign: 0,
         currency: 'دلار',
         priceRiyal: 0,
-        notes: ''
+        notes: '',
+        tagNumber: item.tagNumber
       }));
     }
     return [];
@@ -1016,7 +1022,8 @@ function InquiryFormInner({
                     priceForeign: 0,
                     currency: 'دلار',
                     priceRiyal: 0,
-                    notes: ''
+                    notes: '',
+                    tagNumber: item.tagNumber
                   })));
                 } else {
                   setItems([]);
@@ -1196,6 +1203,16 @@ function InquiryFormInner({
                       required
                       className="w-full px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-sky-500 bg-white"
                     />
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-[9px] text-slate-500 whitespace-nowrap">تگ نامبر:</span>
+                      <input
+                        type="text"
+                        value={item.tagNumber || ''}
+                        onChange={(e) => handleItemFieldChange(index, 'tagNumber', e.target.value)}
+                        placeholder="مثال: PIT-101"
+                        className="w-full border border-slate-200 rounded-md px-2 py-0.5 text-[9px] bg-white font-mono text-right"
+                      />
+                    </div>
                   </td>
                   <td className="p-2">
                     <input

@@ -1427,6 +1427,9 @@ export default function ProformasView({
                                 {overrideShowBrand && item.brand && (
                                   <span className="text-xs text-indigo-600 font-semibold mr-1">({item.brand})</span>
                                 )}
+                                {item.tagNumber && (
+                                  <span className="text-[10px] text-rose-600 font-mono font-bold bg-rose-50 border border-rose-100 px-1 py-0.2 rounded mr-1.5">تگ: {item.tagNumber}</span>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -1984,7 +1987,13 @@ export default function ProformasView({
                     {editingItemsList.map((item, idx) => (
                       <tr key={item.id || idx} className="hover:bg-slate-50/40">
                         <td className="py-3 px-4 font-semibold text-slate-800">
-                          <div>{item.productName}</div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{item.productName}</span>
+                            {item.brand && <span className="text-xs text-indigo-600 font-semibold">({item.brand})</span>}
+                            {item.tagNumber && (
+                              <span className="text-[10px] text-rose-600 font-mono font-bold bg-rose-50 border border-rose-100 px-1 py-0.2 rounded">تگ: {item.tagNumber}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-center font-mono font-bold">{item.quantity}</td>
                         <td className="py-3 px-4 text-left font-mono text-slate-600">{(item.quantity * item.unitPriceRIYAL).toLocaleString('fa-IR')}</td>
@@ -2155,7 +2164,8 @@ export default function ProformasView({
                                   deliveryRange: '۳-۴',
                                   deliveryUnit: 'هفته' as const,
                                   deliveryType: 'کاری' as const,
-                                  deliveryPostfix: 'پس از تایید پیش فاکتور و دریافت پیش پرداخت'
+                                  deliveryPostfix: 'پس از تایید پیش فاکتور و دریافت پیش پرداخت',
+                                  tagNumber: item.tagNumber
                                 };
                               });
                               setItems(newItems);
@@ -2608,7 +2618,7 @@ export default function ProformasView({
                           </div>
                         
                           {/* Additional row for item config */}
-                          <div className="flex gap-3 mt-1 pt-1 border-t border-slate-100/50 w-full">
+                          <div className="flex flex-wrap gap-3 mt-1 pt-1 border-t border-slate-100/50 w-full">
                              <div className="flex items-center gap-2">
                                <label className="text-[10px] text-slate-500">منبع تامین:</label>
                                
@@ -2639,6 +2649,21 @@ export default function ProformasView({
                                     );
                                   })()}
 
+                             </div>
+
+                             <div className="flex items-center gap-2 border-r pr-3 border-slate-200">
+                               <label className="text-[10px] text-slate-500">تگ نامبر:</label>
+                               <input
+                                 type="text"
+                                 value={item.tagNumber || ''}
+                                 onChange={(e) => {
+                                   const newItems = [...items];
+                                   newItems[idx].tagNumber = e.target.value;
+                                   setItems(newItems);
+                                 }}
+                                 placeholder="مثال: PIT-101"
+                                 className="border border-slate-200 rounded-md px-1.5 py-0.5 text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono text-center"
+                               />
                              </div>
                           </div>
 

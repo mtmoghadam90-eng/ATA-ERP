@@ -382,6 +382,13 @@ export default function ProjectsView({
       )
     );
   };
+  const handleItemTagNumberChange = (index, tagNum) => {
+    setItemsNeeded(
+      itemsNeeded.map(
+        (item, i) => i === index ? { ...item, tagNumber: tagNum } : item
+      )
+    );
+  };
   const handleStatusChange = (newStatus) => {
     setStatus(newStatus);
     const today = getTodayShamsi();
@@ -488,7 +495,11 @@ export default function ProjectsView({
     setShowModal(false);
   };
   const filteredProjects = projects.filter((p) => {
-    const matchesSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || p.customerName.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !search || 
+      p.name.toLowerCase().includes(search.toLowerCase()) || 
+      p.code.toLowerCase().includes(search.toLowerCase()) || 
+      p.customerName.toLowerCase().includes(search.toLowerCase()) ||
+      p.itemsNeeded?.some(item => item.tagNumber?.toLowerCase().includes(search.toLowerCase()));
     const matchesStatus = selectedStatus === "all" || p.status === selectedStatus;
     if (!(matchesSearch && matchesStatus)) return false;
     const matchesCustom = Object.entries(customFieldFilters).every(([fieldId, filterValue]) => {
@@ -2432,8 +2443,13 @@ export default function ProjectsView({
                       <div className="flex flex-wrap gap-1 mt-2 bg-slate-50/50 p-1.5 rounded-lg border border-slate-100">
                         <span className="text-[9px] font-extrabold text-slate-500">اقلام درخواستی:</span>
                         {p.itemsNeeded.map((item, i) => (
-                          <span key={i} className="text-[9px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">
-                            {item.name} ({item.quantity} عدد - {item.supplyMethod === 'ORDER' ? 'سفارشی' : item.supplyMethod === 'NONE' ? 'بدون نیاز به تامین' : 'انباری'})
+                          <span key={i} className="text-[9px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100 flex items-center gap-1">
+                            <span>{item.name} ({item.quantity} عدد - {item.supplyMethod === 'ORDER' ? 'سفارشی' : item.supplyMethod === 'NONE' ? 'بدون نیاز به تامین' : 'انباری'})</span>
+                            {item.tagNumber && (
+                              <span className="font-mono text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-100 text-[8px] font-bold">
+                                تگ: {item.tagNumber}
+                              </span>
+                            )}
                           </span>
                         ))}
                       </div>
@@ -3064,7 +3080,7 @@ export default function ProjectsView({
                                   </div>
 
                                   {/* Equipment Type select */}
-                                  <div className="col-span-5 space-y-1">
+                                  <div className="col-span-3 space-y-1">
                                     <label className="text-[10px] font-bold text-slate-500 block">نوع تجهیز *</label>
                                     <select
                                       value={item.equipmentType || ''}
@@ -3096,7 +3112,7 @@ export default function ProjectsView({
 
                                   {/* Size input */}
                                   <div className="col-span-2 space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 block">سایز (در صورت وجود)</label>
+                                    <label className="text-[10px] font-bold text-slate-500 block">سایز</label>
                                     <input
                                       type="text"
                                       value={item.size || ''}
@@ -3105,26 +3121,52 @@ export default function ProjectsView({
                                       className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:ring-1 focus:ring-sky-500 font-mono text-slate-700"
                                     />
                                   </div>
+
+                                  {/* Tag Number input */}
+                                  <div className="col-span-2 space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 block">تگ نامبر</label>
+                                    <input
+                                      type="text"
+                                      value={item.tagNumber || ''}
+                                      onChange={(e) => handleItemTagNumberChange(index, e.target.value)}
+                                      placeholder="مثال: PIT-101"
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:ring-1 focus:ring-sky-500 font-mono text-slate-700"
+                                    />
+                                  </div>
                                 </>
                               ) : (
-                                <div className="col-span-10 space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 block">انتخاب کالا از انبار *</label>
-                                  <SearchableSelect wrapperClassName="flex-1 min-w-0"
-                                    value={item.productId}
-                                    onChange={(val) => handleItemProductChange(index, val)}
-                                    options={products.map(p => {
-                                      const details = [p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ');
-                                      const detailsText = details ? ` (${details})` : '';
-                                      const stockText = p.stockLevel !== undefined && p.stockLevel > 0 ? ` [موجودی: ${p.stockLevel} ${p.unit || 'عدد'}]` : '';
-                                      return {
-                                        value: p.id,
-                                        label: `${p.code} - ${p.displayName}${detailsText}${stockText}`
-                                      };
-                                    })}
-                                    placeholder="-- انتخاب کالا --"
-                                    className="text-xs"
-                                  />
-                                </div>
+                                <>
+                                  <div className="col-span-7 space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 block">انتخاب کالا از انبار *</label>
+                                    <SearchableSelect wrapperClassName="flex-1 min-w-0"
+                                      value={item.productId}
+                                      onChange={(val) => handleItemProductChange(index, val)}
+                                      options={products.map(p => {
+                                        const details = [p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ');
+                                        const detailsText = details ? ` (${details})` : '';
+                                        const stockText = p.stockLevel !== undefined && p.stockLevel > 0 ? ` [موجودی: ${p.stockLevel} ${p.unit || 'عدد'}]` : '';
+                                        return {
+                                          value: p.id,
+                                          label: `${p.code} - ${p.displayName}${detailsText}${stockText}`
+                                        };
+                                      })}
+                                      placeholder="-- انتخاب کالا --"
+                                      className="text-xs"
+                                    />
+                                  </div>
+
+                                  {/* Tag Number input */}
+                                  <div className="col-span-3 space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 block">تگ نامبر</label>
+                                    <input
+                                      type="text"
+                                      value={item.tagNumber || ''}
+                                      onChange={(e) => handleItemTagNumberChange(index, e.target.value)}
+                                      placeholder="مثال: PIT-101"
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:ring-1 focus:ring-sky-500 font-mono text-slate-700"
+                                    />
+                                  </div>
+                                </>
                               )}
 
                               {/* Quantity */}

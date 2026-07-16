@@ -1128,10 +1128,13 @@ export function useERPStore() {
       saveToStorage('erp_projects', syncedProjects, setProjects);
       
       const statusLabel = newProforma.status;
+      const itemsListStr = newProforma.items && newProforma.items.length > 0
+        ? ` شامل اقلام: [${newProforma.items.map(it => `${it.productName} (${it.quantity} عدد${it.tagNumber ? `، تگ: ${it.tagNumber}` : ''})`).join('، ')}]`
+        : '';
       autoLogFactActivity(
         newProforma.projectId,
         'پیش‌فاکتور',
-        `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${newProforma.totalAmount.toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`
+        `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${newProforma.totalAmount.toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.${itemsListStr}`
       );
     }
 
@@ -1193,10 +1196,11 @@ export function useERPStore() {
       const syncedProjects = syncProjectStatus(oldProforma.projectId, updated, projects);
       saveToStorage('erp_projects', syncedProjects, setProjects);
       
+      const reasonStr = newStatus === 'باخته' && lossReason ? ` (علت باخت: ${lossReason})` : '';
       autoLogFactActivity(
         oldProforma.projectId,
         'پیش‌فاکتور',
-        `وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} به «${newStatus}» تغییر یافت.`
+        `وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'} به «${newStatus}» تغییر یافت.${reasonStr}`
       );
     }
 
@@ -1244,9 +1248,68 @@ export function useERPStore() {
     const newOutcome = getProformaOutcomeStatus(finalUpdatedPf);
     const outcomeChanged = oldOutcome !== newOutcome;
 
-    let logText = `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`;
+    let logText = `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'} ویرایش شد.`;
+    const changes: string[] = [];
+    
+    if (oldPf.status !== finalUpdatedPf.status) {
+      changes.push(`وضعیت ارسال به «${finalUpdatedPf.status}»`);
+    }
     if (outcomeChanged) {
-      logText += ` وضعیت نهایی به «${newOutcome}» تغییر یافت.`;
+      changes.push(`وضعیت نهایی به «${newOutcome}»`);
+    }
+    if (oldPf.totalAmount !== finalUpdatedPf.totalAmount) {
+      changes.push(`مبلغ کل از ${oldPf.totalAmount.toLocaleString('fa-IR')} به ${finalUpdatedPf.totalAmount.toLocaleString('fa-IR')} ${finalUpdatedPf.currency || 'ریال'}`);
+    }
+    if (oldPf.discountAmount !== finalUpdatedPf.discountAmount) {
+      changes.push(`تخفیف از ${(oldPf.discountAmount || 0).toLocaleString('fa-IR')} به ${(finalUpdatedPf.discountAmount || 0).toLocaleString('fa-IR')} ریال`);
+    }
+    if (oldPf.taxAmount !== finalUpdatedPf.taxAmount) {
+      changes.push(`مالیات از ${(oldPf.taxAmount || 0).toLocaleString('fa-IR')} به ${(finalUpdatedPf.taxAmount || 0).toLocaleString('fa-IR')} ریال`);
+    }
+    if (oldPf.deliveryDate !== finalUpdatedPf.deliveryDate) {
+      changes.push(`تاریخ تحویل به «${finalUpdatedPf.deliveryDate || 'نامشخص'}»`);
+    }
+
+    // Compare items
+    const oldItems = oldPf.items || [];
+    const newItems = finalUpdatedPf.items || [];
+    const addedItems = newItems.filter(n => !oldItems.some(o => o.productId === n.productId));
+    const removedItems = oldItems.filter(o => !newItems.some(n => n.productId === o.productId));
+    const qtyPriceChanged: string[] = [];
+
+    newItems.forEach(n => {
+      const o = oldItems.find(item => item.productId === n.productId);
+      if (o) {
+        const itemChanges: string[] = [];
+        if (o.quantity !== n.quantity) {
+          itemChanges.push(`تعداد از ${o.quantity} به ${n.quantity}`);
+        }
+        if (o.unitPriceRIYAL !== n.unitPriceRIYAL) {
+          itemChanges.push(`قیمت واحد از ${o.unitPriceRIYAL.toLocaleString('fa-IR')} به ${n.unitPriceRIYAL.toLocaleString('fa-IR')} ریال`);
+        }
+        if (o.tagNumber !== n.tagNumber) {
+          itemChanges.push(`تگ از «${o.tagNumber || 'بدون تگ'}» به «${n.tagNumber || 'بدون تگ'}»`);
+        }
+        if (itemChanges.length > 0) {
+          qtyPriceChanged.push(`${n.productName} (${itemChanges.join('، ')})`);
+        }
+      }
+    });
+
+    if (addedItems.length > 0) {
+      changes.push(`افزودن اقلام: [${addedItems.map(it => `${it.productName} به تعداد ${it.quantity}`).join('، ')}]`);
+    }
+    if (removedItems.length > 0) {
+      changes.push(`حذف اقلام: [${removedItems.map(it => it.productName).join('، ')}]`);
+    }
+    if (qtyPriceChanged.length > 0) {
+      changes.push(`تغییر در جزئیات اقلام: [${qtyPriceChanged.join(' | ')}]`);
+    }
+
+    if (changes.length > 0) {
+      logText += ` تغییرات اعمال شده: ${changes.join('؛ ')}`;
+    } else {
+      logText += ` (بدون تغییر در مقادیر کلیدی)`;
     }
 
     logAction('UPDATE', 'پیش‌فاکتورها', updatedPf.id, logText, oldPf, finalUpdatedPf);
@@ -1317,7 +1380,7 @@ export function useERPStore() {
       autoLogFactActivity(
         pf.projectId,
         'پیش‌فاکتور',
-        `پیش‌فاکتور شماره ${pf.proformaNumber} از سیستم حذف شد.`
+        `پیش‌فاکتور شماره ${pf.proformaNumber} به مبلغ کل ${pf.totalAmount.toLocaleString('fa-IR')} ${pf.currency || 'ریال'} توسط ${currentUser?.fullName || 'کاربر سیستم'} از سیستم حذف شد.`
       );
     }
   };
@@ -1386,7 +1449,7 @@ export function useERPStore() {
     autoLogFactActivity(
       projectId,
       'پیش‌فاکتور',
-      `تغییر وضعیت گروهی تمام پیش‌فاکتورهای پروژه به «${newStatus}» انجام شد.`
+      `تغییر وضعیت گروهی تمام پیش‌فاکتورهای پروژه به «${newStatus}» توسط ${currentUser?.fullName || 'کاربر سیستم'} انجام شد.`
     );
   };
 
@@ -1415,10 +1478,13 @@ export function useERPStore() {
     saveToStorage('erp_purchase_orders', updated, setPurchaseOrders);
 
     if (newPO.projectId) {
+      const itemsListStr = newPO.items && newPO.items.length > 0
+        ? ` شامل اقلام: [${newPO.items.map(it => `${it.productName} (${it.quantity} عدد${it.tagNumber ? `، تگ: ${it.tagNumber}` : ''})`).join('، ')}]`
+        : '';
       autoLogFactActivity(
         newPO.projectId,
         'سفارش خرید',
-        `سفارش خرید شماره ${newPO.poNumber} با وضعیت «${newPO.status}» به تامین‌کننده توسط ${currentUser?.fullName || 'کاربر سیستم'} ثبت شد.`
+        `سفارش خرید شماره ${newPO.poNumber} با وضعیت «${newPO.status}» به تامین‌کننده ${newPO.supplierName} توسط ${currentUser?.fullName || 'کاربر سیستم'} ثبت شد.${itemsListStr}`
       );
     }
 
@@ -1454,7 +1520,7 @@ export function useERPStore() {
       autoLogFactActivity(
         oldPO.projectId,
         'سفارش خرید',
-        `سفارش خرید شماره ${oldPO.poNumber} به وضعیت «${newStatus}» تغییر داده شد.`
+        `وضعیت سفارش خرید شماره ${oldPO.poNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'} به وضعیت «${newStatus}» تغییر داده شد.`
       );
     }
 
@@ -1492,10 +1558,64 @@ export function useERPStore() {
 
     if (updatedPO.projectId) {
       const statusChanged = oldPO.status !== updatedPO.status;
+      let logText = `سفارش خرید شماره ${updatedPO.poNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'} ویرایش شد.`;
+      
+      const changes: string[] = [];
+      if (statusChanged) {
+        changes.push(`تغییر وضعیت به «${updatedPO.status}»`);
+      }
+      if (oldPO.supplierName !== updatedPO.supplierName) {
+        changes.push(`تغییر تامین‌کننده از «${oldPO.supplierName}» به «${updatedPO.supplierName}»`);
+      }
+      if (oldPO.totalForeignAmount !== updatedPO.totalForeignAmount) {
+        changes.push(`تغییر قیمت کل ارز خارجی از ${oldPO.totalForeignAmount.toLocaleString()} به ${updatedPO.totalForeignAmount.toLocaleString()} ${updatedPO.currency}`);
+      }
+      if (oldPO.expectedDeliveryDate !== updatedPO.expectedDeliveryDate) {
+        changes.push(`تغییر تاریخ تخمینی تحویل به «${updatedPO.expectedDeliveryDate || 'نامشخص'}»`);
+      }
 
-      const logText = statusChanged
-        ? `سفارش خرید شماره ${updatedPO.poNumber} ویرایش شد و وضعیت آن به «${updatedPO.status}» تغییر داده شد.`
-        : `سفارش خرید شماره ${updatedPO.poNumber} ویرایش و اطلاعات آن بروزرسانی شد.`;
+      // Compare items
+      const oldItems = oldPO.items || [];
+      const newItems = updatedPO.items || [];
+      const addedItems = newItems.filter(n => !oldItems.some(o => o.productId === n.productId));
+      const removedItems = oldItems.filter(o => !newItems.some(n => n.productId === o.productId));
+      const qtyPriceChanged: string[] = [];
+
+      newItems.forEach(n => {
+        const o = oldItems.find(item => item.productId === n.productId);
+        if (o) {
+          const itemChanges: string[] = [];
+          if (o.quantity !== n.quantity) {
+            itemChanges.push(`تعداد از ${o.quantity} به ${n.quantity}`);
+          }
+          if (o.unitPriceForeignCurrency !== n.unitPriceForeignCurrency) {
+            itemChanges.push(`قیمت واحد ارزی از ${o.unitPriceForeignCurrency.toLocaleString()} به ${n.unitPriceForeignCurrency.toLocaleString()} ${updatedPO.currency}`);
+          }
+          if (o.tagNumber !== n.tagNumber) {
+            itemChanges.push(`تگ از «${o.tagNumber || 'بدون تگ'}» به «${n.tagNumber || 'بدون تگ'}»`);
+          }
+          if (itemChanges.length > 0) {
+            qtyPriceChanged.push(`${n.productName} (${itemChanges.join('، ')})`);
+          }
+        }
+      });
+
+      if (addedItems.length > 0) {
+        changes.push(`افزودن اقلام سفارش: [${addedItems.map(it => `${it.productName} به تعداد ${it.quantity}`).join('، ')}]`);
+      }
+      if (removedItems.length > 0) {
+        changes.push(`حذف اقلام سفارش: [${removedItems.map(it => it.productName).join('، ')}]`);
+      }
+      if (qtyPriceChanged.length > 0) {
+        changes.push(`تغییر در جزئیات اقلام سفارش: [${qtyPriceChanged.join(' | ')}]`);
+      }
+
+      if (changes.length > 0) {
+        logText += ` تغییرات اعمال شده: ${changes.join('؛ ')}`;
+      } else {
+        logText += ` (بدون تغییر در مقادیر کلیدی)`;
+      }
+
       autoLogFactActivity(updatedPO.projectId, 'سفارش خرید', logText);
       
       if (statusChanged && updatedPO.status === 'تحویل شده (رسید انبار)') {
@@ -1550,7 +1670,7 @@ export function useERPStore() {
       autoLogFactActivity(
         po.projectId,
         'سفارش خرید',
-        `سفارش خرید شماره ${po.poNumber} از سیستم حذف شد.`
+        `سفارش خرید شماره ${po.poNumber} مربوط به تامین‌کننده ${po.supplierName} به مبلغ کل ${po.totalPriceForeignCurrency.toLocaleString()} ${po.currency} توسط ${currentUser?.fullName || 'کاربر سیستم'} حذف شد.`
       );
     }
   };
@@ -1572,7 +1692,8 @@ export function useERPStore() {
       const paymentTypeStr = newTransaction.paymentType || '';
       const receiptTypeStr = newTransaction.receiptType ? ` بابت ${newTransaction.receiptType}` : '';
       const refStr = newTransaction.referenceNumber ? ` (شماره ارجاع/چک: ${newTransaction.referenceNumber})` : '';
-      const logText = `ثبت تراکنش جدید ${typeStr}${receiptTypeStr} به شماره سند ${newTransaction.documentNumber || 'بدون شماره'} به مبلغ ${newTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال از طریق ${paymentTypeStr}${refStr}`;
+      const notesStr = newTransaction.notes ? ` (توضیحات: ${newTransaction.notes})` : '';
+      const logText = `ثبت تراکنش جدید ${typeStr}${receiptTypeStr} به شماره سند ${newTransaction.documentNumber || 'بدون شماره'} به مبلغ ${newTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال از طریق ${paymentTypeStr}${refStr}${notesStr} توسط ${currentUser?.fullName || 'کاربر سیستم'}`;
       autoLogFactActivity(newTransaction.projectId, 'مالی', logText);
     }
 
@@ -1587,7 +1708,7 @@ export function useERPStore() {
     if (tr && tr.projectId) {
       const typeStr = tr.type === 'دریافت' ? 'دریافت' : 'پرداخت';
       const receiptTypeStr = tr.receiptType ? ` بابت ${tr.receiptType}` : '';
-      const logText = `حذف تراکنش ${typeStr}${receiptTypeStr} به شماره سند ${tr.documentNumber || 'بدون شماره'} به مبلغ ${tr.amountRIYAL.toLocaleString('fa-IR')} ریال`;
+      const logText = `حذف تراکنش ${typeStr}${receiptTypeStr} به شماره سند ${tr.documentNumber || 'بدون شماره'} به مبلغ ${tr.amountRIYAL.toLocaleString('fa-IR')} ریال توسط ${currentUser?.fullName || 'کاربر سیستم'}`;
       autoLogFactActivity(tr.projectId, 'مالی', logText);
     }
   };
@@ -1602,12 +1723,40 @@ export function useERPStore() {
       logAction('UPDATE', 'دریافت و پرداخت', updatedTransaction.id, `ویرایش تراکنش ${updatedTransaction.type} به شماره ${updatedTransaction.documentNumber}`, before, updatedTransaction);
     }
 
-    if (updatedTransaction.projectId) {
+    if (updatedTransaction.projectId && before) {
       const typeStr = updatedTransaction.type === 'دریافت' ? 'دریافت' : 'پرداخت';
       const paymentTypeStr = updatedTransaction.paymentType || '';
       const receiptTypeStr = updatedTransaction.receiptType ? ` بابت ${updatedTransaction.receiptType}` : '';
       const refStr = updatedTransaction.referenceNumber ? ` (شماره ارجاع/چک: ${updatedTransaction.referenceNumber})` : '';
-      const logText = `بروزرسانی تراکنش ${typeStr}${receiptTypeStr} به شماره سند ${updatedTransaction.documentNumber || 'بدون شماره'} به مبلغ ${updatedTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال از طریق ${paymentTypeStr}${refStr}`;
+      
+      let logText = `بروزرسانی تراکنش ${typeStr}${receiptTypeStr} به شماره سند ${updatedTransaction.documentNumber || 'بدون شماره'} به مبلغ ${updatedTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال از طریق ${paymentTypeStr}${refStr} توسط ${currentUser?.fullName || 'کاربر سیستم'}.`;
+      
+      const changes: string[] = [];
+      if (before.amountRIYAL !== updatedTransaction.amountRIYAL) {
+        changes.push(`تغییر مبلغ از ${before.amountRIYAL.toLocaleString('fa-IR')} به ${updatedTransaction.amountRIYAL.toLocaleString('fa-IR')} ریال`);
+      }
+      if (before.type !== updatedTransaction.type) {
+        changes.push(`تغییر نوع تراکنش از «${before.type}» به «${updatedTransaction.type}»`);
+      }
+      if (before.documentNumber !== updatedTransaction.documentNumber) {
+        changes.push(`تغییر شماره سند از «${before.documentNumber || 'خالی'}» به «${updatedTransaction.documentNumber || 'خالی'}»`);
+      }
+      if (before.paymentType !== updatedTransaction.paymentType) {
+        changes.push(`تغییر نحوه تراکنش از «${before.paymentType}» به «${updatedTransaction.paymentType}»`);
+      }
+      if (before.receiptType !== updatedTransaction.receiptType) {
+        changes.push(`تغییر بابت از «${before.receiptType}» به «${updatedTransaction.receiptType}»`);
+      }
+      if (before.referenceNumber !== updatedTransaction.referenceNumber) {
+        changes.push(`تغییر شماره ارجاع از «${before.referenceNumber || 'خالی'}» به «${updatedTransaction.referenceNumber || 'خالی'}»`);
+      }
+      if (before.notes !== updatedTransaction.notes) {
+        changes.push(`تغییر توضیحات به «${updatedTransaction.notes || 'خالی'}»`);
+      }
+      
+      if (changes.length > 0) {
+        logText += ` جزئیات تغییرات: ${changes.join('؛ ')}`;
+      }
       autoLogFactActivity(updatedTransaction.projectId, 'مالی', logText);
     }
   };
@@ -1655,7 +1804,10 @@ export function useERPStore() {
     const updated = [newDelivery, ...packagingDeliveries];
     saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
     
-    const logText = `ثبت پکینگ لیست و تحویل کالا به شماره ${packingListNumber} با روش ارسال ${delivery.shippingMethod}`;
+    const itemsListStr = delivery.items && delivery.items.length > 0
+      ? ` شامل اقلام: [${delivery.items.map(it => `${it.itemOrDocName} (${it.quantity} عدد${it.tagNumber ? `، تگ: ${it.tagNumber}` : ''})`).join('، ')}]`
+      : '';
+    const logText = `ثبت پکینگ لیست و تحویل کالا به شماره ${packingListNumber} با روش ارسال ${delivery.shippingMethod} توسط ${currentUser?.fullName || 'کاربر سیستم'}.${itemsListStr}`;
     autoLogFactActivity(delivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
     logAction('CREATE', 'بسته‌بندی و ارسال', newDelivery.id, `ثبت پکینگ لیست و تحویل کالا به شماره ${packingListNumber}`, undefined, newDelivery);
     
@@ -1675,9 +1827,47 @@ export function useERPStore() {
     const updated = packagingDeliveries.map(d => d.id === updatedDelivery.id ? updatedDelivery : d);
     saveToStorage('erp_packaging_deliveries', updated, setPackagingDeliveries);
     
-    const logText = `بروزرسانی پکینگ لیست و تحویل کالا به شماره ${updatedDelivery.packingListNumber}`;
-    autoLogFactActivity(updatedDelivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
-    logAction('UPDATE', 'بسته‌بندی و ارسال', updatedDelivery.id, `بروزرسانی پکینگ لیست شماره ${updatedDelivery.packingListNumber}`, before, updatedDelivery);
+    if (before) {
+      let logText = `بروزرسانی پکینگ لیست و تحویل کالا به شماره ${updatedDelivery.packingListNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'}.`;
+      const changes: string[] = [];
+      if (before.shippingMethod !== updatedDelivery.shippingMethod) {
+        changes.push(`تغییر روش ارسال به «${updatedDelivery.shippingMethod}»`);
+      }
+      if (before.actualDeliveryDate !== updatedDelivery.actualDeliveryDate) {
+        changes.push(`تغییر تاریخ واقعی تحویل از «${before.actualDeliveryDate || 'خالی'}» به «${updatedDelivery.actualDeliveryDate || 'خالی'}»`);
+      }
+
+      // Compare items/checklist if needed
+      const oldItems = before.items || [];
+      const newItems = updatedDelivery.items || [];
+      const qtyChanged: string[] = [];
+      newItems.forEach(n => {
+        const o = oldItems.find(item => item.id === n.id);
+        if (o) {
+          const itemChanges: string[] = [];
+          if (o.quantity !== n.quantity) {
+            itemChanges.push(`تعداد از ${o.quantity} به ${n.quantity}`);
+          }
+          if (o.tagNumber !== n.tagNumber) {
+            itemChanges.push(`تگ از «${o.tagNumber || 'خالی'}» به «${n.tagNumber || 'خالی'}»`);
+          }
+          if (itemChanges.length > 0) {
+            qtyChanged.push(`${n.itemOrDocName} (${itemChanges.join('، ')})`);
+          }
+        }
+      });
+      if (qtyChanged.length > 0) {
+        changes.push(`تغییرات اقلام: [${qtyChanged.join(' | ')}]`);
+      }
+
+      if (changes.length > 0) {
+        logText += ` تغییرات: ${changes.join('؛ ')}`;
+      } else {
+        logText += ` (بدون تغییر در مقادیر اصلی)`;
+      }
+      autoLogFactActivity(updatedDelivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
+      logAction('UPDATE', 'بسته‌بندی و ارسال', updatedDelivery.id, `بروزرسانی پکینگ لیست شماره ${updatedDelivery.packingListNumber}`, before, updatedDelivery);
+    }
 
     const wasDeliveredBefore = before ? !!before.actualDeliveryDate : false;
     const isNowDelivered = !!updatedDelivery.actualDeliveryDate;
@@ -1717,7 +1907,7 @@ export function useERPStore() {
           return updatedGroups;
         });
       } else {
-        const logText = `حذف پکینگ لیست و تحویل کالا به شماره ${delivery.packingListNumber}`;
+        const logText = `حذف پکینگ لیست و تحویل کالا به شماره ${delivery.packingListNumber} مربوط به روش ارسال ${delivery.shippingMethod} توسط ${currentUser?.fullName || 'کاربر سیستم'}`;
         autoLogFactActivity(delivery.projectId, 'بسته‌بندی و تحویل کالا', logText);
       }
     }
@@ -1734,7 +1924,7 @@ export function useERPStore() {
     const updated = [newService, ...afterSalesServices];
     saveToStorage('erp_after_sales_services', updated, setAfterSalesServices);
     
-    const logText = `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName}`;
+    const logText = `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName} - مشکل: ${service.issueDescription} توسط ${currentUser?.fullName || 'کاربر سیستم'}`;
     
     runWorkflows('after_sales_service_status_change', {
        projectId: newService.projectId,
@@ -1743,7 +1933,7 @@ export function useERPStore() {
        serviceId: newService.id
     });
     autoLogFactActivity(service.projectId, 'خدمات پس از فروش', logText);
-    logAction('CREATE', 'خدمات پس از فروش', newService.id, `ثبت خدمات پس از فروش جدید برای کالای ${service.itemName}`, undefined, newService);
+    logAction('CREATE', 'خدمات پس از فروش', newService.id, logText, undefined, newService);
     
     return newService;
   };
@@ -1755,9 +1945,28 @@ export function useERPStore() {
     const updated = afterSalesServices.map(s => s.id === updatedService.id ? updatedService : s);
     saveToStorage('erp_after_sales_services', updated, setAfterSalesServices);
     
-    const logText = `بروزرسانی خدمات پس از فروش کالای ${updatedService.itemName} - وضعیت: ${updatedService.status}`;
-    autoLogFactActivity(updatedService.projectId, 'خدمات پس از فروش', logText);
-    logAction('UPDATE', 'خدمات پس از فروش', updatedService.id, `بروزرسانی خدمات پس از فروش برای کالای ${updatedService.itemName}`, oldService, updatedService);
+    if (oldService) {
+      let logText = `بروزرسانی خدمات پس از فروش کالای ${updatedService.itemName} توسط ${currentUser?.fullName || 'کاربر سیستم'}.`;
+      const changes: string[] = [];
+      if (oldService.status !== updatedService.status) {
+        changes.push(`تغییر وضعیت به «${updatedService.status}»`);
+      }
+      if (oldService.actionsTaken !== updatedService.actionsTaken) {
+        changes.push(`ثبت اقدام انجام شده: «${updatedService.actionsTaken || 'خالی'}»`);
+      }
+      if (oldService.issueDescription !== updatedService.issueDescription) {
+        changes.push(`تغییر شرح مشکل به «${updatedService.issueDescription}»`);
+      }
+      if (oldService.endDate !== updatedService.endDate) {
+        changes.push(`تغییر تاریخ پایان خدمات به «${updatedService.endDate || 'نامشخص'}»`);
+      }
+
+      if (changes.length > 0) {
+        logText += ` جزئیات: ${changes.join('؛ ')}`;
+      }
+      autoLogFactActivity(updatedService.projectId, 'خدمات پس از فروش', logText);
+      logAction('UPDATE', 'خدمات پس از فروش', updatedService.id, `بروزرسانی خدمات پس از فروش برای کالای ${updatedService.itemName}`, oldService, updatedService);
+    }
     
     if (oldService && oldService.status !== updatedService.status && updatedService.status === 'تحویل داده شده') {
       setCompletionPrompt({
@@ -1794,7 +2003,7 @@ export function useERPStore() {
           return updatedGroups;
         });
       } else {
-        const logText = `حذف رکورد خدمات پس از فروش برای کالای ${service.itemName}`;
+        const logText = `حذف رکورد خدمات پس از فروش برای کالای ${service.itemName} توسط ${currentUser?.fullName || 'کاربر سیستم'}`;
         autoLogFactActivity(service.projectId, 'خدمات پس از فروش', logText);
       }
     }
@@ -1811,7 +2020,10 @@ export function useERPStore() {
     const updated = [newInquiry, ...supplierInquiries];
     saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
     
-    const logText = `ثبت استعلام قیمت جدید از تامین‌کننده ${inquiry.supplierName}`;
+    const itemsListStr = inquiry.items && inquiry.items.length > 0
+      ? ` شامل اقلام استعلام: [${inquiry.items.map(it => `${it.name} (${it.quantity} عدد${it.tagNumber ? `، تگ: ${it.tagNumber}` : ''})`).join('، ')}]`
+      : '';
+    const logText = `ثبت استعلام قیمت جدید از تامین‌کننده ${inquiry.supplierName} توسط ${currentUser?.fullName || 'کاربر سیستم'}.${itemsListStr}`;
     autoLogFactActivity(inquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
     logAction('CREATE', 'استعلام تامین‌کننده', newInquiry.id, logText, undefined, newInquiry);
     
@@ -1823,9 +2035,50 @@ export function useERPStore() {
     const updated = supplierInquiries.map(inq => inq.id === updatedInquiry.id ? updatedInquiry : inq);
     saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
     
-    const logText = `بروزرسانی استعلام قیمت تامین‌کننده ${updatedInquiry.supplierName}`;
-    autoLogFactActivity(updatedInquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
-    logAction('UPDATE', 'استعلام تامین‌کننده', updatedInquiry.id, logText, oldInquiry, updatedInquiry);
+    if (oldInquiry) {
+      let logText = `بروزرسانی استعلام قیمت تامین‌کننده ${updatedInquiry.supplierName} توسط ${currentUser?.fullName || 'کاربر سیستم'}.`;
+      const changes: string[] = [];
+      if (oldInquiry.isWinner !== updatedInquiry.isWinner) {
+        changes.push(updatedInquiry.isWinner ? 'به عنوان پیشنهاد برنده علامت‌گذاری شد' : 'از حالت پیشنهاد برنده خارج شد');
+      }
+      
+      // Compare items for prices
+      const oldItems = oldInquiry.items || [];
+      const newItems = updatedInquiry.items || [];
+      const priceChanged: string[] = [];
+      newItems.forEach(n => {
+        const o = oldItems.find(item => item.id === n.id);
+        if (o) {
+          const itemChanges: string[] = [];
+          if (o.priceForeign !== n.priceForeign) {
+            itemChanges.push(`قیمت ارزی از ${o.priceForeign.toLocaleString()} به ${n.priceForeign.toLocaleString()} ${n.currency}`);
+          }
+          if (o.priceRiyal !== n.priceRiyal) {
+            itemChanges.push(`قیمت ریالی از ${o.priceRiyal.toLocaleString()} به ${n.priceRiyal.toLocaleString()} ریال`);
+          }
+          if (o.deliveryTime !== n.deliveryTime) {
+            itemChanges.push(`زمان تحویل از «${o.deliveryTime || 'خالی'}» به «${n.deliveryTime || 'خالی'}»`);
+          }
+          if (o.tagNumber !== n.tagNumber) {
+            itemChanges.push(`تگ از «${o.tagNumber || 'خالی'}» به «${n.tagNumber || 'خالی'}»`);
+          }
+          if (itemChanges.length > 0) {
+            priceChanged.push(`${n.name} (${itemChanges.join('، ')})`);
+          }
+        }
+      });
+      if (priceChanged.length > 0) {
+        changes.push(`بروزرسانی قیمت‌ها و اقلام: [${priceChanged.join(' | ')}]`);
+      }
+
+      if (changes.length > 0) {
+        logText += ` جزئیات: ${changes.join('؛ ')}`;
+      } else {
+        logText += ` (بدون تغییر در مقادیر کلیدی)`;
+      }
+      autoLogFactActivity(updatedInquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+      logAction('UPDATE', 'استعلام تامین‌کننده', updatedInquiry.id, logText, oldInquiry, updatedInquiry);
+    }
   };
 
   const deleteSupplierInquiry = (id: string) => {
@@ -1834,7 +2087,7 @@ export function useERPStore() {
     saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
     
     if (inquiry) {
-      const logText = `حذف استعلام قیمت تامین‌کننده ${inquiry.supplierName}`;
+      const logText = `حذف استعلام قیمت تامین‌کننده ${inquiry.supplierName} توسط ${currentUser?.fullName || 'کاربر سیستم'}`;
       autoLogFactActivity(inquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
       logAction('DELETE', 'استعلام تامین‌کننده', id, logText, inquiry, undefined);
     }
