@@ -4,7 +4,7 @@ import {
   Plus, Search, Filter, Briefcase, Edit, Trash2, XCircle, AlertCircle, TrendingUp, X,
   FileSpreadsheet, Clock, Sliders, User, Paperclip, ChevronLeft, ChevronDown, ChevronUp,
   Send, CheckCircle2, History, Check, Folder, FolderOpen, File, Download, Eye, Upload,
-  ChevronRight, Loader2, Image as ImageIcon, Maximize2, Minimize2
+  ChevronRight, Loader2, Image as ImageIcon, Maximize2, Minimize2, ArrowLeftRight
 } from 'lucide-react';
 
 import { getTodayShamsi, addDaysToShamsi, addWorkingDaysToShamsi } from '../dateUtils';
@@ -17,7 +17,7 @@ import { exportToCSV } from '../excelUtils';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
-import { Project, Customer, Product, Proforma, ERPSettings, ProjectCategoryGroup, User as UserType, Transaction, PackagingDelivery, PurchaseOrder, AfterSalesService } from '../types';
+import { Project, Customer, Product, Proforma, ERPSettings, ProjectCategoryGroup, User as UserType, Transaction, PackagingDelivery, PurchaseOrder, AfterSalesService, SupplierInquiry } from '../types';
 
 export interface ProjectsViewProps {
   onOpenDocument?: any;
@@ -29,6 +29,7 @@ export interface ProjectsViewProps {
   transactions?: Transaction[];
   purchaseOrders?: PurchaseOrder[];
   afterSalesServices?: AfterSalesService[];
+  supplierInquiries?: SupplierInquiry[];
   addProject: (p: any) => any;
   updateProject: (p: any) => void;
   deleteProject: (id: string, deleteLogs: boolean) => void;
@@ -51,7 +52,7 @@ export interface ProjectsViewProps {
 
 export default function ProjectsView({
   onOpenDocument, projects, customers, products, proformas,
-  packagingDeliveries = [], transactions = [], purchaseOrders = [], afterSalesServices = [],
+  packagingDeliveries = [], transactions = [], purchaseOrders = [], afterSalesServices = [], supplierInquiries = [],
   addProject, updateProject, deleteProject, settings, addCustomer, addProduct,
   projectCategoryGroups = [], addProjectCategoryGroup, addProjectActivity,
   completeProjectCategoryGroup, resumeProjectCategoryGroup, deleteProjectCategoryGroup,
@@ -592,6 +593,7 @@ export default function ProjectsView({
     const folders = [
       { id: "customer_inquiry", name: "درخواست مشتری و استعلام اولیه", desc: "اسناد درخواست اولیه، استعلام‌های فنی و مکاتبات مشتری", iconBg: "bg-indigo-50 text-indigo-600 border-indigo-100", icon: Paperclip },
       { id: "sales_proforma", name: "پیش‌فاکتورها و مهندسی فروش", desc: "پیش‌فاکتورهای صادر شده فنی و مالی و پروپوزال‌ها", iconBg: "bg-sky-50 text-sky-600 border-sky-100", icon: FileSpreadsheet },
+      { id: "supplier_inquiry", name: "استعلام قیمت تأمین‌کنندگان", desc: "اسناد و آفرهای فنی و مالی دریافت شده از تأمین‌کنندگان", iconBg: "bg-blue-50 text-blue-600 border-blue-100", icon: ArrowLeftRight },
       { id: "supplier_po", name: "سفارشات خرید تامین‌کنندگان", desc: "سفارش‌های خرید ارسالی به سازندگان و تامین‌کنندگان کالا", iconBg: "bg-amber-50 text-amber-600 border-amber-100", icon: Briefcase },
       { id: "packaging_delivery", name: "بسته‌بندی و تحویل کالا", desc: "پکینگ لیست‌های صادر شده، عکس‌های بسته‌بندی و اسناد بارنامه", iconBg: "bg-emerald-50 text-emerald-600 border-emerald-100", icon: CheckCircle2 },
       { id: "financial_transactions", name: "تراکنش‌های مالی و پرداخت‌ها", desc: "فیش‌های پیش‌پرداخت، فاکتورهای رسمی و اسناد مالی پروژه", iconBg: "bg-purple-50 text-purple-600 border-purple-100", icon: TrendingUp },
@@ -625,6 +627,32 @@ export default function ProjectsView({
         type: "system",
         originalEntity: pf
       });
+    });
+
+    const projectInquiries = (supplierInquiries || []).filter((inq) => inq.projectId === p.id);
+    projectInquiries.forEach((inq) => {
+      if (inq.technicalOfferUrl) {
+        folderFiles["استعلام قیمت تأمین‌کنندگان"].push({
+          id: `inquiry-tech-${inq.id}`,
+          name: `آفر فنی - تأمین‌کننده: ${inq.supplierName}`,
+          url: inq.technicalOfferUrl,
+          size: "پیشنهاد فنی",
+          date: inq.creationDate || p.creationDate || "مشخص نشده",
+          type: "system",
+          originalEntity: inq
+        });
+      }
+      if (inq.financialOfferUrl) {
+        folderFiles["استعلام قیمت تأمین‌کنندگان"].push({
+          id: `inquiry-fin-${inq.id}`,
+          name: `آفر مالی - تأمین‌کننده: ${inq.supplierName}`,
+          url: inq.financialOfferUrl,
+          size: "پیشنهاد مالی",
+          date: inq.creationDate || p.creationDate || "مشخص نشده",
+          type: "system",
+          originalEntity: inq
+        });
+      }
     });
     const projectPOs = (purchaseOrders || []).filter((po) => po.projectId === p.id);
     projectPOs.forEach((po) => {
@@ -697,6 +725,11 @@ export default function ProjectsView({
     if (p.manualDocuments && p.manualDocuments.length > 0) {
       p.manualDocuments.forEach(doc => {
         const targetFolderName = folders.some(f => f.name === doc.folderName) ? doc.folderName : 'سایر مدارک و فایل‌های دستی';
+        
+        // Prevent duplicate manual entries if the document with same URL is already added to that folder
+        const exists = folderFiles[targetFolderName]?.some((f: any) => f.url === doc.url);
+        if (exists) return;
+
         folderFiles[targetFolderName].push({
           id: doc.id,
           name: doc.name,
@@ -770,12 +803,20 @@ export default function ProjectsView({
     const p = selectedProjectForActivities;
     let updatedProject = { ...p };
     if (docType === 'manual') {
+      const deletedDoc = (p.manualDocuments || []).find(doc => doc.id === docId);
       updatedProject.manualDocuments = (p.manualDocuments || []).filter(doc => doc.id !== docId);
+      if (deletedDoc) {
+        // Also remove from attachments if it was a duplicate
+        updatedProject.attachments = (p.attachments || []).filter(att => att.url !== deletedDoc.url);
+      }
     } else if (docType === 'attachment') {
-      // Deleting a customer attachment also deletes it from project.attachments
+      const deletedIdx = parseInt(docId.replace('attachment-', ''), 10);
+      const deletedAtt = p.attachments ? p.attachments[deletedIdx] : null;
       updatedProject.attachments = (p.attachments || []).filter((_, idx) => `attachment-${idx}` !== docId);
-      // and remove from manualDocuments if duplicate
-      updatedProject.manualDocuments = (p.manualDocuments || []).filter(doc => doc.id !== docId);
+      if (deletedAtt) {
+        // and remove from manualDocuments if duplicate URL or matching ID
+        updatedProject.manualDocuments = (p.manualDocuments || []).filter(doc => doc.url !== deletedAtt.url && doc.id !== docId);
+      }
     }
 
     updateProject(updatedProject);
@@ -783,27 +824,429 @@ export default function ProjectsView({
     alert('فایل با موفقیت حذف شد.');
   };
 
-    const handlePreviewOrDownload = (doc: any) => {
-    if (doc.type === 'system') {
-      if (doc.id?.startsWith('proforma-') && onOpenDocument) {
-        onOpenDocument('proformas', doc.id.replace('proforma-', ''));
-      } else if (doc.id?.startsWith('po-') && onOpenDocument) {
-        onOpenDocument('purchaseOrders', doc.id.replace('po-', ''));
-      } else if (doc.id?.startsWith('inquiry-') && onOpenDocument) {
-        // Just show it in the generic preview modal, not the form
-        setActivePreviewDoc(doc);
-      } else if (doc.id?.startsWith('delivery-') && onOpenDocument) {
-        onOpenDocument('packagingDelivery', doc.id.replace('delivery-', ''));
-      } else {
-        setActivePreviewDoc(doc);
-      }
+  const generateDocumentHtml = (doc: any, project: any) => {
+    const isImage = doc.url && (doc.url.startsWith('data:image/') || doc.url.startsWith('http') || doc.name.endsWith('.png') || doc.name.endsWith('.jpg') || doc.name.endsWith('.jpeg'));
+    let innerContent = '';
+
+    if (isImage) {
+      innerContent = `
+        <div class="flex flex-col items-center justify-center space-y-4">
+          <img src="${doc.url}" alt="${doc.name}" class="max-w-full max-h-[85vh] rounded-lg border border-slate-200 shadow-sm object-contain" />
+          <p class="text-[10px] text-slate-400 font-mono">اندازه: ${doc.size || 'نامشخص'} - تاریخ ثبت: ${doc.date || 'نامشخص'}</p>
+        </div>
+      `;
+    } else if (doc.id?.startsWith('proforma-')) {
+      const pf = doc.originalEntity;
+      const itemsRows = (pf?.items || []).map((item: any, idx: number) => `
+        <tr class="border-b border-slate-150">
+          <td class="p-2 border border-slate-200 text-center font-mono">${idx + 1}</td>
+          <td class="p-2 border border-slate-200">
+            <span class="font-bold text-slate-800">${item.name}</span>
+            <span class="text-[10px] text-slate-500 block">برند: ${item.brand || 'متفرقه'} - پارت‌نامبر: ${item.partNumber || '-'}</span>
+          </td>
+          <td class="p-2 border border-slate-200 text-center font-mono">${item.quantity}</td>
+          <td class="p-2 border border-slate-200 text-left font-mono">${item.unitPrice?.toLocaleString('fa-IR')}</td>
+          <td class="p-2 border border-slate-200 text-left font-mono">${(item.unitPrice * item.quantity)?.toLocaleString('fa-IR')}</td>
+        </tr>
+      `).join('');
+
+      innerContent = `
+        <div class="space-y-6 text-xs">
+          <div class="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+            <div class="space-y-1">
+              <h2 class="text-base font-bold text-slate-900">پیش‌فاکتور رسمی فروش کالا</h2>
+              <p class="text-slate-400 text-[10px]">شرکت ابزار تامین عرشیا (واحد مالی و مهندسی فروش)</p>
+            </div>
+            <div class="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+              <div>No: ${pf?.proformaNumber}</div>
+              <div>Date: ${pf?.issueDate}</div>
+              <div>Status: ${pf?.status}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+            <div>
+              <span class="text-slate-400 font-bold">خریدار / کارفرما:</span>
+              <span class="text-slate-800 font-bold mr-1">${pf?.customerName}</span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-bold">کارشناس مسئول:</span>
+              <span class="text-slate-800 font-bold mr-1">${project?.salesExpert || 'مشخص نشده'}</span>
+            </div>
+          </div>
+
+          <table class="w-full text-right border-collapse border border-slate-200">
+            <thead>
+              <tr class="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                <th class="p-2 border border-slate-200 text-center w-10">ردیف</th>
+                <th class="p-2 border border-slate-200">شرح کالا / خدمات</th>
+                <th class="p-2 border border-slate-200 text-center w-16">تعداد</th>
+                <th class="p-2 border border-slate-200 text-left">قیمت واحد (ریال)</th>
+                <th class="p-2 border border-slate-200 text-left">قیمت کل (ریال)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="flex justify-end">
+            <div class="w-64 space-y-1.5 text-[11px]">
+              <div class="flex justify-between border-b border-slate-100 pb-1">
+                <span class="text-slate-400 font-bold">مجموع ناخالص:</span>
+                <span class="font-mono">${pf?.totalAmount?.toLocaleString('fa-IR')} ریال</span>
+              </div>
+              <div class="flex justify-between border-b border-slate-100 pb-1">
+                <span class="text-slate-400 font-bold">تخفیف:</span>
+                <span class="font-mono text-red-600">${(pf?.discountAmount || 0)?.toLocaleString('fa-IR')} ریال</span>
+              </div>
+              <div class="flex justify-between border-b border-slate-100 pb-1">
+                <span class="text-slate-400 font-bold">مالیات بر ارزش افزوده (۱۰٪):</span>
+                <span class="font-mono">${(pf?.vatAmount || 0)?.toLocaleString('fa-IR')} ریال</span>
+              </div>
+              <div class="flex justify-between font-bold text-slate-900 border-b-2 border-slate-300 pb-1.5 text-xs">
+                <span>مبلغ قابل پرداخت:</span>
+                <span class="font-mono">${pf?.finalAmount?.toLocaleString('fa-IR')} ریال</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 pt-10 text-center text-[10px] text-slate-400">
+            <div>
+              <p class="font-bold text-slate-700">مهر و امضای بخش مالی شرکت</p>
+              <div class="h-20 w-32 mx-auto border-2 border-dashed border-slate-200 rounded-lg mt-2 flex items-center justify-center">
+                <span class="text-[8px] rotate-12">امضا و مهر معتبر</span>
+              </div>
+            </div>
+            <div>
+              <p class="font-bold text-slate-700">مهر و تایید خریدار</p>
+              <div class="h-20 w-32 mx-auto border-2 border-dashed border-slate-200 rounded-lg mt-2 flex items-center justify-center">
+                <span class="text-[8px]">محل امضای خریدار</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (doc.id?.startsWith('po-')) {
+      const po = doc.originalEntity;
+      const itemsRows = (po?.items || []).map((item: any, idx: number) => `
+        <tr class="border-b border-slate-150">
+          <td class="p-2 border border-slate-200 text-center font-mono">${idx + 1}</td>
+          <td class="p-2 border border-slate-200">
+            <span class="font-bold text-slate-800">${item.name}</span>
+            <span class="text-[10px] text-slate-500 block">برند: ${item.brand || '-'} - پارت‌نامبر: ${item.partNumber || '-'}</span>
+          </td>
+          <td class="p-2 border border-slate-200 text-center font-mono">${item.quantity}</td>
+          <td class="p-2 border border-slate-200 text-left font-mono">${item.foreignUnitPrice?.toLocaleString('fa-IR')} ${po?.currency}</td>
+          <td class="p-2 border border-slate-200 text-left font-mono">${(item.foreignUnitPrice * item.quantity)?.toLocaleString('fa-IR')} ${po?.currency}</td>
+        </tr>
+      `).join('');
+
+      innerContent = `
+        <div class="space-y-6 text-xs">
+          <div class="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">سفارش رسمی خرید کالا (PO)</h2>
+              <p class="text-slate-400 text-[10px]">واحد تامین و بازرگانی خارجی/داخلی</p>
+            </div>
+            <div class="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+              <div>PO No: ${po?.poNumber}</div>
+              <div>Date: ${po?.orderDate}</div>
+              <div>Status: ${po?.status}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+            <div>
+              <span class="text-slate-400 font-bold">تامین‌کننده / سازنده:</span>
+              <span class="text-slate-800 font-bold mr-1">${po?.supplierName}</span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-bold">ارز مبادلاتی:</span>
+              <span class="text-slate-800 font-bold mr-1">${po?.currency}</span>
+            </div>
+          </div>
+
+          <table class="w-full text-right border-collapse border border-slate-200">
+            <thead>
+              <tr class="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                <th class="p-2 border border-slate-200 text-center w-10">ردیف</th>
+                <th class="p-2 border border-slate-200">نام کالا / پارت‌نامبر</th>
+                <th class="p-2 border border-slate-200 text-center w-16">تعداد</th>
+                <th class="p-2 border border-slate-200 text-left">قیمت ارزی واحد</th>
+                <th class="p-2 border border-slate-200 text-left">قیمت ارزی کل</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="flex justify-between items-center pt-8 text-[10px] text-slate-500">
+            <div>
+              <p><span class="font-bold">شرایط پرداخت:</span> ${po?.paymentTerms || 'طبق توافق'}</p>
+              <p><span class="font-bold">مدت تحویل:</span> ${po?.deliveryLeadTime || 'مشخص نشده'}</p>
+            </div>
+            <div class="text-center font-bold text-slate-700 w-48">
+              <p>امضا کارشناس بازرگانی</p>
+              <div class="h-14"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (doc.id?.startsWith('delivery-')) {
+      const del = doc.originalEntity;
+      const itemsRows = (del?.items || []).map((item: any, idx: number) => `
+        <tr class="border-b border-slate-150">
+          <td class="p-2 border border-slate-200 text-center font-mono">${idx + 1}</td>
+          <td class="p-2 border border-slate-200 font-bold text-slate-800">${item.name}</td>
+          <td class="p-2 border border-slate-200 text-center font-mono">${item.orderedQty}</td>
+          <td class="p-2 border border-slate-200 text-center font-mono">${item.packedQty}</td>
+          <td class="p-2 border border-slate-200 text-center text-emerald-600 font-bold">${item.isPacked ? '✓ بله' : '✗ خیر'}</td>
+        </tr>
+      `).join('');
+
+      innerContent = `
+        <div class="space-y-6 text-xs">
+          <div class="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">سند رسمی پکینگ لیست (Packing List)</h2>
+              <p class="text-slate-400 text-[10px]">واحد انبار و لجستیک کالا</p>
+            </div>
+            <div class="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+              <div>Packing No: ${del?.packingListNumber}</div>
+              <div>Delivery Date: ${del?.deliveryDate}</div>
+              <div>Shipping Method: ${del?.shippingMethod}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100 text-[11px]">
+            <div>
+              <span class="text-slate-400 font-bold">تعداد کل کارتن/بسته:</span>
+              <span class="text-slate-800 font-bold mr-1">${del?.boxCount} عدد</span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-bold">وزن ناخالص کل (کیلوگرم):</span>
+              <span class="text-slate-800 font-bold mr-1">${del?.grossWeightKg} کیلوگرم</span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-bold">ابعاد حدودی بسته‌ها:</span>
+              <span class="text-slate-800 font-bold mr-1">${del?.dimensionsCm || 'استاندارد'}</span>
+            </div>
+          </div>
+
+          <table class="w-full text-right border-collapse border border-slate-200">
+            <thead>
+              <tr class="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                <th class="p-2 border border-slate-200 text-center w-10">ردیف</th>
+                <th class="p-2 border border-slate-200">نام تجهیز / کالا</th>
+                <th class="p-2 border border-slate-200 text-center">تعداد سفارش</th>
+                <th class="p-2 border border-slate-200 text-center">تعداد آماده‌سازی</th>
+                <th class="p-2 border border-slate-200 text-center">بسته‌بندی کامل؟</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="grid grid-cols-2 gap-4 pt-8 text-center text-[10px] text-slate-500">
+            <div>
+              <p class="font-bold text-slate-700">تاییدکننده صحت بسته‌بندی (مسئول انبار)</p>
+              <div class="h-14"></div>
+            </div>
+            <div>
+              <p class="font-bold text-slate-700">گیرنده نهایی کالا / کارفرما</p>
+              <div class="h-14"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (doc.id?.startsWith('tx-')) {
+      const tx = doc.originalEntity;
+      innerContent = `
+        <div class="space-y-6 text-xs">
+          <div class="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">${tx?.type === 'دریافت' ? 'رسید دریافت وجه (سند بستانکار)' : 'سند پرداخت وجه (سند بدهکار)'}</h2>
+              <p class="text-slate-400 text-[10px]">امور مالی و خزانه‌داری عرشیا</p>
+            </div>
+            <div class="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+              <div>Voucher No: ${tx?.documentNumber}</div>
+              <div>Date: ${tx?.date}</div>
+              <div>Ref No: ${tx?.referenceNumber || '-'}</div>
+            </div>
+          </div>
+
+          <div class="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-slate-700 text-[11px]">
+            <div>
+              <span class="text-slate-400 font-bold">مبلغ تراکنش:</span>
+              <strong class="text-slate-900 text-sm font-mono mr-1">${tx?.amountRIYAL?.toLocaleString('fa-IR')} ریال</strong>
+            </div>
+            <div>
+              <span class="text-slate-400 font-bold">نوع پرداخت/دریافت:</span>
+              <span class="text-slate-800 font-bold mr-1">${tx?.paymentType}</span>
+            </div>
+            ${tx?.bankName ? `
+              <div>
+                <span class="text-slate-400 font-bold">نام بانک مبدا/مقصد:</span>
+                <span class="text-slate-800 mr-1">${tx?.bankName}</span>
+              </div>
+            ` : ''}
+            <div>
+              <span class="text-slate-400 font-bold">شرح تراکنش و بابت:</span>
+              <p class="text-slate-800 mr-1 inline">${tx?.notes || 'بدون بابت'}</p>
+            </div>
+          </div>
+
+          <div class="pt-12 text-center text-[10px] text-slate-400 flex justify-between">
+            <div>
+              <p class="font-bold text-slate-700">تحویل‌دهنده سند / پرداخت‌کننده</p>
+              <div class="h-14"></div>
+            </div>
+            <div>
+              <p class="font-bold text-slate-700">مدیر خزانه‌داری و امور مالی</p>
+              <div class="h-14"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (doc.id?.startsWith('service-')) {
+      const service = doc.originalEntity;
+      innerContent = `
+        <div class="space-y-6 text-xs">
+          <div class="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">برگه گزارش خدمات پس از فروش و گارانتی</h2>
+              <p class="text-slate-400 text-[10px]">دپارتمان مهندسی خدمات و پشتیبانی فنی</p>
+            </div>
+            <div class="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+              <div>Service ID: ${service?.id}</div>
+              <div>Start Date: ${service?.startDate}</div>
+              <div>Status: ${service?.status}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100 text-[11px]">
+            <div>
+              <span class="text-slate-400 font-bold">تجهیز ارجاعی:</span>
+              <span class="text-slate-800 font-bold mr-1">${service?.itemName}</span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-bold">برند / مدل:</span>
+              <span class="text-slate-800 font-bold mr-1">${service?.itemBrand || 'مشخص نشده'}</span>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="bg-white p-3 rounded-lg border border-slate-150">
+              <span class="font-bold text-slate-800 block border-b border-slate-100 pb-1.5 mb-1.5">شرح ایراد گزارش شده توسط کارفرما:</span>
+              <p class="text-slate-600 leading-relaxed text-[11px]">${service?.issueDescription}</p>
+            </div>
+
+            <div class="bg-white p-3 rounded-lg border border-slate-150">
+              <span class="font-bold text-emerald-800 block border-b border-slate-100 pb-1.5 mb-1.5">اقدامات انجام‌شده توسط دپارتمان فنی:</span>
+              <p class="text-slate-600 leading-relaxed text-[11px]">${service?.actionsTaken || 'در حال عیب‌یابی کالا'}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 pt-8 text-center text-[10px] text-slate-500">
+            <div>
+              <p class="font-bold text-slate-700">تاییدکننده فنی و کارشناس پشتیبانی</p>
+              <div class="h-14"></div>
+            </div>
+            <div>
+              <p class="font-bold text-slate-700">امضای نماینده خریدار (تحویل‌گیرنده)</p>
+              <div class="h-14"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      innerContent = `
+        <div class="text-center py-10 space-y-4">
+          <div class="p-4 bg-slate-100 rounded-full text-slate-400 w-16 h-16 flex items-center justify-center mx-auto">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </div>
+          <h4 class="font-bold text-slate-800">${doc.name}</h4>
+          <p class="text-xs text-slate-500">این فایل با موفقیت به صورت دستی بارگذاری شده است.</p>
+          <p class="text-[10px] text-slate-400 font-mono">اندازه: ${doc.size || 'نامشخص'} - تاریخ ثبت: ${doc.date || 'نامشخص'}</p>
+          ${doc.url && doc.url !== '#' ? `
+            <div class="pt-4">
+              <a href="${doc.url}" target="_blank" class="px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-sky-500/10 no-print">دانلود و بازکردن مستقیم فایل</a>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    return `
+      <!DOCTYPE html>
+      <html dir="rtl">
+        <head>
+          <meta charset="utf-8">
+          <title>${doc.name}</title>
+          <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;700&display=swap');
+            body {
+              font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+              background-color: #f8fafc;
+              color: #1e293b;
+            }
+            @media print {
+              .no-print { display: none !important; }
+              body { background-color: #ffffff; }
+              .print-container { border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+            }
+          </style>
+        </head>
+        <body class="p-4 sm:p-8 bg-slate-50 text-slate-800">
+          <div class="max-w-4xl mx-auto space-y-4">
+            <!-- Control bar for new tab -->
+            <div class="flex justify-between items-center bg-slate-900 text-white p-4 rounded-xl shadow-lg no-print">
+              <div class="flex items-center gap-2">
+                <span class="p-1.5 bg-slate-800 rounded-lg text-sky-400">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                </span>
+                <h1 class="font-bold text-xs sm:text-sm truncate max-w-xs sm:max-w-md">${doc.name}</h1>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="window.print()" class="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-sky-500/10">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                  <span>چاپ سند</span>
+                </button>
+                <button onclick="window.close()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition">
+                  بستن صفحه
+                </button>
+              </div>
+            </div>
+
+            <!-- Document Container -->
+            <div class="bg-white p-6 sm:p-10 rounded-2xl border border-slate-200 shadow-sm print-container">
+              ${innerContent}
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  const handlePreviewOrDownload = (doc: any) => {
+    const isImage = doc.url && (doc.url.startsWith('data:image/') || doc.url.startsWith('http') || doc.name.endsWith('.png') || doc.name.endsWith('.jpg') || doc.name.endsWith('.jpeg'));
+
+    if (doc.url !== '#' && !isImage && !doc.url.startsWith('data:')) {
+      window.open(doc.url, '_blank');
       return;
     }
 
-    if (doc.url !== '#' && !doc.url.startsWith('data:image/') && !doc.name.endsWith('.png') && !doc.name.endsWith('.jpg') && !doc.name.endsWith('.jpeg')) {
-      window.open(doc.url, '_blank');
+    const win = window.open('', '_blank');
+    if (win) {
+      const html = generateDocumentHtml(doc, selectedProjectForActivities);
+      win.document.write(html);
+      win.document.close();
     } else {
-      setActivePreviewDoc(doc);
+      alert('لطفاً اجازه باز شدن پنجره‌های پاپ‌آپ (Pop-ups) را در مرورگر خود بدهید تا سند باز شود.');
     }
   };
 
@@ -1054,7 +1497,7 @@ export default function ProjectsView({
                             <button
                               type="button"
                               onClick={() => {
-                                setActivePreviewDoc({
+                                handlePreviewOrDownload({
                                   id: `proforma-${item.proformaId}`,
                                   name: `پیش‌فاکتور ${item.proformaNumber}.pdf`,
                                   url: '#',
@@ -2755,6 +3198,7 @@ export default function ProjectsView({
                             setIsUploading(false);
                           }
                         }
+                        if (e.target) e.target.value = '';
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                       disabled={isUploading}
@@ -3410,6 +3854,7 @@ export default function ProjectsView({
                                                 if (file) {
                                                   if (file.size > 2 * 1024 * 1024 && !file.type.startsWith('image/')) {
                                                     alert('حداکثر حجم مجاز برای فایل‌های غیرتصویری ۲ مگابایت می‌باشد.');
+                                                    if (e.target) e.target.value = '';
                                                     return;
                                                   }
                                                   
@@ -3424,6 +3869,7 @@ export default function ProjectsView({
                                                     }));
                                                   });
                                                 }
+                                                if (e.target) e.target.value = '';
                                               }}
                                             />
                                           </label>

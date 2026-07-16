@@ -145,6 +145,7 @@ export default function SettingsView({
     'packageTypes',
     'returnReasons',
     'equipmentTypes',
+    'supplierInquirySteps',
     'lossReasons'
   ];
 
@@ -164,6 +165,7 @@ export default function SettingsView({
     packageTypes: 'نوع بسته‌بندی (پکینگ لیست)',
     returnReasons: 'دلایل برگشت کالا (خدمات پس از فروش)',
     equipmentTypes: 'انواع پیش‌فرض تجهیزات ابزار دقیق (پروژه‌ها)',
+    supplierInquirySteps: 'مراحل و رویدادهای استعلام (استعلام‌ها)',
     lossReasons: 'دلایل باخت پروژه/اقلام (پروژه‌ها/پیش‌فاکتور)'
   };
 
@@ -183,6 +185,7 @@ export default function SettingsView({
     packageTypes: 'لیست انواع پیش‌فرض بسته‌بندی کالاها در پکینگ لیست.',
     returnReasons: 'لیست دلایل و مشکلات خرابی یا برگشت کالا در بخش خدمات پس از فروش.',
     equipmentTypes: 'لیست انواع تجهیزات ابزار دقیق (مانند فلومتر کوریولیس، ترانسمیتر فشار، لول ترانسمیتر راداری و غیره) برای ثبت سریع درخواست‌های پروژه‌ها.',
+    supplierInquirySteps: 'مراحل و رویدادهای پیش‌فرض برای ثبت گردش کار استعلام‌های قیمت از تأمین‌کنندگان خارجی.',
     lossReasons: 'دلایل باخت تعریف شده که کاربر می‌تواند هنگام مشخص کردن وضعیت بازنده یا لغو پروژه/پیش‌فاکتور انتخاب کند.'
   };
 
@@ -1936,7 +1939,7 @@ export default function SettingsView({
                             className="rounded text-sky-500 focus:ring-sky-500 w-4 h-4"
                           />
                           <div className="flex-1">
-                            <span className="text-sm font-bold text-slate-700 block">{proj.name}</span>
+                            <span className="text-sm font-bold text-slate-700 block">{proj.name} ({proj.code})</span>
                             <span className="text-[10px] text-slate-500">{proj.code} - {proj.customerName}</span>
                           </div>
                         </label>

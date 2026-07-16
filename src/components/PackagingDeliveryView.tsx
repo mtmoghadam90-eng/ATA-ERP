@@ -880,7 +880,7 @@ export default function PackagingDeliveryView({
               >
                 <option value="">همه پروژه‌ها</option>
                 {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
                 ))}
               </select>
             </div>
@@ -1116,7 +1116,7 @@ export default function PackagingDeliveryView({
               >
                 <option value="">-- انتخاب پروژه --</option>
                 {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
                 ))}
               </select>
             </div>

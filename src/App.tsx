@@ -14,6 +14,7 @@ import ReferralsView from './components/ReferralsView';
 import UsersView from './components/UsersView';
 import AfterSalesServicesView from './components/AfterSalesServicesView';
 import PackagingDeliveryView from './components/PackagingDeliveryView';
+import SupplierInquiriesView from './components/SupplierInquiriesView';
 import LoginView from './components/LoginView';
 import { useERPStore } from './useERPStore';
 import { ShieldAlert, Bell, Inbox, Menu, Calendar, CheckCircle2, Clock, User } from 'lucide-react';
@@ -370,6 +371,7 @@ export default function App() {
             packagingDeliveries={store.packagingDeliveries}
             purchaseOrders={store.purchaseOrders}
             afterSalesServices={store.afterSalesServices}
+            supplierInquiries={store.supplierInquiries || []}
             initialSelectedProjectId={selectedProjectIdForActivities}
             onClearInitialSelectedProject={() => setSelectedProjectIdForActivities(null)}
           />
@@ -463,6 +465,19 @@ export default function App() {
             deleteAfterSalesService={store.deleteAfterSalesService}
             settings={store.settings}
             currentUser={store.currentUser}
+          />
+        );
+      case 'supplierInquiries':
+        return (
+          <SupplierInquiriesView
+            projects={store.projects}
+            suppliers={store.suppliers}
+            exchangeRates={store.exchangeRates}
+            supplierInquiries={store.supplierInquiries || []}
+            addSupplierInquiry={store.addSupplierInquiry}
+            updateSupplierInquiry={store.updateSupplierInquiry}
+            deleteSupplierInquiry={store.deleteSupplierInquiry}
+            settings={store.settings}
           />
         );
       case 'settings':

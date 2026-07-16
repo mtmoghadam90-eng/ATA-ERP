@@ -368,6 +368,7 @@ export interface ERPSettings {
     packageTypes?: string[];
     returnReasons?: string[];
     equipmentTypes?: string[];
+    supplierInquirySteps?: string[];
   };
   lossReasons: string[];
   activityCategories: { id: string; name: string; module: string; responsibleUserId?: string }[];
@@ -559,4 +560,42 @@ export interface WorkflowRule {
     };
   }[];
 }
+
+export interface InquiryStep {
+  id: string;
+  title: string;
+  date: string;
+  notes?: string;
+  method?: string; // e.g. ایمیل/تلفن/واتساپ/حضوری
+  recipientName?: string; // نام شخص گیرنده در سمت تامین‌کننده
+}
+
+export interface SupplierInquiryItem {
+  id: string;
+  name: string;
+  brand?: string;
+  partNumber?: string;
+  quantity: number;
+  priceForeign: number; // قیمت آفر به ارز
+  currency: 'دلار' | 'یورو' | 'درهم' | 'یوان' | 'ریال';
+  priceRiyal: number; // معادل ریالی
+  deliveryTime?: string; // زمان تحویل
+  notes?: string;
+}
+
+export interface SupplierInquiry {
+  id: string;
+  projectId: string;
+  projectName?: string;
+  supplierId: string;
+  supplierName: string;
+  items: SupplierInquiryItem[];
+  technicalOfferUrl?: string; // فایل پیشنهاد فنی
+  financialOfferUrl?: string; // فایل پیشنهاد مالی
+  steps: InquiryStep[];
+  isWinner: boolean;
+  winnerDate?: string;
+  creationDate: string;
+}
+
 

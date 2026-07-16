@@ -103,7 +103,19 @@ async function startServer() {
       const { originalname, mimetype, buffer } = req.file;
       const ext = path.extname(originalname).toLowerCase();
       const uniqueName = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}${ext}`;
-      const targetPath = path.join(UPLOADS_DIR, uniqueName);
+      
+      const subfolder = req.query.folder ? String(req.query.folder) : "";
+      let finalDir = UPLOADS_DIR;
+      if (subfolder) {
+        // Prevent path traversal
+        const safeSubfolder = subfolder.replace(/[^a-zA-Z0-9_-]/g, "");
+        finalDir = path.join(UPLOADS_DIR, safeSubfolder);
+        if (!fs.existsSync(finalDir)) {
+          fs.mkdirSync(finalDir, { recursive: true });
+        }
+      }
+
+      const targetPath = path.join(finalDir, uniqueName);
 
       if (mimetype.startsWith("image/")) {
         if (buffer.length > 10 * 1024 * 1024) {
@@ -136,7 +148,7 @@ async function startServer() {
         await fs.promises.writeFile(targetPath, buffer);
       }
 
-      const fileUrl = `/uploads/${uniqueName}`;
+      const fileUrl = subfolder ? `/uploads/${subfolder}/${uniqueName}` : `/uploads/${uniqueName}`;
       res.json({ success: true, url: fileUrl });
     } catch (err: any) {
       console.error("Upload error:", err);
@@ -232,6 +244,21 @@ async function startServer() {
     'erp_audit_logs'
   ]);
 
+  // Batch GET API for initial data to optimize performance and prevent connection limits/drops
+  app.get("/api/init-data", (req, res) => {
+    try {
+      const responseData: Record<string, any> = {};
+      for (const key of ALLOWED_KEYS) {
+        const row = getStmt.get(key) as {value: string} | undefined;
+        responseData[key] = row ? JSON.parse(row.value) : null;
+      }
+      res.json(responseData);
+    } catch (err: any) {
+      console.error("Error in GET /api/init-data:", err);
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
   // KV Store APIs
   app.get("/api/data/:key", (req, res) => {
     const key = req.params.key;
@@ -239,11 +266,16 @@ async function startServer() {
       return res.status(403).json({ error: "Access denied: Unauthorized key" });
     }
     
-    const row = getStmt.get(key) as {value: string} | undefined;
-    if (row) {
-      res.json(JSON.parse(row.value));
-    } else {
-      res.json(null);
+    try {
+      const row = getStmt.get(key) as {value: string} | undefined;
+      if (row) {
+        res.json(JSON.parse(row.value));
+      } else {
+        res.json(null);
+      }
+    } catch (err: any) {
+      console.error(`Error in GET /api/data/${key}:`, err);
+      res.status(500).json({ error: err.message || String(err) });
     }
   });
 
@@ -253,27 +285,32 @@ async function startServer() {
       return res.status(403).json({ error: "Access denied: Unauthorized key" });
     }
     
-    let data = req.body;
-    
-    // If saving users, ensure passwords are hashed if they changed
-    if (key === 'erp_users') {
-      const existingRow = getStmt.get(key) as {value: string} | undefined;
-      const existingUsers = existingRow ? JSON.parse(existingRow.value) : [];
+    try {
+      let data = req.body;
       
-      data = data.map((user: any) => {
-        const existingUser = existingUsers.find((u: any) => u.id === user.id);
-        // If password is new or changed (and not already a hash starting with $2b$), hash it
-        if (user.password && !user.password.startsWith('$2b$')) {
-          user.password = bcrypt.hashSync(user.password, 10);
-        } else if (!user.password && existingUser) {
-          user.password = existingUser.password;
-        }
-        return user;
-      });
-    }
+      // If saving users, ensure passwords are hashed if they changed
+      if (key === 'erp_users') {
+        const existingRow = getStmt.get(key) as {value: string} | undefined;
+        const existingUsers = existingRow ? JSON.parse(existingRow.value) : [];
+        
+        data = data.map((user: any) => {
+          const existingUser = existingUsers.find((u: any) => u.id === user.id);
+          // If password is new or changed (and not already a hash starting with $2b$), hash it
+          if (user.password && !user.password.startsWith('$2b$')) {
+            user.password = bcrypt.hashSync(user.password, 10);
+          } else if (!user.password && existingUser) {
+            user.password = existingUser.password;
+          }
+          return user;
+        });
+      }
 
-    insertStmt.run(key, JSON.stringify(data));
-    res.json({ success: true });
+      insertStmt.run(key, JSON.stringify(data));
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error(`Error in POST /api/data/${key}:`, err);
+      res.status(500).json({ success: false, error: err.message || String(err) });
+    }
   });
 
   // Login attempt trackers for rate-limiting

@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   HelpCircle,
   Boxes,
-  Wrench
+  Wrench,
+  ArrowLeftRight
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -64,7 +65,8 @@ export default function Sidebar({
     { id: 'proformas', name: 'پیش‌فاکتورها', icon: FileText },
     { id: 'products', name: 'کالا و انبار', icon: Package },
     { id: 'suppliers', name: 'تأمین‌کنندگان', icon: Truck },
-        { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', icon: ShoppingCart },
+    { id: 'supplierInquiries', name: 'استعلام قیمت تأمین‌کنندگان', icon: ArrowLeftRight },
+    { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', icon: ShoppingCart },
     { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا', icon: Boxes },
     { id: 'afterSalesServices', name: 'خدمات پس از فروش', icon: Wrench },
     { id: 'transactions', name: 'دریافت و پرداخت ریالی', icon: ArrowDownLeft },

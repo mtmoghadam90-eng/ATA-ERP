@@ -22,7 +22,10 @@ import {
   PackagingDelivery,
   AfterSalesService,
   AuditLog,
-  WorkflowRule
+  WorkflowRule,
+  SupplierInquiry,
+  SupplierInquiryItem,
+  InquiryStep
 } from './types';
 import { compressLZW, decompressLZW } from './utils/compress';
 
@@ -184,6 +187,7 @@ export function useERPStore() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [packagingDeliveries, setPackagingDeliveries] = useState<PackagingDelivery[]>([]);
   const [afterSalesServices, setAfterSalesServices] = useState<AfterSalesService[]>([]);
+  const [supplierInquiries, setSupplierInquiries] = useState<SupplierInquiry[]>([]);
   const [moduleNotifications, setModuleNotifications] = useState<ModuleNotification[]>([]);
   const [projectCategoryGroups, setProjectCategoryGroups] = useState<ProjectCategoryGroup[]>([]);
   const [readItems, setReadItems] = useState<string[]>([]);
@@ -291,43 +295,76 @@ export function useERPStore() {
   useEffect(() => {
     async function loadData() {
       try {
-        const fetchKey = async (key: string, setter: Function, fallback: any) => {
-          try {
-            const res = await fetch(`/api/data/${key}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data !== null) {
-                setter(data);
+        let batchLoaded = false;
+        try {
+          const res = await fetch('/api/init-data');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && typeof data === 'object') {
+              if (data.erp_customers !== null) setCustomers(data.erp_customers || []);
+              if (data.erp_products !== null) setProducts(data.erp_products || []);
+              if (data.erp_suppliers !== null) setSuppliers(data.erp_suppliers || []);
+              if (data.erp_exchange_rates !== null) setExchangeRates(data.erp_exchange_rates || []);
+              if (data.erp_projects !== null) setProjects(data.erp_projects || []);
+              if (data.erp_proformas !== null) setProformas(data.erp_proformas || []);
+              if (data.erp_purchase_orders !== null) setPurchaseOrders(data.erp_purchase_orders || []);
+              if (data.erp_transactions !== null) setTransactions(data.erp_transactions || []);
+              if (data.erp_inventory_transactions !== null) setInventoryTransactions(data.erp_inventory_transactions || []);
+              if (data.erp_tasks !== null) setTasks(data.erp_tasks || []);
+              if (data.erp_settings !== null) setSettings(data.erp_settings || DEFAULT_SETTINGS);
+              if (data.erp_project_category_groups !== null) setProjectCategoryGroups(data.erp_project_category_groups || []);
+              if (data.erp_packaging_deliveries !== null) setPackagingDeliveries(data.erp_packaging_deliveries || []);
+              if (data.erp_after_sales_services !== null) setAfterSalesServices(data.erp_after_sales_services || []);
+              if (data.erp_supplier_inquiries !== null) setSupplierInquiries(data.erp_supplier_inquiries || []);
+              if (data.erp_users !== null) setUsers(data.erp_users || []);
+              if (data.erp_audit_logs !== null) setAuditLogs(data.erp_audit_logs || []);
+              batchLoaded = true;
+            }
+          }
+        } catch (batchErr) {
+          console.warn("Failed to batch fetch initial data, falling back to sequential/individual requests...", batchErr);
+        }
+
+        if (!batchLoaded) {
+          const fetchKey = async (key: string, setter: Function, fallback: any) => {
+            try {
+              const res = await fetch(`/api/data/${key}`);
+              if (res.ok) {
+                const data = await res.json();
+                if (data !== null) {
+                  setter(data);
+                } else {
+                  setter(fallback);
+                }
               } else {
                 setter(fallback);
               }
-            } else {
+            } catch (e) {
+              console.error(`Failed to fetch ${key}:`, e);
               setter(fallback);
             }
-          } catch (e) {
-            console.error(`Failed to fetch ${key}:`, e);
-            setter(fallback);
-          }
-        };
+          };
 
-        await Promise.all([
-          fetchKey('erp_customers', setCustomers, []),
-          fetchKey('erp_products', setProducts, []),
-          fetchKey('erp_suppliers', setSuppliers, []),
-          fetchKey('erp_exchange_rates', setExchangeRates, []),
-          fetchKey('erp_projects', setProjects, []),
-          fetchKey('erp_proformas', setProformas, []),
-          fetchKey('erp_purchase_orders', setPurchaseOrders, []),
-          fetchKey('erp_transactions', setTransactions, []),
-          fetchKey('erp_inventory_transactions', setInventoryTransactions, []),
-          fetchKey('erp_tasks', setTasks, []),
-          fetchKey('erp_settings', setSettings, DEFAULT_SETTINGS),
-          fetchKey('erp_project_category_groups', setProjectCategoryGroups, []),
-          fetchKey('erp_packaging_deliveries', setPackagingDeliveries, []),
-          fetchKey('erp_after_sales_services', setAfterSalesServices, []),
-          fetchKey('erp_users', setUsers, []),
-          fetchKey('erp_audit_logs', setAuditLogs, []),
-        ]);
+          await Promise.all([
+            fetchKey('erp_customers', setCustomers, []),
+            fetchKey('erp_products', setProducts, []),
+            fetchKey('erp_suppliers', setSuppliers, []),
+            fetchKey('erp_exchange_rates', setExchangeRates, []),
+            fetchKey('erp_projects', setProjects, []),
+            fetchKey('erp_proformas', setProformas, []),
+            fetchKey('erp_purchase_orders', setPurchaseOrders, []),
+            fetchKey('erp_transactions', setTransactions, []),
+            fetchKey('erp_inventory_transactions', setInventoryTransactions, []),
+            fetchKey('erp_tasks', setTasks, []),
+            fetchKey('erp_settings', setSettings, DEFAULT_SETTINGS),
+            fetchKey('erp_project_category_groups', setProjectCategoryGroups, []),
+            fetchKey('erp_packaging_deliveries', setPackagingDeliveries, []),
+            fetchKey('erp_after_sales_services', setAfterSalesServices, []),
+            fetchKey('erp_supplier_inquiries', setSupplierInquiries, []),
+            fetchKey('erp_users', setUsers, []),
+            fetchKey('erp_audit_logs', setAuditLogs, []),
+          ]);
+        }
 
         const storedCurrentUser = localStorage.getItem('erp_current_user');
         if (storedCurrentUser) {
@@ -1763,6 +1800,47 @@ export function useERPStore() {
     }
   };
 
+
+  // --- Supplier Inquiries CRUD ---
+  const addSupplierInquiry = (inquiry: Omit<SupplierInquiry, 'id' | 'creationDate'>) => {
+    const newInquiry: SupplierInquiry = {
+      ...inquiry,
+      id: `inq-${Date.now()}`,
+      creationDate: getTodayShamsi()
+    };
+    const updated = [newInquiry, ...supplierInquiries];
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+    
+    const logText = `ثبت استعلام قیمت جدید از تامین‌کننده ${inquiry.supplierName}`;
+    autoLogFactActivity(inquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+    logAction('CREATE', 'استعلام تامین‌کننده', newInquiry.id, logText, undefined, newInquiry);
+    
+    return newInquiry;
+  };
+
+  const updateSupplierInquiry = (updatedInquiry: SupplierInquiry) => {
+    const oldInquiry = supplierInquiries.find(inq => inq.id === updatedInquiry.id);
+    const updated = supplierInquiries.map(inq => inq.id === updatedInquiry.id ? updatedInquiry : inq);
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+    
+    const logText = `بروزرسانی استعلام قیمت تامین‌کننده ${updatedInquiry.supplierName}`;
+    autoLogFactActivity(updatedInquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+    logAction('UPDATE', 'استعلام تامین‌کننده', updatedInquiry.id, logText, oldInquiry, updatedInquiry);
+  };
+
+  const deleteSupplierInquiry = (id: string) => {
+    const inquiry = supplierInquiries.find(inq => inq.id === id);
+    const updated = supplierInquiries.filter(inq => inq.id !== id);
+    saveToStorage('erp_supplier_inquiries', updated, setSupplierInquiries);
+    
+    if (inquiry) {
+      const logText = `حذف استعلام قیمت تامین‌کننده ${inquiry.supplierName}`;
+      autoLogFactActivity(inquiry.projectId, 'استعلام قیمت از تامین کننده ها', logText);
+      logAction('DELETE', 'استعلام تامین‌کننده', id, logText, inquiry, undefined);
+    }
+  };
+
+
   // --- Settings Customizer ---
   const updateSettings = (newSettings: ERPSettings) => {
     saveToStorage('erp_settings', newSettings, setSettings);
@@ -1967,6 +2045,7 @@ export function useERPStore() {
     inventoryTransactions,
     tasks,
     packagingDeliveries,
+    supplierInquiries,
     moduleNotifications,
     settings,
     userRole,
@@ -2022,6 +2101,10 @@ export function useERPStore() {
     addPackagingDelivery,
     updatePackagingDelivery,
     deletePackagingDelivery,
+
+    addSupplierInquiry,
+    updateSupplierInquiry,
+    deleteSupplierInquiry,
     
     markModuleNotificationAsRead,
     markAllModuleNotificationsAsRead,
