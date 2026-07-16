@@ -5,6 +5,7 @@
 export interface InventoryTransaction {
   id: string;
   productId: string;
+  variantId?: string;
   date: string;
   type: 'IN' | 'OUT';
   quantity: number;
@@ -50,6 +51,28 @@ export interface Customer {
   contactLastName?: string;
 }
 
+export interface ProductFeatureOption {
+  id: string;
+  value: string;
+  code?: string;
+}
+
+export interface ProductFeature {
+  id: string;
+  name: string;
+  code?: string;
+  options: ProductFeatureOption[];
+}
+
+export interface ProductVariant {
+  id: string;
+  sku: string;
+  attributes: Record<string, string>; // feature.name -> option.value
+  stockLevel: number;
+  minStockLevel: number;
+  priceRIYAL?: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -64,10 +87,11 @@ export interface Product {
   stockLevel: number; // Current inventory
   minStockLevel: number; // Threshold for reordering
   supplyType?: 'INVENTORY' | 'ORDER';
-  size?: string; // سایز
-  measurementRange?: string; // رنج اندازه گیری
   images?: string[]; // فایل های تصویر
   customValues?: Record<string, any>;
+  features?: ProductFeature[]; // ویژگی‌های قابل تنظیم
+  hasVariants?: boolean;
+  variants?: ProductVariant[];
 }
 
 export interface Supplier {
@@ -89,6 +113,7 @@ export interface Supplier {
 export interface ProformaItem {
   id: string;
   productId: string;
+  variantId?: string;
   productName: string;
   productCode: string;
   brand: string;
@@ -99,6 +124,7 @@ export interface ProformaItem {
   status?: 'جاری' | 'برنده' | 'بازنده';
   lossReason?: string;
   techSpecs?: string;
+  selectedFeatures?: Record<string, string>;
   selectedImage?: string;
   deliveryRange?: string;
   deliveryUnit?: 'روز' | 'هفته' | 'ماه';
@@ -142,6 +168,7 @@ export interface Proforma {
 export interface PurchaseOrderItem {
   id: string;
   productId: string;
+  variantId?: string;
   productName: string;
   productCode: string;
   brand: string;
@@ -200,7 +227,8 @@ export interface Project {
   probabilityPercent?: number; // Optional/legacy
   status: 'جدید' | 'در حال مذاکره' | 'ارائه پیش‌فاکتور' | 'برنده (موفق)' | 'باخته' | 'لغو شده' | 'نیمه برنده';
   itemsNeeded?: {
-    productId: string; // can be 'generic' if not matching a specific warehouse product
+    productId: string;
+  variantId?: string; // can be 'generic' if not matching a specific warehouse product
     name: string;
     quantity: number;
     supplyMethod?: 'INVENTORY' | 'ORDER' | 'NONE';

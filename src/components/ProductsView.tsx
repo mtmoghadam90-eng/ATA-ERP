@@ -9,7 +9,7 @@ import {
   Trash2, 
   X
 } from 'lucide-react';
-import { Product, ERPSettings, InventoryTransaction } from '../types';
+import { Product, ProductVariant, ERPSettings, InventoryTransaction, ProductFeature } from '../types';
 import { toShamsiStr, toGregorianStr } from '../dateUtils';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -25,15 +25,13 @@ interface ProductsViewProps {
   addProduct: (product: Omit<Product, 'id' | 'stockLevel'> & { stockLevel?: number, transactionDate?: string, customValues?: Record<string, any> }) => void;
   updateProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
-  adjustProductStock: (id: string, amount: number, referenceId?: string, referenceType?: 'MANUAL' | 'PURCHASE_ORDER' | 'PROFORMA', notes?: string, transactionDate?: string) => void;
+  adjustProductStock: (id: string, amount: number, variantId?: string, referenceId?: string, referenceType?: 'MANUAL' | 'PURCHASE_ORDER' | 'PROFORMA', notes?: string, transactionDate?: string) => void;
   batchImportProducts: (items: Array<{
     code?: string;
     name?: string;
     category?: string;
     supplyType?: 'INVENTORY' | 'ORDER';
     notes?: string;
-    size?: string;
-    measurementRange?: string;
     amt?: number;
     type?: string;
     dateVal?: string;
@@ -70,14 +68,16 @@ export default function ProductsView({
 
   // Form states (Only Category, Equipment Type, and Technical Specs are managed in UI)
   const [displayName, setDisplayName] = useState('');
+  const [productCode, setProductCode] = useState('');
   const [category, setCategory] = useState('');
   const [brand, setBrand] = useState('');
   const [description, setDescription] = useState('');
-  const [size, setSize] = useState('');
-  const [measurementRange, setMeasurementRange] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [supplyType, setSupplyType] = useState<'INVENTORY' | 'ORDER'>('INVENTORY');
   const [initialStock, setInitialStock] = useState<string>('0');
+  const [features, setFeatures] = useState<ProductFeature[]>([]);
+  const [hasVariants, setHasVariants] = useState(false);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
 
   // Batch upload modal state
   const [batchModalOpen, setBatchModalOpen] = useState(false);
@@ -89,6 +89,7 @@ export default function ProductsView({
   const [stockAdjustAmount, setStockAdjustAmount] = useState('');
   const [stockAdjustType, setStockAdjustType] = useState<'IN' | 'OUT'>('IN');
   const [stockAdjustNotes, setStockAdjustNotes] = useState('');
+  const [stockAdjustVariantId, setStockAdjustVariantId] = useState('');
 
   // Trigger modal for adding
   const handleOpenAdd = () => {
@@ -97,27 +98,31 @@ export default function ProductsView({
     setCategory(categories[0] || 'ابزار دقیق - فشار');
     setBrand('');
     setDescription('');
-    setSize('');
-    setMeasurementRange('');
     setImages([]);
     setSupplyType('INVENTORY');
     setInitialStock('0');
+    setProductCode('');
     setCustomValues({});
+    setFeatures([]);
+    setHasVariants(false);
+    setVariants([]);
     setShowModal(true);
   };
 
   // Trigger modal for editing
   const handleOpenEdit = (prod: Product) => {
     setEditingProduct(prod);
+    setProductCode(prod.code || '');
     setDisplayName(prod.displayName);
     setCategory(prod.category);
     setBrand(prod.brand || '');
     setDescription(prod.description);
-    setSize(prod.size || '');
-    setMeasurementRange(prod.measurementRange || '');
     setImages(prod.images || []);
     setSupplyType(prod.supplyType === 'ORDER' ? 'ORDER' : 'INVENTORY');
     setCustomValues(prod.customValues || {});
+    setFeatures(prod.features || []);
+    setHasVariants(prod.hasVariants || false);
+    setVariants(prod.variants || []);
     setShowModal(true);
   };
 
@@ -137,21 +142,21 @@ export default function ProductsView({
       { header: "تعداد تغییر / موجودی اولیه", key: "amount", width: 25 },
       { header: "نوع تغییر", key: "type", width: 15 },
       { header: "تاریخ", key: "date", width: 15 },
-      { header: "سایز", key: "size", width: 15 },
-      { header: "رنج اندازه گیری", key: "mRange", width: 20 },
       { header: "توضیحات", key: "notes", width: 30 },
+      { header: "ویژگی‌های قابل تنظیم", key: "features", width: 35 },
     ];
 
     // Add some sample rows
     worksheet.addRow({
       code: "EQ-12345", name: "پرشر ترانسمیتر", category: categories.length > 0 ? categories[0] : "ابزار دقیق - فشار", brand: "WIKA",
       supplyType: "INVENTORY", amount: 10, type: "IN", date: "1403/05/12", 
-      size: "2 inch", mRange: "0-10 bar", notes: "خرید جدید"
+ notes: "خرید جدید",
+      features: "سایز:۱ اینچ،۲ اینچ|متریال بدنه:استیل،برنج"
     });
     worksheet.addRow({
       code: "EQ-67890", name: "", category: "", brand: "",
       supplyType: "", amount: 5, type: "OUT", date: "", 
-      size: "", mRange: "", notes: "مصرف پروژه"
+ notes: "مصرف پروژه"
     });
 
     // Add data validations for 200 rows
@@ -232,8 +237,7 @@ export default function ProductsView({
           const category = row["دسته بندی"];
           const brand = row["برند"] || "";
           const supplyType = (row["نوع تامین"] === 'ORDER' ? 'ORDER' : 'INVENTORY') as 'INVENTORY' | 'ORDER';
-          const size = row["سایز"] || "";
-          const mRange = row["رنج اندازه گیری"] || "";
+          const featuresRaw = row["ویژگی‌های قابل تنظیم"] || "";
 
           return {
             code,
@@ -242,11 +246,10 @@ export default function ProductsView({
             brand,
             supplyType,
             notes,
-            size,
-            measurementRange: mRange,
             amt,
             type,
-            dateVal
+            dateVal,
+            featuresRaw
           };
         });
 
@@ -277,6 +280,18 @@ export default function ProductsView({
       }
     }
 
+    if (!productCode.trim()) {
+      alert('لطفاً کد کالا را وارد کنید.');
+      return;
+    }
+    
+    // Check for duplicate code
+    const duplicate = products.find(p => p.code === productCode.trim() && p.id !== editingProduct?.id);
+    if (duplicate) {
+      alert('کد کالای وارد شده تکراری است. لطفاً کد دیگری انتخاب کنید.');
+      return;
+    }
+
     if (editingProduct) {
       updateProduct({
         ...editingProduct,
@@ -285,11 +300,13 @@ export default function ProductsView({
         category,
         brand,
         description,
-        size,
-        measurementRange,
         images,
         supplyType,
-        customValues
+        code: productCode.trim(),
+        customValues,
+        features,
+        hasVariants,
+        variants
       });
     } else {
       addProduct({
@@ -298,17 +315,18 @@ export default function ProductsView({
         category,
         brand,
         description,
-        size,
-        measurementRange,
         images,
         supplyType,
-        code: "EQ-" + Math.floor(10000 + Math.random() * 90000),
+        code: productCode.trim(),
         modelNumber: "N/A",
         unit: "عدد",
         basePriceRIYAL: 0,
         minStockLevel: 0,
-        stockLevel: supplyType === 'INVENTORY' ? Number(initialStock) || 0 : 0,
-        customValues
+        stockLevel: supplyType === 'INVENTORY' ? (hasVariants ? variants.reduce((sum, v) => sum + (v.stockLevel || 0), 0) : Number(initialStock) || 0) : 0,
+        customValues,
+        features,
+        hasVariants,
+        variants
       });
     }
     setShowModal(false);
@@ -439,16 +457,6 @@ export default function ProductsView({
                                 برند: {p.brand}
                               </span>
                             )}
-                            {p.size && (
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-medium">
-                                سایز: {p.size}
-                              </span>
-                            )}
-                            {p.measurementRange && (
-                              <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-md font-medium">
-                                رنج: {p.measurementRange}
-                              </span>
-                            )}
                             {p.images && p.images.length > 0 && (
                               <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-medium">
                                 🖼️ {p.images.length} تصویر
@@ -482,21 +490,31 @@ export default function ProductsView({
                     {/* Stock & Supply Type */}
                     <td className="p-4">
                       <div className="flex flex-col gap-1.5">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-md inline-block w-max ${
-                          p.supplyType === 'INVENTORY' ? 'bg-indigo-50 text-indigo-700' :
-                          p.supplyType === 'ORDER' ? 'bg-amber-50 text-amber-700' :
-                          'bg-emerald-50 text-emerald-700'
-                        }`}>
-                          {p.supplyType === 'ORDER' ? 'قابل سفارش' : 'موجود در انبار'}
-                        </span>
-                        {(p.supplyType === 'INVENTORY' || !p.supplyType) && (
+                        
+                        {(() => {
+                          const totalStock = p.hasVariants && p.variants ? p.variants.reduce((acc, v) => acc + (v.stockLevel || 0), 0) : (p.stockLevel || 0);
+                          const effectiveSupplyType = totalStock === 0 ? 'ORDER' : (p.supplyType || 'INVENTORY');
+                          return (
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-md inline-block w-max ${
+                              effectiveSupplyType === 'INVENTORY' ? 'bg-indigo-50 text-indigo-700' :
+                              effectiveSupplyType === 'ORDER' ? 'bg-amber-50 text-amber-700' :
+                              'bg-emerald-50 text-emerald-700'
+                            }`}>
+                              {effectiveSupplyType === 'ORDER' ? 'قابل سفارش' : 'موجود در انبار'}
+                            </span>
+                          );
+                        })()}
+                        {(() => {
+                          const totalStock = p.hasVariants && p.variants ? p.variants.reduce((acc, v) => acc + (v.stockLevel || 0), 0) : (p.stockLevel || 0);
+                          const effectiveSupplyType = totalStock === 0 ? 'ORDER' : (p.supplyType || 'INVENTORY');
+                          return (effectiveSupplyType === 'INVENTORY') && (
                           <div className="flex items-center gap-1.5 mt-1">
                             <span className="text-slate-500 text-xs">موجودی:</span>
-                            <span className={`text-sm font-bold ${(p.stockLevel || 0) > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {p.stockLevel || 0}
+                            <span className={`text-sm font-bold ${(p.hasVariants && p.variants ? p.variants.reduce((acc, v) => acc + (v.stockLevel || 0), 0) : p.stockLevel || 0) > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {p.hasVariants && p.variants ? p.variants.reduce((acc, v) => acc + (v.stockLevel || 0), 0) : p.stockLevel || 0}
                             </span>
                           </div>
-                        )}
+                        )})()}
                       </div>
                     </td>
 
@@ -511,6 +529,7 @@ export default function ProductsView({
                               setStockAdjustAmount('');
                               setStockAdjustNotes('');
                               setStockAdjustType('IN');
+                              setStockAdjustVariantId('');
                               setStockModalOpen(true);
                             }}
                             className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
@@ -636,6 +655,20 @@ export default function ProductsView({
                   </select>
                 </div>
 
+                {/* Product Code */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">کد کالا *</label>
+                  <input
+                    type="text"
+                    required
+                    value={productCode}
+                    onChange={(e) => setProductCode(e.target.value)}
+                    placeholder="مثال: PRD-001"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all"
+                  />
+                  <p className="text-[10px] text-slate-500">کد کالا باید یکتا باشد.</p>
+                </div>
+
                 {/* Equipment Type / Display Name */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">نوع تجهیز و نام کالا *</label>
@@ -662,17 +695,7 @@ export default function ProductsView({
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Size */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">سایز (Size)</label>
-                    <input
-                      type="text"
-                      value={size}
-                      onChange={(e) => setSize(e.target.value)}
-                      placeholder="مثال: '2 یا DN50"
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right font-medium"
-                    />
-                  </div>
+
 
                   {/* Supply Type */}
                   <div className="space-y-1.5">
@@ -688,7 +711,7 @@ export default function ProductsView({
                   </div>
 
                   {/* Initial Stock (Only for New Products & Inventory) */}
-                  {!editingProduct && supplyType === 'INVENTORY' && (
+                  {!editingProduct && supplyType === 'INVENTORY' && !hasVariants && (
                     <div className="space-y-1.5 border-t border-slate-100 pt-3 mt-3">
                       <label className="text-xs font-semibold text-emerald-600">موجودی اولیه در انبار</label>
                       <input
@@ -703,17 +726,7 @@ export default function ProductsView({
                     </div>
                   )}
 
-                  {/* Measurement Range */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">رنج اندازه‌گیری (Range)</label>
-                    <input
-                      type="text"
-                      value={measurementRange}
-                      onChange={(e) => setMeasurementRange(e.target.value)}
-                      placeholder="مثال: 0 to 10 bar"
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right font-medium"
-                    />
-                  </div>
+
                 </div>
 
                 {/* Product Images */}
@@ -785,6 +798,302 @@ export default function ProductsView({
                   />
                 </div>
 
+                {/* Product Features Configuration */}
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">ویژگی‌های قابل تنظیم (کانفیگوراتور)</h4>
+                      <p className="text-xs text-slate-500 mt-1">ویژگی‌هایی که در زمان پیش‌فاکتور قابل انتخاب هستند.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFeatures([...features, { id: Date.now().toString(), name: '', options: [] }])}
+                      className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 transition flex items-center gap-1"
+                    >
+                      <Plus size={14} />
+                      افزودن ویژگی
+                    </button>
+                  </div>
+                  
+                  {features.map((feature, fIndex) => (
+                    <div key={feature.id} className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="flex-1 flex flex-col sm:flex-row gap-2 w-full">
+                          <input
+                            type="text"
+                            value={feature.name}
+                            onChange={(e) => {
+                              const newF = [...features];
+                              newF[fIndex] = { ...newF[fIndex], name: e.target.value };
+                              setFeatures(newF);
+                            }}
+                            placeholder="نام ویژگی (مثل: سایز)"
+                            className="w-full sm:flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-sky-500"
+                          />
+                          <input
+                            type="text"
+                            value={feature.code || ''}
+                            onChange={(e) => {
+                              const newF = [...features];
+                              newF[fIndex] = { ...newF[fIndex], code: e.target.value };
+                              setFeatures(newF);
+                            }}
+                            placeholder="کد (مثل: s)"
+                            className="w-full sm:w-24 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-sky-500 sm:text-center"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newF = [...features];
+                            newF.splice(fIndex, 1);
+                            setFeatures(newF);
+                          }}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg shrink-0 mt-0.5"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {feature.options.map((opt, oIndex) => (
+                            <div key={opt.id} className="flex items-center bg-white border border-slate-200 rounded-md overflow-hidden shadow-sm">
+                              <span className="px-2 text-xs font-medium">{opt.value}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newF = [...features];
+                                  newF[fIndex] = {
+                                    ...newF[fIndex],
+                                    options: newF[fIndex].options.filter((_, idx) => idx !== oIndex)
+                                  };
+                                  setFeatures(newF);
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full">
+                            <input
+                              type="text"
+                              id={`feature-input-${feature.id}`}
+                              placeholder="مقدار جدید (برای چند مقدار با ویرگول جدا کنید)..."
+                              className="w-full sm:flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-sky-500"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const inputEl = e.currentTarget;
+                                  const val = inputEl.value.trim();
+                                  if (val) {
+                                    const vals = val.split(/[,،]/).map(v => v.trim()).filter(Boolean);
+                                    if (vals.length > 0) {
+                                      const newOptions = vals.map((v, i) => ({ id: Date.now().toString() + i.toString() + Math.random().toString(), value: v }));
+                                      const newF = [...features];
+                                      newF[fIndex] = {
+                                        ...newF[fIndex],
+                                        options: [...newF[fIndex].options, ...newOptions]
+                                      };
+                                      setFeatures(newF);
+                                    }
+                                    inputEl.value = '';
+                                  }
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const inputEl = document.getElementById(`feature-input-${feature.id}`) as HTMLInputElement;
+                                if (inputEl) {
+                                  const val = inputEl.value.trim();
+                                  if (val) {
+                                    const vals = val.split(/[,،]/).map(v => v.trim()).filter(Boolean);
+                                    if (vals.length > 0) {
+                                      const newOptions = vals.map((v, i) => ({ id: Date.now().toString() + i.toString() + Math.random().toString(), value: v }));
+                                      const newF = [...features];
+                                      newF[fIndex] = {
+                                        ...newF[fIndex],
+                                        options: [...newF[fIndex].options, ...newOptions]
+                                      };
+                                      setFeatures(newF);
+                                    }
+                                    inputEl.value = '';
+                                  }
+                                }
+                              }}
+                              className="w-full sm:w-auto px-3 py-1.5 bg-sky-50 text-sky-600 font-semibold text-xs rounded-lg hover:bg-sky-100 transition whitespace-nowrap"
+                            >
+                              افزودن
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-slate-400">برای ثبت Enter بزنید یا روی دکمه افزودن کلیک کنید. برای ثبت چند مقدار همزمان از ویرگول (,) استفاده کنید.</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Variants Configuration */}
+                {features.length > 0 && (
+                  <div className="space-y-4 pt-4 border-t border-slate-100">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hasVariants}
+                        onChange={(e) => setHasVariants(e.target.checked)}
+                        className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer"
+                      />
+                      <span className="text-sm font-bold text-slate-800">مدیریت موجودی در سطح ویژگی‌ها (SKU)</span>
+                    </label>
+
+                    {hasVariants && (
+                      <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div className="flex justify-between items-center mb-2">
+                          <p className="text-xs text-slate-500">برای ترکیب‌های مختلف ویژگی‌ها کدهای کالا (SKU) و موجودی مجزا تعریف کنید.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Generate cartesian product of all feature options
+                              const getCombinations = (featuresArr: ProductFeature[]): Record<string, string>[] => {
+                                if (featuresArr.length === 0) return [{}];
+                                const current = featuresArr[0];
+                                const rest = getCombinations(featuresArr.slice(1));
+                                const combos: Record<string, string>[] = [];
+                                
+                                if (current.options.length === 0) {
+                                  return rest;
+                                }
+
+                                for (const opt of current.options) {
+                                  for (const r of rest) {
+                                    combos.push({ ...r, [current.name]: opt.value });
+                                  }
+                                }
+                                return combos;
+                              };
+
+                              const combinations = getCombinations(features);
+                              const pCode = productCode.trim() || 'SKU';
+                              const newVariants = combinations.map((combo, i) => {
+                                // Generate SKU
+                                const skuParts = [pCode];
+                                Object.entries(combo).forEach(([fName, fVal]) => {
+                                  const feat = features.find(f => f.name === fName);
+                                  if (feat) {
+                                    const optIndex = feat.options.findIndex(o => o.value === fVal);
+                                    if (optIndex !== -1) {
+                                      const prefix = feat.code ? feat.code : '';
+                                      skuParts.push(`${prefix}${optIndex + 1}`);
+                                    }
+                                  }
+                                });
+                                const generatedSku = skuParts.join('-');
+
+                                // check if exists
+                                const existing = variants.find(v => {
+                                  const vKeys = Object.keys(v.attributes);
+                                  const cKeys = Object.keys(combo);
+                                  if (vKeys.length !== cKeys.length) return false;
+                                  return vKeys.every(k => v.attributes[k] === combo[k]);
+                                });
+                                
+                                if (existing) {
+                                  return { ...existing, sku: existing.sku || generatedSku };
+                                }
+
+                                return {
+                                  id: `var-${Date.now()}-${i}`,
+                                  sku: generatedSku,
+                                  attributes: combo,
+                                  stockLevel: 0,
+                                  minStockLevel: 0
+                                };
+                              });
+                              setVariants(newVariants);
+                            }}
+                            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition"
+                          >
+                            تولید ترکیب‌ها
+                          </button>
+                        </div>
+                        
+                        {variants.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-right border-collapse">
+                              <thead>
+                                <tr className="border-b border-slate-200">
+                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">کد SKU</th>
+                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">ترکیب</th>
+                                  {supplyType === 'INVENTORY' && <th className="py-2 px-3 text-xs font-semibold text-slate-600">موجودی اولیه</th>}
+                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">عملیات</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {variants.map((variant, vIdx) => (
+                                  <tr key={variant.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-100 transition">
+                                    <td className="py-2 px-3">
+                                      <input
+                                        type="text"
+                                        value={variant.sku}
+                                        onChange={(e) => {
+                                          const newV = [...variants];
+                                          newV[vIdx].sku = e.target.value;
+                                          setVariants(newV);
+                                        }}
+                                        placeholder="SKU"
+                                        className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500"
+                                      />
+                                    </td>
+                                    <td className="py-2 px-3 text-xs text-slate-700 whitespace-nowrap">
+                                      {Object.entries(variant.attributes).map(([k, v]) => `${k}: ${v}`).join(' ، ')}
+                                    </td>
+                                    {supplyType === 'INVENTORY' && (
+                                      <td className="py-2 px-3">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={variant.stockLevel}
+                                          onChange={(e) => {
+                                            const newV = [...variants];
+                                            newV[vIdx].stockLevel = Number(e.target.value) || 0;
+                                            setVariants(newV);
+                                          }}
+                                          className="w-20 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500"
+                                        />
+                                      </td>
+                                    )}
+                                    <td className="py-2 px-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newV = [...variants];
+                                          newV.splice(vIdx, 1);
+                                          setVariants(newV);
+                                        }}
+                                        className="text-red-500 hover:text-red-600 hover:bg-red-50 p-1 rounded transition"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-6 text-slate-400 text-xs">
+                            هیچ ترکیب SKU ایجاد نشده است.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Dynamic Custom Fields Form Section */}
                 <CustomFieldsForm
                   module="products"
@@ -835,23 +1144,56 @@ export default function ProductsView({
               e.preventDefault();
               const amt = Number(stockAdjustAmount);
               if (amt > 0) {
-                const finalAmt = stockAdjustType === 'IN' ? amt : -amt;
-                if (stockAdjustType === 'OUT' && (stockAdjustProd.stockLevel || 0) < amt) {
-                   alert('موجودی انبار کافی نیست.');
-                   return;
+                if (stockAdjustProd.hasVariants && !stockAdjustVariantId) {
+                  alert('لطفاً نوع (SKU) مورد نظر را انتخاب کنید.');
+                  return;
                 }
-                adjustProductStock(stockAdjustProd.id, finalAmt, undefined, 'MANUAL', stockAdjustNotes);
+                
+                const finalAmt = stockAdjustType === 'IN' ? amt : -amt;
+                let currentStock = stockAdjustProd.stockLevel || 0;
+                
+                if (stockAdjustProd.hasVariants && stockAdjustVariantId) {
+                  const variant = stockAdjustProd.variants?.find(v => v.id === stockAdjustVariantId);
+                  if (variant) currentStock = variant.stockLevel || 0;
+                }
+                
+                if (stockAdjustType === 'OUT' && currentStock < amt) {
+                   if (!window.confirm('موجودی ثبت شده در سیستم برای این خروج کافی نیست. آیا مایلید با وجود مغایرت، موجودی منفی را در دفاتر انبار ثبت کنید؟')) return;
+                }
+                
+                adjustProductStock(stockAdjustProd.id, finalAmt, stockAdjustVariantId || undefined, 'MANUAL', stockAdjustNotes);
                 setStockModalOpen(false);
               }
             }} className="p-6 space-y-4">
               
               <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
                 <div className="font-bold text-slate-800 mb-1">{stockAdjustProd.displayName}</div>
-                <div className="flex justify-between mt-2 text-xs">
-                  <span>موجودی فعلی:</span>
-                  <span className="font-bold">{stockAdjustProd.stockLevel || 0} عدد</span>
-                </div>
+                {!stockAdjustProd.hasVariants && (
+                  <div className="flex justify-between mt-2 text-xs">
+                    <span>موجودی فعلی:</span>
+                    <span className="font-bold">{stockAdjustProd.stockLevel || 0} عدد</span>
+                  </div>
+                )}
               </div>
+              
+              {stockAdjustProd.hasVariants && stockAdjustProd.variants && (
+                <div className="space-y-1.5 mb-4">
+                  <label className="text-xs font-semibold text-slate-500">انتخاب نوع (SKU) *</label>
+                  <select
+                    value={stockAdjustVariantId}
+                    onChange={(e) => setStockAdjustVariantId(e.target.value)}
+                    required
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- انتخاب کنید --</option>
+                    {stockAdjustProd.variants.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.sku} - {Object.values(v.attributes).join(', ')} (موجودی: {v.stockLevel || 0})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <button

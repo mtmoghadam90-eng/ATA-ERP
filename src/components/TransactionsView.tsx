@@ -454,6 +454,59 @@ export default function TransactionsView({
 
     const linkedProjName = projects.find(p => p.id === projectId)?.name;
 
+    // Financial Transaction Over-Payment Protection Validation
+    if (type === 'دریافت' && projectId) {
+      const projSummary = computedProjectSummaries.find(p => p.id === projectId);
+      if (projSummary) {
+        const currentSales = projSummary.salesAmount || 0;
+        // Calculate other payments excluding the one we are editing
+        const otherPayments = transactions
+          .filter(t => t.id !== editingTransaction?.id && t.projectId === projectId && t.type === 'دریافت' && t.status !== 'لغو شده')
+          .reduce((sum, t) => sum + t.amountRIYAL, 0);
+        const newTotal = otherPayments + amountRIYAL;
+        if (currentSales > 0 && newTotal > currentSales) {
+          const overAmount = newTotal - currentSales;
+          const confirmProceed = window.confirm(
+            `هشدار مغایرت حسابداری:\n` +
+            `مجموع دریافتی‌های این پروژه با ثبت این تراکنش (${newTotal.toLocaleString('fa-IR')} ریال) از کل مبلغ فروش پروژه (${currentSales.toLocaleString('fa-IR')} ریال) بیشتر می‌شود!\n` +
+            `مبلغ اضافی (مغایرت): ${overAmount.toLocaleString('fa-IR')} ریال.\n\n` +
+            `آیا مایل به ثبت این سند با وجود مغایرت هستید؟`
+          );
+          if (!confirmProceed) {
+            return;
+          }
+        }
+      }
+    }
+
+    // Draft Receipt Warning
+    if (type === 'دریافت' && status === 'پیش‌نویس') {
+      const confirmDraft = window.confirm(
+        `هشدار وضعیت پیش‌نویس:\n` +
+        `این سند دریافت در وضعیت «پیش‌نویس» ثبت می‌شود و تا زمان تایید نهایی در صورتحساب‌ها، پیش‌پرداخت‌ها و مانده بدهی مشتری منظور نخواهد شد.\n` +
+        `آیا مایلید تراکنش را به صورت پیش‌نویس ثبت کنید؟`
+      );
+      if (!confirmDraft) {
+        return;
+      }
+    }
+
+    // Unassigned Receipt Warning
+    if (type === 'دریافت' && projectId && !proformaId) {
+      const approvedPfs = proformas.filter(pf => pf.projectId === projectId && (pf.status === 'تأیید شده (برنده)' || pf.status === 'نیمه برنده'));
+      if (approvedPfs.length > 0) {
+        const confirmUnallocated = window.confirm(
+          `هشدار عدم تخصیص به پیش‌فاکتور:\n` +
+          `پروژه مادریِ انتخاب‌شده دارای ${approvedPfs.length} پیش‌فاکتور تایید شده است، اما این دریافت به هیچ پیش‌فاکتوری متصل نشده است.\n` +
+          `عدم تخصیص دریافتی‌ها به پیش‌فاکتور باعث می‌شود تا فاکتورهای مشتری تسویه‌نشده باقی مانده و مغایرت حسابداری ایجاد شود.\n\n` +
+          `آیا مایل به ثبت دریافت به صورت آزاد در سطح کل پروژه هستید؟`
+        );
+        if (!confirmUnallocated) {
+          return;
+        }
+      }
+    }
+
     const transactionPayload = {
       type,
       receiptType,

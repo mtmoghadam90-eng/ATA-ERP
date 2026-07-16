@@ -317,14 +317,33 @@ export default function ProjectsView({
         (item, i) => i === index ? {
           ...item,
           productId: prodId,
+          variantId: undefined,
           name: selectedProd.displayName,
-          supplyMethod: selectedProd.supplyType === "ORDER" ? "ORDER" : "INVENTORY",
+          supplyMethod: (selectedProd.stockLevel === 0 ? "ORDER" : selectedProd.supplyType) === "ORDER" ? "ORDER" : "INVENTORY",
           category: void 0,
           equipmentType: void 0,
           size: void 0
         } : item
       )
     );
+  };
+  const handleItemVariantChange = (index: number, variantId: string) => {
+    const newItems = [...itemsNeeded];
+    const item = newItems[index];
+    const prod = products.find(p => p.id === item.productId);
+    if (!prod || !prod.hasVariants || !prod.variants) return;
+
+    const variant = prod.variants.find(v => v.id === variantId);
+    if (!variant) return;
+
+    const effectiveST = variant.stockLevel === 0 ? "ORDER" : (prod.supplyType || "INVENTORY");
+    
+    newItems[index] = {
+      ...item,
+      variantId: variant.id,
+      supplyMethod: effectiveST === "ORDER" ? "ORDER" : "INVENTORY",
+    };
+    setItemsNeeded(newItems);
   };
   const handleItemCategoryChange = (index, cat) => {
     setItemsNeeded(
@@ -460,6 +479,20 @@ export default function ProjectsView({
       }
     }
     const customerName = customers.find((c) => c.id === customerId)?.companyName || "مشتری نامشخص";
+
+    // Won/Partial Won Project without Required Items Warning
+    if ((status === 'برنده (موفق)' || status === 'نیمه برنده') && (!itemsNeeded || itemsNeeded.length === 0)) {
+      const confirmNoItems = window.confirm(
+        `هشدار عدم ثبت نیازمندی‌های کالا:\n` +
+        `وضعیت پروژه روی «${status}» قرار دارد، اما هیچ کالای مورد نیازی برای پروژه تعریف نشده است!\n` +
+        `این مسئله باعث می‌شود تا زنجیره تأمین، سفارش خرید و مدارک حمل با خطا و عدم ردیابی مواجه شوند.\n\n` +
+        `آیا اطمینان دارید که می‌خواهید این پروژه را بدون اقلام مورد نیاز ثبت کنید؟`
+      );
+      if (!confirmNoItems) {
+        return;
+      }
+    }
+
     const data = {
       name,
       customerId,
@@ -1307,14 +1340,14 @@ export default function ProjectsView({
           resolvedSupplyMethod = item.supplyMethod;
         } else if (projectItemNeeded && projectItemNeeded.supplyMethod && projectItemNeeded.supplyMethod !== 'INVENTORY') {
           resolvedSupplyMethod = projectItemNeeded.supplyMethod;
-        } else if (matchedProd && matchedProd.supplyType === 'ORDER') {
+        } else if (matchedProd && (matchedProd.stockLevel === 0 ? 'ORDER' : matchedProd.supplyType) === 'ORDER') {
           resolvedSupplyMethod = 'ORDER';
         } else if (item.supplyMethod) {
           resolvedSupplyMethod = item.supplyMethod;
         } else if (projectItemNeeded && projectItemNeeded.supplyMethod) {
           resolvedSupplyMethod = projectItemNeeded.supplyMethod;
         } else if (matchedProd && matchedProd.supplyType) {
-          resolvedSupplyMethod = matchedProd.supplyType;
+          resolvedSupplyMethod = matchedProd.stockLevel === 0 ? 'ORDER' : matchedProd.supplyType;
         }
 
         allWonItems.push({
@@ -3142,9 +3175,10 @@ export default function ProjectsView({
                                       value={item.productId}
                                       onChange={(val) => handleItemProductChange(index, val)}
                                       options={products.map(p => {
-                                        const details = [p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ');
+                                        const details = '';
                                         const detailsText = details ? ` (${details})` : '';
-                                        const stockText = p.stockLevel !== undefined && p.stockLevel > 0 ? ` [موجودی: ${p.stockLevel} ${p.unit || 'عدد'}]` : '';
+                                        const effectiveST = p.stockLevel === 0 ? "ORDER" : (p.supplyType || "INVENTORY");
+                                        const stockText = effectiveST === "INVENTORY" ? (p.stockLevel !== undefined ? ` [موجودی: ${p.stockLevel} ${p.unit || 'عدد'}]` : '') : ' [تامین سفارشی]';
                                         return {
                                           value: p.id,
                                           label: `${p.code} - ${p.displayName}${detailsText}${stockText}`

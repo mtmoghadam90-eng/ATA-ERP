@@ -735,8 +735,14 @@ export default function PackagingDeliveryView({
     for (const item of packingItems) {
       const maxAllowed = getMaxAllowedQty(item);
       if (item.quantity > maxAllowed && maxAllowed !== Infinity) {
-        alert(`خطا: تعداد وارد شده برای "${item.itemOrDocName}" (${item.quantity} عدد) بیشتر از مقدار مجاز باقی‌مانده پیش‌فاکتور (${maxAllowed} عدد) است. امکان ثبت وجود ندارد.`);
-        return;
+        const confirmOverQty = window.confirm(
+          `هشدار مغایرت پکینگ لیست:\n` +
+          `تعداد وارد شده برای "${item.itemOrDocName}" (${item.quantity} عدد) بیشتر از مقدار مجاز باقی‌مانده پیش‌فاکتور (${maxAllowed} عدد) است.\n` +
+          `آیا اطمینان دارید که می‌خواهید این تعداد مازاد را ثبت و ارسال کنید؟`
+        );
+        if (!confirmOverQty) {
+          return;
+        }
       }
     }
 
@@ -749,6 +755,47 @@ export default function PackagingDeliveryView({
     }));
 
     const finalActualDeliveryDate = useItemizedDeliveryDates ? '' : actualDeliveryDate;
+
+    // Quality Control Checklist Validation on Delivery
+    const isMarkedAsDelivered = useItemizedDeliveryDates 
+      ? cleanItems.some(item => !!item.actualDeliveryDate) 
+      : !!finalActualDeliveryDate;
+
+    const hasIncompleteChecklist = checklist.some(c => !c.completed);
+
+    if (isMarkedAsDelivered && hasIncompleteChecklist) {
+      const incompleteItems = checklist.filter(c => !c.completed).map(c => `- ${c.taskName}`);
+      const confirmDeliv = window.confirm(
+        `هشدار کنترل کیفیت (QC):\n` +
+        `مواردی از چک‌لیست بسته‌بندی و فنی هنوز تایید نهایی نشده‌اند:\n` +
+        `${incompleteItems.join('\n')}\n\n` +
+        `ثبت تاریخ تحویل واقعی به منزله خروج نهایی کالا از کارخانه یا انبار است.\n` +
+        `آیا اطمینان دارید که می‌خواهید کالا را قبل از تایید نهایی کیفیت تحویل دهید؟`
+      );
+      if (!confirmDeliv) {
+        return;
+      }
+    }
+
+    // Shipping tracking and driver details validation
+    const nonLocalShipping = ['باربری', 'تیپاکس', 'پست پیشتاز', 'هواپیمایی'];
+    if (isMarkedAsDelivered && nonLocalShipping.includes(shippingMethod)) {
+      const notesClean = (preDeliveryTestNotes || '').trim();
+      const hasTrackingKeywords = /بارنامه|راننده|رهگیری|پست|تیپاکس|کد|شماره|پلاک/g.test(notesClean);
+      const hasDigits = /\d+/g.test(notesClean);
+      
+      if (!notesClean || notesClean.length < 10 || (!hasTrackingKeywords && !hasDigits)) {
+        const confirmTracking = window.confirm(
+          `هشدار اطلاعات حمل و نقل:\n` +
+          `روش ارسال کالا روی «${shippingMethod}» تنظیم شده است، اما اطلاعات بارنامه، نام راننده یا کد رهگیری معتبری در بخش گزارش تست و ارسال ثبت نشده است.\n\n` +
+          `ثبت شماره بارنامه یا مشخصات راننده جهت پیگیری‌های بعدی و شفافیت مالی مشتری الزامی است.\n` +
+          `آیا اطمینان دارید که می‌خواهید تحویل کالا را بدون این اطلاعات ثبت کنید؟`
+        );
+        if (!confirmTracking) {
+          return;
+        }
+      }
+    }
 
     if (editingDeliveryId) {
       const existingDelivery = packagingDeliveries.find(d => d.id === editingDeliveryId);

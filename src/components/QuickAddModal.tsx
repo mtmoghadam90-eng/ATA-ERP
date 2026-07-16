@@ -328,9 +328,7 @@ export default function QuickAddModal({
         basePriceRIYAL: 0,
         minStockLevel: 0,
         stockLevel: prodSupplyType === 'INVENTORY' ? (parseInt(prodInitialStock) || 0) : 0,
-        size: prodSize,
-        measurementRange: prodMeasurementRange,
-        supplyType: prodSupplyType,
+                        supplyType: prodSupplyType,
         images: prodImages,
         customValues
       });
@@ -1050,7 +1048,7 @@ export default function QuickAddModal({
                               className="flex-1 border border-slate-200 rounded px-2 py-1 text-xs bg-white text-right min-w-0"
                             >
                               {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.displayName}{p.size || p.measurementRange ? ` (${[p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ')})` : ''}</option>
+                                <option key={p.id} value={p.id}>{p.displayName}{''}</option>
                               ))}
                             </select>
 

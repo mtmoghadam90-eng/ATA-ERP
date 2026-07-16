@@ -277,6 +277,22 @@ export default function PurchaseOrdersView({
     setItems(newItems);
   };
 
+  const handleItemVariantChange = (index: number, variantId: string) => {
+    const newItems = [...items];
+    const item = newItems[index];
+    const prod = products.find(p => p.id === item.productId);
+    if (!prod || !prod.hasVariants || !prod.variants) return;
+
+    const variant = prod.variants.find(v => v.id === variantId);
+    if (!variant) return;
+
+    newItems[index] = {
+      ...item,
+      variantId: variant.id,
+      productCode: variant.sku,
+    };
+    setItems(newItems);
+  };
   const handleItemFieldChange = (idx: number, field: 'quantity' | 'unitPriceForeignCurrency', val: number) => {
     const newItems = [...items];
     const updatedQty = field === 'quantity' ? Math.max(0, val) : newItems[idx].quantity;
@@ -321,6 +337,21 @@ export default function PurchaseOrdersView({
       ...item,
       totalPriceForeignCurrency: item.quantity * item.unitPriceForeignCurrency
     }));
+
+    // Empty Tag Numbers validation on Purchase Orders
+    const itemsWithoutTag = formattedItems.filter(item => !item.tagNumber || !item.tagNumber.trim());
+    if (itemsWithoutTag.length > 0 && status !== 'پیش‌نویس') {
+      const confirmTags = window.confirm(
+        `هشدار تگ نامبر:\n` +
+        `اقلام زیر در سفارش خرید فاقد تگ نامبر (Tag Number) هستند:\n` +
+        `${itemsWithoutTag.map(it => `- ${it.productName || 'کالا'}`).join('\n')}\n\n` +
+        `در فاکتورها و سفارشات خرید تجهیزات ابزاردقیق، عدم درج تگ نامبر می‌تواند باعث مغایرت شدید در زمان ساخت و گمرک شود.\n` +
+        `آیا اطمینان دارید که می‌خواهید سفارش خرید را ثبت کنید؟`
+      );
+      if (!confirmTags) {
+        return;
+      }
+    }
 
     if (editingPO) {
       updatePurchaseOrder({
@@ -1257,23 +1288,54 @@ export default function PurchaseOrdersView({
                       {/* Product select & Proforma Item select */}
                       <div className="col-span-6 space-y-1.5">
                         <div className="flex gap-1 items-center">
-                          <SearchableSelect wrapperClassName="flex-1 min-w-0"
-                            value={item.productId}
-                            onChange={(val) => handleItemProductChange(idx, val)}
-                            options={[
-                              { value: '', label: '-- انتخاب کالا --' },
-                              ...products.map(p => {
-                                const details = [p.size ? `سایز: ${p.size}` : null, p.measurementRange ? `رنج: ${p.measurementRange}` : null].filter(Boolean).join(', ');
-                                const detailsText = details ? ` (${details})` : '';
-                                return {
-                                  value: p.id,
-                                  label: `${p.code} - ${p.displayName}${detailsText}`
-                                };
-                              })
-                            ]}
-                            placeholder="-- انتخاب کالا --"
-                            className="text-xs"
-                          />
+                          <div className="flex-1 flex flex-col gap-2 min-w-0">
+                            <SearchableSelect wrapperClassName="w-full min-w-0"
+                              value={item.productId}
+                              onChange={(val) => handleItemProductChange(idx, val)}
+                              options={[
+                                { value: '', label: '-- انتخاب کالا --' },
+                                ...products.map(p => {
+                                  let stockText = "";
+                                  if (p.hasVariants && p.variants && p.variants.length > 0) {
+                                      const totalStock = p.variants.reduce((acc, v) => acc + (v.stockLevel || 0), 0);
+                                      const hasOrderVariant = p.variants.some(v => !v.stockLevel || v.stockLevel === 0);
+                                      const hasInventoryVariant = p.variants.some(v => v.stockLevel && v.stockLevel > 0);
+                                      
+                                      if (hasInventoryVariant && hasOrderVariant) {
+                                          stockText = ` [موجودی: ${totalStock} + تامین سفارشی]`;
+                                      } else if (hasInventoryVariant) {
+                                          stockText = ` [موجودی: ${totalStock}]`;
+                                      } else {
+                                          stockText = ` [تامین سفارشی]`;
+                                      }
+                                  } else {
+                                      const effectiveST = p.stockLevel === 0 ? "ORDER" : (p.supplyType || "INVENTORY");
+                                      stockText = effectiveST === "INVENTORY" ? (p.stockLevel !== undefined ? ` [موجودی: ${p.stockLevel}]` : '') : ' [تامین سفارشی]';
+                                  }
+                                  return {
+                                    value: p.id,
+                                    label: `${p.code} - ${p.displayName}${stockText}`
+                                  };
+                                })
+                              ]}
+                              placeholder="-- انتخاب کالا --"
+                              className="text-xs"
+                            />
+                            {item.productId && products.find(p => p.id === item.productId)?.hasVariants && (
+                              <select
+                                className="w-full border border-slate-200 rounded-lg px-2 py-1 text-[11px] bg-slate-50 focus:bg-white text-right outline-none"
+                                value={item.variantId || ""}
+                                onChange={(e) => handleItemVariantChange(idx, e.target.value)}
+                              >
+                                <option value="">-- انتخاب ترکیب مشخصات (SKU) --</option>
+                                {products.find(p => p.id === item.productId)?.variants?.map(v => (
+                                  <option key={v.id} value={v.id}>
+                                    {v.sku} - {Object.values(v.attributes).join(', ')}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
                           {addProduct && (
                             <button
                               type="button"
