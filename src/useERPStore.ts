@@ -1295,6 +1295,10 @@ export function useERPStore() {
     return newProject;
   };
   const updateProject = (updatedProject: any) => {
+    const oldProject = projects.find(p => p.id === updatedProject.id);
+    if (oldProject && oldProject.status !== updatedProject.status) {
+      processWorkflowRules('project_status_change', { newStatus: updatedProject.status, ...updatedProject });
+    }
     const updated = projects.map(p => p.id === updatedProject.id ? updatedProject : p);
     saveToStorage("erp_projects", updated, setProjects);
     logAction("UPDATE", "پروژه", updatedProject.id, `بروزرسانی پروژه: ${updatedProject.title}`);
@@ -1336,6 +1340,53 @@ export function useERPStore() {
     saveToStorage("erp_tasks", updated, setTasks);
     logAction("CREATE", "وظیفه", newTask.id, `ایجاد وظیفه: ${task.title}`);
   };
+
+  const addModuleNotification = (notif: Omit<ModuleNotification, 'id' | 'timestamp' | 'read'>) => {
+    const newNotif: ModuleNotification = {
+      ...notif,
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: Date.now(),
+      read: false
+    };
+    const updated = [newNotif, ...moduleNotifications];
+    saveToStorage("erp_module_notifications", updated, setModuleNotifications);
+  };
+
+  const processWorkflowRules = (triggerType: string, payload: any) => {
+    const activeRules = settings.workflows?.filter(r => r.active && r.triggerType === triggerType) || [];
+    for (const rule of activeRules) {
+      let match = true;
+      for (const cond of rule.conditions) {
+        const actualValue = payload[cond.field];
+        if (cond.operator === 'equals' && String(actualValue) !== String(cond.value)) match = false;
+        if (cond.operator === 'not_equals' && String(actualValue) === String(cond.value)) match = false;
+        if (cond.operator === 'greater_than' && Number(actualValue) <= Number(cond.value)) match = false;
+        if (cond.operator === 'less_than' && Number(actualValue) >= Number(cond.value)) match = false;
+      }
+      if (match) {
+        for (const action of rule.actions) {
+          if (action.actionType === 'create_task') {
+            addTask({
+              title: `وظیفه خودکار: ${rule.name}`,
+              description: action.taskDescription || '',
+              dueDate: new Date().toISOString(),
+              priority: 'بالا',
+              status: 'در انتظار',
+              assignedTo: action.taskAssigneeRole || 'admin'
+            });
+          } else if (action.actionType === 'send_notification') {
+            addModuleNotification({
+              module: 'سیستم',
+              title: rule.name,
+              description: action.notificationMessage || '',
+              responsibleName: 'سیستم'
+            });
+          }
+        }
+      }
+    }
+  };
+
   const updateTask = (updatedTask: any) => {
     const updated = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
     saveToStorage("erp_tasks", updated, setTasks);
@@ -1351,6 +1402,7 @@ export function useERPStore() {
     const newPd = { ...pd, id: `pd-${Date.now()}`, createdAt: new Date().toISOString() };
     const updated = [...packagingDeliveries, newPd];
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
+    processWorkflowRules('packaging_delivery_created', newPd);
   };
   const updatePackagingDelivery = (updatedPd: any) => {
     const updated = packagingDeliveries.map(p => p.id === updatedPd.id ? updatedPd : p);

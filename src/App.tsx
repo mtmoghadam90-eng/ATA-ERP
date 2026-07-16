@@ -321,6 +321,7 @@ export default function App() {
             products={store.products}
             exchangeRates={store.exchangeRates}
             proformas={store.proformas}
+            supplierInquiries={store.supplierInquiries || []}
             addPurchaseOrder={store.addPurchaseOrder}
             updatePurchaseOrder={store.updatePurchaseOrder}
             updatePurchaseOrderStatus={store.updatePurchaseOrderStatus}

@@ -1525,7 +1525,13 @@ export default function TransactionsView({
                     <input
                       type="number"
                       value={amountForeign}
-                      onChange={(e) => setAmountForeign(Number(e.target.value))}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setAmountForeign(val);
+                        if (exchangeRate > 0) {
+                          setAmountRIYAL(val * exchangeRate);
+                        }
+                      }}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left"
                     />
                   </div>
@@ -1537,7 +1543,13 @@ export default function TransactionsView({
                         <input
                           type="number"
                           value={exchangeRate}
-                          onChange={(e) => setExchangeRate(Number(e.target.value))}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setExchangeRate(val);
+                            if (amountForeign > 0) {
+                              setAmountRIYAL(amountForeign * val);
+                            }
+                          }}
                           required={amountForeign > 0}
                           className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left"
                         />
