@@ -648,7 +648,7 @@ export default function DashboardView({
                 <h3 className="text-base font-bold text-slate-800">نرخ تبدیل کلی پیش‌فاکتورها</h3>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed mb-6">
-                درصد پیش‌فاکتورهایی که به قرارداد نهایی (برنده) تبدیل شده‌اند نسبت به کل پیش‌فاکتورهای تعیین تکلیف شده.
+                درصد پیش‌فاکتورهایی که به قرارداد نهایی (برنده) تبدیل شده‌اند نسبت به کل پیش‌فاکتورهای صادر شده.
               </p>
             </div>
             
@@ -656,11 +656,11 @@ export default function DashboardView({
               <div className="flex-1 relative h-4 bg-slate-100 rounded-full overflow-hidden">
                 <div 
                   className="absolute top-0 right-0 h-full bg-emerald-500 rounded-full transition-all duration-1000 ease-out"
-                  style={{ width: `${proformas.length > 0 ? Math.round((proformas.filter(p => { const outcome = getProformaOutcomeStatus(p); return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده'; }).length / Math.max(1, proformas.filter(p => { const outcome = getProformaOutcomeStatus(p); return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده' || outcome === 'باخته'; }).length)) * 100) : 0}%` }}
+                  style={{ width: `${proformas.length > 0 ? Math.round((proformas.filter(p => { const outcome = getProformaOutcomeStatus(p); return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده'; }).length / proformas.length) * 100) : 0}%` }}
                 ></div>
               </div>
               <div className="text-4xl font-black text-slate-800 font-mono tracking-tighter">
-                {proformas.length > 0 ? Math.round((proformas.filter(p => { const outcome = getProformaOutcomeStatus(p); return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده'; }).length / Math.max(1, proformas.filter(p => { const outcome = getProformaOutcomeStatus(p); return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده' || outcome === 'باخته'; }).length)) * 100) : 0}<span className="text-xl text-slate-400 font-sans">٪</span>
+                {proformas.length > 0 ? Math.round((proformas.filter(p => { const outcome = getProformaOutcomeStatus(p); return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده'; }).length / proformas.length) * 100) : 0}<span className="text-xl text-slate-400 font-sans">٪</span>
               </div>
             </div>
             
@@ -694,14 +694,11 @@ export default function DashboardView({
             
             <div className="flex-1 overflow-auto max-h-[220px] pr-2 space-y-4">
               {(() => {
-                const decidedProformas = proformas.filter(p => {
-                  const outcome = getProformaOutcomeStatus(p);
-                  return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده' || outcome === 'باخته';
-                });
+                const activeProformas = proformas.filter(p => !p.isCancelled && p.status !== 'لغو شده');
                 
                 const categoryStats: Record<string, { won: number, total: number }> = {};
                 
-                decidedProformas.forEach(p => {
+                activeProformas.forEach(p => {
                   const outcome = getProformaOutcomeStatus(p);
                   const isWon = outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
                   

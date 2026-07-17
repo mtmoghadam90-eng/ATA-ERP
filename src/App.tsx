@@ -551,6 +551,9 @@ export default function App() {
   const pendingReferrals = (store.projectCategoryGroups || []).flatMap(g => g.activities || [])
     .filter(a => a.referral && a.referral.status === 'در انتظار اقدام' && a.referral.assignedTo === currentUserName);
 
+  const activeTemplate = store.settings?.proformaTemplates?.find(t => t.name === store.settings?.activeTemplateId) || store.settings?.proformaTemplates?.[0];
+  const logoUrl = activeTemplate?.logoUrl;
+
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-right" dir="rtl">
       
@@ -568,6 +571,7 @@ export default function App() {
         sidebarModuleOrder={store.settings.sidebarModuleOrder}
         isOpen={sidebarOpen}
         setIsOpen={setSidebarOpen}
+        logoUrl={logoUrl}
       />
 
       {/* Main Panel Content Area */}

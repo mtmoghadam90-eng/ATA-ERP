@@ -38,6 +38,7 @@ interface SidebarProps {
   sidebarModuleOrder?: string[];
   isOpen?: boolean;
   setIsOpen?: (open: boolean) => void;
+  logoUrl?: string;
 }
 
 export default function Sidebar({ 
@@ -52,7 +53,8 @@ export default function Sidebar({
   onLogout, 
   sidebarModuleOrder,
   isOpen: propIsOpen,
-  setIsOpen: propSetIsOpen
+  setIsOpen: propSetIsOpen,
+  logoUrl
 }: SidebarProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(true);
   const isOpen = propIsOpen !== undefined ? propIsOpen : internalIsOpen;
@@ -109,8 +111,18 @@ export default function Sidebar({
         {/* Brand Header */}
         <div className={`p-4 border-b border-slate-800 flex ${isOpen ? 'justify-start' : 'justify-center'} items-center bg-slate-950 transition-all duration-300`}>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-sky-500 rounded-lg text-white flex items-center justify-center shadow-lg shadow-sky-500/20 flex-shrink-0">
-              <Clock className="animate-spin-slow text-white" size={20} />
+            <div className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sky-400 flex items-center justify-center shadow-lg shadow-slate-950/50 flex-shrink-0 w-10 h-10 overflow-hidden">
+              {logoUrl ? (
+                <img src={logoUrl} alt="لوگو" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+              ) : (
+                <svg className="text-sky-400" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {/* Gauge representation for precision instrumentation & tools */}
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeWidth="1.5" className="stroke-sky-500/40" />
+                  <circle cx="12" cy="11" r="3.5" />
+                  <path d="M12 11l2-2" strokeWidth="2.5" strokeLinecap="round" />
+                  <circle cx="12" cy="11" r="1" fill="currentColor" />
+                </svg>
+              )}
             </div>
             {isOpen && (
               <div className="flex flex-col overflow-hidden">
