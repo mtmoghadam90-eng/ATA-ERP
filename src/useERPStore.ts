@@ -542,11 +542,14 @@ export function useERPStore() {
   const autoLogFactActivity = (projectId: string | undefined, categoryName: string, text: string) => {
     if (!projectId) return;
 
+    // A robust normalize function to remove all spaces, ZWNJs, and convert to lowercase for exact matching
+    const normalize = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
+
     setProjectCategoryGroups((prevGroups: any[]) => {
       let updatedGroups = [...prevGroups];
       const existingGroupIndex = updatedGroups.findIndex(g => 
         g.projectId === projectId && 
-        (g.categoryName || '').trim() === categoryName.trim()
+        normalize(g.categoryName) === normalize(categoryName)
       );
 
       const newActivity = {
@@ -1479,14 +1482,14 @@ export function useERPStore() {
     saveToStorage("erp_proformas", updated, setProformas);
     logAction("CREATE", "پیش‌فاکتور", newProforma.id, `ایجاد پیش‌فاکتور: ${finalProformaNumber}`);
     
-    autoLogFactActivity(newProforma.projectId, 'پیشفاکتور', `صدور پیش‌فاکتور جدید با شماره ${newProforma.proformaNumber} به مبلغ ${newProforma.totalPrice?.toLocaleString() || 0} و وضعیت ${newProforma.status}`);
+    autoLogFactActivity(newProforma.projectId, 'پیش‌فاکتور', `صدور پیش‌فاکتور جدید با شماره ${newProforma.proformaNumber} به مبلغ ${newProforma.totalPrice?.toLocaleString() || 0} و وضعیت ${newProforma.status}`);
   };
   const updateProforma = (updatedProforma: any) => {
     const updated = proformas.map(p => p.id === updatedProforma.id ? updatedProforma : p);
     saveToStorage("erp_proformas", updated, setProformas);
     logAction("UPDATE", "پیش‌فاکتور", updatedProforma.id, `بروزرسانی پیش‌فاکتور`);
     
-    autoLogFactActivity(updatedProforma.projectId, 'پیشفاکتور', `بروزرسانی پیش‌فاکتور ${updatedProforma.proformaNumber} - مبلغ: ${updatedProforma.totalPrice?.toLocaleString() || 0} - وضعیت: ${updatedProforma.status}`);
+    autoLogFactActivity(updatedProforma.projectId, 'پیش‌فاکتور', `بروزرسانی پیش‌فاکتور ${updatedProforma.proformaNumber} - مبلغ: ${updatedProforma.totalPrice?.toLocaleString() || 0} - وضعیت: ${updatedProforma.status}`);
   };
   const deleteProforma = (id: string) => {
     const updated = proformas.filter(p => p.id !== id);
@@ -1603,13 +1606,13 @@ export function useERPStore() {
     const newSi = { ...si, id: `si-${Date.now()}`, createdAt: new Date().toISOString() };
     const updated = [...supplierInquiries, newSi];
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
-    autoLogFactActivity(newSi.projectId, 'استعلام قیمت از تامین کننده ها', `ثبت استعلام جدید برای تامین‌کننده ${newSi.supplierId || ''} - مبلغ: ${newSi.price?.toLocaleString() || 0} - وضعیت: ${newSi.status}`);
+    autoLogFactActivity(newSi.projectId, 'استعلام قیمت از تامین‌کننده‌ها', `ثبت استعلام جدید برای تامین‌کننده ${newSi.supplierId || ''} - مبلغ: ${newSi.price?.toLocaleString() || 0} - وضعیت: ${newSi.status}`);
     return newSi;
   };
   const updateSupplierInquiry = (updatedSi: any) => {
     const updated = supplierInquiries.map(s => s.id === updatedSi.id ? updatedSi : s);
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
-    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت از تامین کننده ها', `بروزرسانی استعلام برای تامین‌کننده ${updatedSi.supplierId || ''} - مبلغ: ${updatedSi.price?.toLocaleString() || 0} - وضعیت: ${updatedSi.status}`);
+    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت از تامین‌کننده‌ها', `بروزرسانی استعلام برای تامین‌کننده ${updatedSi.supplierId || ''} - مبلغ: ${updatedSi.price?.toLocaleString() || 0} - وضعیت: ${updatedSi.status}`);
   };
   const deleteSupplierInquiry = (id: string) => {
     const updated = supplierInquiries.filter(s => s.id !== id);
