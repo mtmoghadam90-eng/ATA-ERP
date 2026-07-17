@@ -333,6 +333,7 @@ export default function App() {
             addProduct={store.addProduct}
             customers={store.customers}
             addCustomer={store.addCustomer}
+            currentUser={store.currentUser}
           />
         );
       case 'suppliers':
@@ -445,6 +446,7 @@ export default function App() {
             initialPrintDocId={printDocumentRequest?.module === 'packagingDelivery' ? printDocumentRequest.docId : undefined}
             onClearInitialPrintDocId={handleClearPrintDoc}
             projects={store.projects}
+            customers={store.customers}
             proformas={store.proformas}
             products={store.products}
             packagingDeliveries={store.packagingDeliveries}
@@ -461,6 +463,7 @@ export default function App() {
           <AfterSalesServicesView 
             afterSalesServices={store.afterSalesServices}
             projects={store.projects}
+            customers={store.customers}
             proformas={store.proformas}
             addAfterSalesService={store.addAfterSalesService}
             updateAfterSalesService={store.updateAfterSalesService}

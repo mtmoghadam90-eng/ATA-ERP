@@ -698,6 +698,7 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     'proformas',
     'products',
     'suppliers',
+    'supplierInquiries',
     'purchaseOrders',
     'packagingDelivery',
     'transactions',

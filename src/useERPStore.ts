@@ -287,32 +287,8 @@ export function useERPStore() {
     message: string;
   } | null>(null);
 
-  const completeCategoryGroup = (projectId: string, categoryName: string) => {
-    const normalize = (str: string) => str.replace(/[\s‌]/g, "").trim();
-    setProjectCategoryGroups((prevGroups) => {
-      const updatedGroups = prevGroups.map((g) => {
-        if (
-          g.projectId === projectId &&
-          normalize(g.categoryName) === normalize(categoryName)
-        ) {
-        
-  
-  
-  
-  
-  
-  return {
-            ...g,
-            status: "اتمام کار",
-            endDate: getTodayShamsi(),
-          };
-        }
-        return g;
-      });
-      saveToServer("erp_project_category_groups", updatedGroups);
-      return updatedGroups;
-    });
-  };
+  // completeCategoryGroup is defined below to prevent TDZ with updateProject
+
 
   useEffect(() => {
     if (currentUser) {
@@ -1360,6 +1336,45 @@ export function useERPStore() {
     if (oldProject && oldProject.status !== updatedProject.status) {
       processWorkflowRules('project_status_change', { newStatus: updatedProject.status, ...updatedProject });
     }
+    
+    // Check for newly completed project milestones and run automated milestone rules
+    if (oldProject && updatedProject.milestones) {
+      const oldCompletedIds = new Set(
+        (oldProject.milestones || [])
+          .filter((m: any) => m.isCompleted)
+          .map((m: any) => m.id)
+      );
+      
+      updatedProject.milestones.forEach((m: any) => {
+        if (m.isCompleted && !oldCompletedIds.has(m.id)) {
+          // This milestone was just completed! Run the associated milestone rules
+          const rules = updatedProject.milestoneRules?.filter((r: any) => r.triggerMilestoneId === m.id) || [];
+          rules.forEach((rule: any) => {
+            if (rule.actionType === 'create_task') {
+              addTask({
+                title: rule.taskTitle || `پیگیری نقطه حیاتی: ${m.name}`,
+                description: rule.taskDesc || `این کار به صورت خودکار با اتمام نقطه حیاتی "${m.name}" ایجاد شد.`,
+                relatedToType: 'پروژه',
+                relatedToId: updatedProject.id,
+                relatedToName: updatedProject.name,
+                priority: rule.priority || 'متوسط',
+                dueDate: addDaysToShamsi(getTodayShamsi(), rule.dueDaysOffset || 0),
+                assignedTo: rule.assignedTo || 'admin',
+                status: 'در حال انجام',
+              });
+            } else if (rule.actionType === 'send_notification') {
+              addModuleNotification({
+                module: 'projects',
+                title: rule.taskTitle || `رویداد پروژه: اتمام ${m.name}`,
+                description: rule.taskDesc || `نقطه حیاتی "${m.name}" در پروژه "${updatedProject.name}" انجام شد.`,
+                responsibleName: rule.assignedTo || 'admin',
+              });
+            }
+          });
+        }
+      });
+    }
+
     const updated = projects.map(p => p.id === updatedProject.id ? updatedProject : p);
     saveToStorage("erp_projects", updated, setProjects);
     logAction("UPDATE", "پروژه", updatedProject.id, `بروزرسانی پروژه: ${updatedProject.title}`);
@@ -1534,10 +1549,88 @@ export function useERPStore() {
   
   
 
-  const addProjectCategoryGroup = (group: any) => {
-    const newGroup = { ...group, id: `catgrp-${Date.now()}`, createdAt: new Date().toISOString() };
+  const triggerMilestonesForEvent = (projectId: string, eventType: 'category_start' | 'category_complete', categoryName: string) => {
+    const normalize = (str: string) => str ? str.replace(/[\s‌]/g, "").trim() : "";
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const updatedMilestones = (project.milestones || []).map(m => {
+      const isMatch = m.triggerType === eventType && m.triggerCategoryName && normalize(m.triggerCategoryName) === normalize(categoryName);
+      if (isMatch && !m.isCompleted) {
+        return {
+          ...m,
+          isCompleted: true,
+          completedAt: getTodayShamsi()
+        };
+      }
+      return m;
+    });
+
+    const milestoneChanged = JSON.stringify(project.milestones) !== JSON.stringify(updatedMilestones);
+    if (milestoneChanged) {
+      updateProject({
+        ...project,
+        milestones: updatedMilestones
+      });
+    }
+  };
+
+  const completeCategoryGroup = (projectId: string, categoryName: string) => {
+    const normalize = (str: string) => str.replace(/[\s‌]/g, "").trim();
+    setProjectCategoryGroups((prevGroups) => {
+      const updatedGroups = prevGroups.map((g) => {
+        if (
+          g.projectId === projectId &&
+          normalize(g.categoryName) === normalize(categoryName)
+        ) {
+          return {
+            ...g,
+            status: "اتمام کار",
+            endDate: getTodayShamsi(),
+          };
+        }
+        return g;
+      });
+      saveToServer("erp_project_category_groups", updatedGroups);
+      return updatedGroups;
+    });
+
+    // Auto trigger completion milestones
+    triggerMilestonesForEvent(projectId, 'category_complete', categoryName);
+  };
+
+  const addProjectCategoryGroup = (projectIdOrGroup: any, categoryId?: string, categoryName?: string) => {
+    let newGroup: any;
+    let pId = "";
+    let catName = "";
+
+    if (typeof projectIdOrGroup === 'object' && projectIdOrGroup !== null) {
+      newGroup = { ...projectIdOrGroup, id: `catgrp-${Date.now()}`, createdAt: new Date().toISOString() };
+      pId = projectIdOrGroup.projectId;
+      catName = projectIdOrGroup.categoryName;
+    } else {
+      newGroup = {
+        projectId: projectIdOrGroup,
+        categoryId: categoryId,
+        categoryName: categoryName,
+        status: 'pending',
+        activities: [],
+        id: `catgrp-${Date.now()}`,
+        createdAt: new Date().toISOString()
+      };
+      pId = projectIdOrGroup;
+      catName = categoryName || "";
+    }
+
     const updated = [...projectCategoryGroups, newGroup];
     saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
+
+    // Auto trigger start milestones
+    if (pId && catName) {
+      triggerMilestonesForEvent(pId, 'category_start', catName);
+    }
+
+    return { success: true };
   };
   const deleteProjectCategoryGroup = (id: string) => {
     const updated = projectCategoryGroups.filter(g => g.id !== id);

@@ -29,18 +29,22 @@ import {
   PackagingDelivery, 
   PackingItem, 
   DeliveryChecklistItem,
-  ERPSettings 
+  ERPSettings,
+  Customer
 } from '../types';
 import { getTodayShamsi } from '../dateUtils';
 import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
 import ConfirmModal from './ConfirmModal';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import { uploadFile } from '../imageUtils';
+import ModuleNotesSection from './ModuleNotesSection';
+import CustomerAgreementAlert from './CustomerAgreementAlert';
 
 interface PackagingDeliveryViewProps {
   initialPrintDocId?: string;
   onClearInitialPrintDocId?: () => void;
   projects: Project[];
+  customers: Customer[];
   proformas: Proforma[];
   products: Product[];
   packagingDeliveries: PackagingDelivery[];
@@ -55,6 +59,7 @@ export default function PackagingDeliveryView({
   initialPrintDocId,
   onClearInitialPrintDocId,
   projects,
+  customers,
   proformas,
   products,
   packagingDeliveries,
@@ -1168,6 +1173,14 @@ export default function PackagingDeliveryView({
                   <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
                 ))}
               </select>
+              {selectedProjectId && (
+                <div className="mt-2">
+                  <CustomerAgreementAlert 
+                    customer={customers?.find(c => c.id === projects?.find(p => p.id === selectedProjectId)?.customerId)} 
+                    moduleName="packaging" 
+                  />
+                </div>
+              )}
             </div>
 
             {/* Approved Proformas dropdown */}
@@ -1821,6 +1834,39 @@ export default function PackagingDeliveryView({
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono">{currentUser?.fullName}</span>
                 </div>
+              </div>
+
+              {/* Module Notes & Comments (Not printed) */}
+              <div className="no-print pt-6 border-t border-slate-200 mt-6 text-right">
+                <ModuleNotesSection
+                  notes={selectedDelivery.moduleNotes || []}
+                  currentUser={currentUser}
+                  title="نکات، کامنت‌ها و توافقات مرحله بسته‌بندی/ارسال"
+                  placeholder="مثال: کامنت مشتری در مرحله بسته‌بندی یا شرایط لجستیک خاص این ارسال..."
+                  onAddNote={(text) => {
+                    const newNote = {
+                      id: `note-${Date.now()}`,
+                      text,
+                      createdAt: getTodayShamsi(),
+                      author: currentUser?.fullName || currentUser?.username || 'کاربر سیستم'
+                    };
+                    const updated = {
+                      ...selectedDelivery,
+                      moduleNotes: [...(selectedDelivery.moduleNotes || []), newNote]
+                    };
+                    updatePackagingDelivery(updated);
+                    setSelectedDelivery(updated);
+                  }}
+                  onDeleteNote={(id) => {
+                    const updatedNotes = (selectedDelivery.moduleNotes || []).filter(n => n.id !== id);
+                    const updated = {
+                      ...selectedDelivery,
+                      moduleNotes: updatedNotes
+                    };
+                    updatePackagingDelivery(updated);
+                    setSelectedDelivery(updated);
+                  }}
+                />
               </div>
 
               {/* Template Footer */}

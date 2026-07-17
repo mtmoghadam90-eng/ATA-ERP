@@ -33,6 +33,8 @@ import CustomFieldsDetailView from './CustomFieldsDetailView';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
+import ModuleNotesSection from './ModuleNotesSection';
+import CustomerAgreementAlert from './CustomerAgreementAlert';
 
 interface PurchaseOrdersViewProps {
   initialPrintDocId?: string;
@@ -54,6 +56,7 @@ interface PurchaseOrdersViewProps {
   addProduct?: (product: any) => any;
   customers?: Customer[];
   addCustomer?: (customer: any) => any;
+  currentUser?: any;
 }
 
 export default function PurchaseOrdersView({
@@ -75,7 +78,8 @@ export default function PurchaseOrdersView({
   addProject,
   addProduct,
   customers = [],
-  addCustomer
+  addCustomer,
+  currentUser
 }: PurchaseOrdersViewProps) {
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -889,6 +893,39 @@ export default function PurchaseOrdersView({
                   <Award size={16} className="text-blue-600 flex-shrink-0" />
                   <span>مکانیزم لندد کاست به بازرگان اجازه می‌دهد قیمت دقیق پایه هر یک از محصولات وارداتی را با احتساب هزینه‌های ارزی حواله و حمل، به انضمام هزینه‌های ترخیص ریالی محاسبه کند.</span>
                 </div>
+
+                {/* Purchase Order Special Notes & Agreements */}
+                <div className="pt-4 border-t border-slate-100">
+                  <ModuleNotesSection
+                    notes={selectedPO.moduleNotes || []}
+                    currentUser={currentUser}
+                    title="توافقات و یادداشت‌های سفارش خارجی"
+                    placeholder="توافق ارزی خاص، جزییات حمل یا کامنت جدید درباره تامین کالا..."
+                    onAddNote={(text) => {
+                      const newNote = {
+                        id: `note-${Date.now()}`,
+                        text,
+                        createdAt: getTodayShamsi(),
+                        author: currentUser?.fullName || currentUser?.username || 'کاربر سیستم'
+                      };
+                      const updated = {
+                        ...selectedPO,
+                        moduleNotes: [...(selectedPO.moduleNotes || []), newNote]
+                      };
+                      updatePurchaseOrder(updated);
+                      setSelectedPO(updated);
+                    }}
+                    onDeleteNote={(id) => {
+                      const updatedNotes = (selectedPO.moduleNotes || []).filter(n => n.id !== id);
+                      const updated = {
+                        ...selectedPO,
+                        moduleNotes: updatedNotes
+                      };
+                      updatePurchaseOrder(updated);
+                      setSelectedPO(updated);
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1071,6 +1108,14 @@ export default function PurchaseOrdersView({
                       </button>
                     )}
                   </div>
+                  {projectId && (
+                    <div className="mt-2">
+                      <CustomerAgreementAlert 
+                        customer={customers?.find(c => c.id === projects?.find(p => p.id === projectId)?.customerId)} 
+                        moduleName="purchase_orders" 
+                      />
+                    </div>
+                  )}
                 </div>
 
                 

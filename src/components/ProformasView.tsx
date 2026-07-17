@@ -44,6 +44,8 @@ import ConfirmModal from "./ConfirmModal";
 import { SearchableSelect } from "./SearchableSelect";
 import QuickAddModal from "./QuickAddModal";
 import { toPersianDigits } from "../numUtils";
+import ModuleNotesSection from "./ModuleNotesSection";
+import CustomerAgreementAlert from "./CustomerAgreementAlert";
 
 // Helper functions for dynamic delivery time notes generation
 const generateDeliveryNotes = (
@@ -2086,6 +2088,39 @@ export default function ProformasView({
                 </div>
               </div>
             </div>
+
+            {/* Proforma Global Module Notes & Agreements (Hidden on Print) */}
+            <div className="print:hidden mt-8 text-right border-t border-slate-200 pt-8">
+              <ModuleNotesSection
+                notes={selectedProforma.moduleNotes || []}
+                currentUser={currentUser}
+                title="توافقات خاص و کامنت‌های این پیش‌فاکتور"
+                placeholder="یادداشت یا کامنت جدید درباره شرایط پرداخت، تخفیفات، یا توافقات خاص مشتری بنویسید..."
+                onAddNote={(text) => {
+                  const newNote = {
+                    id: `note-${Date.now()}`,
+                    text,
+                    createdAt: getTodayShamsi(),
+                    author: currentUser?.fullName || currentUser?.username || "کاربر سیستم",
+                  };
+                  const updated = {
+                    ...selectedProforma,
+                    moduleNotes: [...(selectedProforma.moduleNotes || []), newNote],
+                  };
+                  updateProforma(updated);
+                  setSelectedProforma(updated);
+                }}
+                onDeleteNote={(id) => {
+                  const updatedNotes = (selectedProforma.moduleNotes || []).filter((n) => n.id !== id);
+                  const updated = {
+                    ...selectedProforma,
+                    moduleNotes: updatedNotes,
+                  };
+                  updateProforma(updated);
+                  setSelectedProforma(updated);
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -3059,6 +3094,12 @@ export default function ProformasView({
                       </button>
                     )}
                   </div>
+                  <div className="mt-2">
+                    <CustomerAgreementAlert 
+                      customer={customers.find(c => c.id === customerId)} 
+                      moduleName="proformas" 
+                    />
+                  </div>
                   {(() => {
                     const selectedProjObj = projects.find(
                       (p) => p.id === projectId,
@@ -3074,6 +3115,23 @@ export default function ProformasView({
                         مشتری انتخاب‌شده با مشتری پروژه (
                         {selectedProjObj?.customerName}) مغایرت دارد!
                       </p>
+                    );
+                  })()}
+                  
+                  {/* Dynamic special agreement reminder for selected customer */}
+                  {(() => {
+                    const selectedCustObj = customers.find(c => c.id === customerId);
+                    if (!selectedCustObj || !selectedCustObj.specialAgreements) return null;
+                    return (
+                      <div className="text-[11px] text-indigo-850 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 mt-1.5 flex items-start gap-2 animate-fade-in font-bold">
+                        <AlertCircle size={14} className="flex-shrink-0 text-indigo-600 mt-0.5" />
+                        <div className="space-y-0.5 text-right">
+                          <span className="block text-indigo-900 font-extrabold text-[11px]">💡 توافق خاص و یادآور مهم این مشتری:</span>
+                          <p className="text-[10px] text-slate-700 leading-relaxed font-normal">
+                            {selectedCustObj.specialAgreements}
+                          </p>
+                        </div>
+                      </div>
                     );
                   })()}
                 </div>

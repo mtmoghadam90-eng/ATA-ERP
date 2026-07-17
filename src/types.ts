@@ -2,6 +2,13 @@
  * Types & Interfaces for Abzar Tamin Arshia ERP
  */
 
+export interface ModuleNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  author: string;
+}
+
 export interface InventoryTransaction {
   id: string;
   productId: string;
@@ -27,6 +34,13 @@ export interface Customer {
   address: string;
   notes?: string;
   tags?: string;
+  moduleAgreements?: {
+    id: string;
+    moduleName: string;
+    text: string;
+    createdAt: string;
+    createdBy?: string;
+  }[];
 
   // Legal customer fields (مشتری حقوقی)
   companyName: string; // Used for legal company name or computed individual full name for backward compatibility
@@ -45,6 +59,9 @@ export interface Customer {
 
   // Custom Field values
   customValues?: Record<string, any>;
+
+  // Special Agreements & Auto Reminders
+  specialAgreements?: string;
 
   // Backward compatibility fields
   contactName?: string;
@@ -193,6 +210,7 @@ export interface Proforma {
   creatorId?: string;
   historicalExchangeRate?: number; // نرخ تسعیر تاریخی فروش
   customValues?: Record<string, any>;
+  moduleNotes?: ModuleNote[];
 }
 
 export interface PurchaseOrderItem {
@@ -241,6 +259,7 @@ export interface PurchaseOrder {
   createdAt: string;
   notes?: string;
   customValues?: Record<string, any>;
+  moduleNotes?: ModuleNote[];
 }
 
 export interface Project {
@@ -288,6 +307,29 @@ export interface Project {
   
   attachments?: { name: string; url: string; }[]; // فایل‌های درخواست
   manualDocuments?: { id: string; folderName: string; name: string; url: string; createdAt: string; size?: string; }[]; // مدارک آپلود شده دستی در پوشه‌ها
+
+  // Project Milestone & Automations
+  milestones?: {
+    id: string;
+    name: string;
+    isCompleted: boolean;
+    completedAt?: string;
+    dueDate?: string;
+    notes?: string;
+    triggerType?: 'manual' | 'category_start' | 'category_complete';
+    triggerCategoryName?: string;
+  }[];
+  moduleNotes?: ModuleNote[];
+  milestoneRules?: {
+    id: string;
+    triggerMilestoneId: string;
+    actionType: 'create_task' | 'send_notification';
+    taskTitle: string;
+    taskDesc: string;
+    assignedTo: string;
+    priority: 'پایین' | 'متوسط' | 'بالا' | 'فوری';
+    dueDaysOffset?: number;
+  }[];
 }
 
 export interface Transaction {
@@ -548,6 +590,7 @@ export interface PackagingDelivery {
   items: PackingItem[]; // اقلام پکینگ لیست
   photos: string[]; // تصاویر آپلود شده بسته‌بندی و ارسال (base64)
   createdAt: string;
+  moduleNotes?: ModuleNote[];
 }
 
 
@@ -580,6 +623,7 @@ export interface AfterSalesService {
   createdAt: string;
   createdBy: string;
   items?: AfterSalesServiceItem[];
+  moduleNotes?: ModuleNote[];
 }
 
 export interface AuditLog {

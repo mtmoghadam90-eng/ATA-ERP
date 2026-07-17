@@ -4,7 +4,7 @@ import {
   Plus, Search, Filter, Briefcase, Edit, Trash2, XCircle, AlertCircle, TrendingUp, X,
   FileSpreadsheet, Clock, Sliders, User, Paperclip, ChevronLeft, ChevronDown, ChevronUp,
   Send, CheckCircle2, History, Check, Folder, FolderOpen, File, Download, Eye, Upload,
-  ChevronRight, Loader2, Image as ImageIcon, Maximize2, Minimize2, ArrowLeftRight
+  ChevronRight, Loader2, Image as ImageIcon, Maximize2, Minimize2, ArrowLeftRight, Flag, Zap, MessageSquare
 } from 'lucide-react';
 
 import { getTodayShamsi, addDaysToShamsi, addWorkingDaysToShamsi } from '../dateUtils';
@@ -17,6 +17,7 @@ import { exportToCSV } from '../excelUtils';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
+import CustomerAgreementAlert from './CustomerAgreementAlert';
 import { Project, Customer, Product, Proforma, ERPSettings, ProjectCategoryGroup, User as UserType, Transaction, PackagingDelivery, PurchaseOrder, AfterSalesService, SupplierInquiry } from '../types';
 
 export interface ProjectsViewProps {
@@ -113,6 +114,23 @@ export default function ProjectsView({
   const [selectedCategoryToCreate, setSelectedCategoryToCreate] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<any>({});
   const [customValues, setCustomValues] = useState<any>({});
+
+  // Milestone & Automations UI States
+  const [newMilestoneName, setNewMilestoneName] = useState("");
+  const [newMilestoneDueDate, setNewMilestoneDueDate] = useState("");
+  const [newMilestoneNotes, setNewMilestoneNotes] = useState("");
+  const [newMilestoneTriggerType, setNewMilestoneTriggerType] = useState<'manual' | 'category_start' | 'category_complete'>("manual");
+  const [newMilestoneTriggerCategoryName, setNewMilestoneTriggerCategoryName] = useState("");
+  
+  const [newRuleMilestoneId, setNewRuleMilestoneId] = useState("");
+  const [newRuleActionType, setNewRuleActionType] = useState<'create_task' | 'send_notification'>("create_task");
+  const [newRuleTitle, setNewRuleTitle] = useState("");
+  const [newRuleDesc, setNewRuleDesc] = useState("");
+  const [newRuleAssignedTo, setNewRuleAssignedTo] = useState("");
+  const [newRulePriority, setNewRulePriority] = useState<'پایین' | 'متوسط' | 'بالا' | 'فوری'>("متوسط");
+  const [newRuleDueDays, setNewRuleDueDays] = useState(0);
+  
+  const [showRuleForm, setShowRuleForm] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [projectToDeleteId, setProjectToDeleteId] = useState<any>(null);
   const [projectToDeleteName, setProjectToDeleteName] = useState("");
@@ -1595,6 +1613,507 @@ export default function ProjectsView({
     );
   };
 
+  const renderProjectMilestones = (project: Project) => {
+    const projectMilestones = project.milestones || [];
+    const projectRules = project.milestoneRules || [];
+
+    const handleAddMilestone = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newMilestoneName.trim()) return;
+
+      const newMs = {
+        id: `ms-${Date.now()}`,
+        name: newMilestoneName.trim(),
+        isCompleted: false,
+        dueDate: newMilestoneDueDate || undefined,
+        notes: newMilestoneNotes.trim() || undefined,
+        triggerType: newMilestoneTriggerType,
+        triggerCategoryName: newMilestoneTriggerType !== 'manual' ? newMilestoneTriggerCategoryName : undefined
+      };
+
+      const updated = {
+        ...project,
+        milestones: [...projectMilestones, newMs]
+      };
+
+      updateProject(updated);
+      setNewMilestoneName("");
+      setNewMilestoneDueDate("");
+      setNewMilestoneNotes("");
+      setNewMilestoneTriggerType("manual");
+      setNewMilestoneTriggerCategoryName("");
+    };
+
+    const handleToggleMilestone = (milestoneId: string) => {
+      const updatedMilestones = projectMilestones.map(m => {
+        if (m.id === milestoneId) {
+          const nextCompleted = !m.isCompleted;
+          return {
+            ...m,
+            isCompleted: nextCompleted,
+            completedAt: nextCompleted ? getTodayShamsi() : undefined
+          };
+        }
+        return m;
+      });
+
+      const updated = {
+        ...project,
+        milestones: updatedMilestones
+      };
+
+      updateProject(updated);
+    };
+
+    const handleDeleteMilestone = (milestoneId: string) => {
+      const updatedMilestones = projectMilestones.filter(m => m.id !== milestoneId);
+      // Also filter out any rules tied to this deleted milestone
+      const updatedRules = projectRules.filter(r => r.triggerMilestoneId !== milestoneId);
+
+      const updated = {
+        ...project,
+        milestones: updatedMilestones,
+        milestoneRules: updatedRules
+      };
+
+      updateProject(updated);
+    };
+
+    const handleAddRule = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newRuleMilestoneId || !newRuleTitle.trim()) return;
+
+      const newRule = {
+        id: `rule-${Date.now()}`,
+        triggerMilestoneId: newRuleMilestoneId,
+        actionType: newRuleActionType,
+        taskTitle: newRuleTitle.trim(),
+        taskDesc: newRuleDesc.trim(),
+        assignedTo: newRuleAssignedTo || 'admin',
+        priority: newRulePriority,
+        dueDaysOffset: newRuleDueDays
+      };
+
+      const updated = {
+        ...project,
+        milestoneRules: [...projectRules, newRule]
+      };
+
+      updateProject(updated);
+      setNewRuleTitle("");
+      setNewRuleDesc("");
+      setNewRuleAssignedTo("");
+      setNewRulePriority("متوسط");
+      setNewRuleDueDays(0);
+      setShowRuleForm(false);
+    };
+
+    const handleDeleteRule = (ruleId: string) => {
+      const updatedRules = projectRules.filter(r => r.id !== ruleId);
+      const updated = {
+        ...project,
+        milestoneRules: updatedRules
+      };
+      updateProject(updated);
+    };
+
+    return (
+      <div className="space-y-6 animate-fade-in text-right" dir="rtl">
+        {/* Explanation Card */}
+        <div className="bg-gradient-to-r from-sky-50 to-indigo-50 p-5 rounded-2xl border border-sky-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="space-y-1">
+            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+              <Zap size={18} className="text-sky-600 animate-pulse" />
+              مدیریت نقاط حیاتی (Milestones) و اتوماسیون وظایف پروژه
+            </h3>
+            <p className="text-slate-600 text-xs leading-relaxed max-w-3xl">
+              در این بخش می‌توانید نقاط عطف و نقاط حیاتی مخصوص به این پروژه را (مثلاً مراحل تسویه قرارداد، تحویل مدارک، اتمام مهندسی) تعریف کنید. همچنین می‌توانید قوانین اتوماسیونی تنظیم کنید تا با علامت‌گذاری هر نقطه حیاتی به عنوان «انجام شده»، وظایف (تسک‌ها) مرتبط یا اعلان‌های سیستم به صورت خودکار برای پرسنل صادر گردد.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Right Column: Milestones Management */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h4 className="font-bold text-xs md:text-sm text-slate-800 flex items-center gap-2">
+                <Flag size={16} className="text-sky-500" />
+                لیست نقاط حیاتی پروژه ({projectMilestones.length})
+              </h4>
+            </div>
+
+            {/* Add Milestone Form */}
+            <form onSubmit={handleAddMilestone} className="bg-slate-50/50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <span className="block text-[11px] font-bold text-slate-700">تعریف نقطه حیاتی جدید برای پروژه:</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 block">عنوان نقطه حیاتی *</label>
+                  <input
+                    type="text"
+                    value={newMilestoneName}
+                    onChange={(e) => setNewMilestoneName(e.target.value)}
+                    placeholder="مثال: اتمام خرید خارجی تجهیزات"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 block">تاریخ هدف (شمسی)</label>
+                  <ShamsiDatePicker
+                    value={newMilestoneDueDate}
+                    onChange={setNewMilestoneDueDate}
+                    placeholder="۱۴۰۲/۰۶/۳۰"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 block">توضیحات و نکات اختیاری</label>
+                <input
+                  type="text"
+                  value={newMilestoneNotes}
+                  onChange={(e) => setNewMilestoneNotes(e.target.value)}
+                  placeholder="نکات مرتبط با پرداخت یا ارسال مدارک این مرحله..."
+                  className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                />
+              </div>
+
+              {/* Trigger Type Selection */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-slate-100 pt-2.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 block">نوع تریگر (فعال‌سازی)</label>
+                  <select
+                    value={newMilestoneTriggerType}
+                    onChange={(e) => {
+                      const val = e.target.value as 'manual' | 'category_start' | 'category_complete';
+                      setNewMilestoneTriggerType(val);
+                      if (val === 'manual') {
+                        setNewMilestoneTriggerCategoryName("");
+                      } else if (!newMilestoneTriggerCategoryName) {
+                        setNewMilestoneTriggerCategoryName("");
+                      }
+                    }}
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white font-sans"
+                  >
+                    <option value="manual">دستی (توسط کاربر)</option>
+                    <option value="category_start">خودکار با شروع دسته‌بندی فعالیت پروژه</option>
+                    <option value="category_complete">خودکار با اتمام دسته‌بندی فعالیت پروژه</option>
+                  </select>
+                </div>
+
+                {newMilestoneTriggerType !== 'manual' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">انتخاب دسته‌بندی فعالیت مربوطه</label>
+                    <select
+                      value={newMilestoneTriggerCategoryName}
+                      onChange={(e) => setNewMilestoneTriggerCategoryName(e.target.value)}
+                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white font-sans"
+                    >
+                      <option value="" disabled>-- انتخاب کنید --</option>
+                      <optgroup label="ماژول‌های سیستمی">
+                        <option value="پیش‌فاکتورها">پیش‌فاکتورها</option>
+                        <option value="سفارشات خرید (PO)">سفارشات خرید (PO)</option>
+                        <option value="بسته‌بندی و ارسال">بسته‌بندی و ارسال</option>
+                        <option value="خدمات پس از فروش">خدمات پس از فروش</option>
+                      </optgroup>
+                      <optgroup label="دسته‌بندی‌های سفارشی (فعالیت‌ها)">
+                        {(settings.activityCategories || []).map(cat => (
+                          <option key={cat.id} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={!newMilestoneName.trim() || (newMilestoneTriggerType !== 'manual' && !newMilestoneTriggerCategoryName)}
+                  className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-bold py-1.5 px-4 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-sm shadow-sky-600/10"
+                >
+                  <Plus size={14} />
+                  ثبت نقطه حیاتی
+                </button>
+              </div>
+            </form>
+
+            {/* Milestones List */}
+            {projectMilestones.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                هیچ نقطه حیاتی برای این پروژه ثبت نشده است. ابتدا یک مورد در فرم بالا ثبت کنید.
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                {projectMilestones.map((m) => {
+                  return (
+                    <div
+                      key={m.id}
+                      className={`p-3.5 rounded-xl border transition-all flex items-start justify-between gap-3 ${
+                        m.isCompleted 
+                          ? 'bg-emerald-50/40 border-emerald-100' 
+                          : 'bg-white border-slate-100 hover:border-slate-200 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMilestone(m.id)}
+                          className={`mt-0.5 p-1 rounded-full border flex items-center justify-center transition-all ${
+                            m.isCompleted
+                              ? 'bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-600'
+                              : 'bg-white border-slate-300 text-transparent hover:border-emerald-500'
+                          }`}
+                          title={m.isCompleted ? "تغییر وضعیت به در انتظار" : "تغییر وضعیت به انجام شده (کلیک برای فعالسازی اتوماسیون)"}
+                        >
+                          <Check size={12} className={m.isCompleted ? "text-white" : "text-emerald-500"} />
+                        </button>
+                        <div className="space-y-1">
+                          <span className={`text-xs font-bold block ${m.isCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                            {m.name}
+                          </span>
+                          {m.notes && (
+                            <p className="text-[10px] text-slate-500 leading-relaxed max-w-sm">
+                              {m.notes}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                            {m.dueDate && (
+                              <span className="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                تاریخ هدف: {m.dueDate}
+                              </span>
+                            )}
+                            {m.isCompleted && m.completedAt && (
+                              <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-bold">
+                                تاریخ انجام: {m.completedAt}
+                              </span>
+                            )}
+                            {m.triggerType && m.triggerType !== 'manual' && (
+                              <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                                <Zap size={10} className="text-indigo-500 animate-pulse" />
+                                تریگر هوشمند: {m.triggerType === 'category_start' ? 'شروع' : 'اتمام'} «{m.triggerCategoryName}»
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMilestone(m.id)}
+                        className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1 rounded-lg transition-all"
+                        title="حذف نقطه حیاتی"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Left Column: Automations/Workflows */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h4 className="font-bold text-xs md:text-sm text-slate-800 flex items-center gap-2">
+                <Sliders size={16} className="text-indigo-500" />
+                قوانین اتوماسیون وظایف پروژه ({projectRules.length})
+              </h4>
+              {!showRuleForm && projectMilestones.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewRuleMilestoneId(projectMilestones[0]?.id || "");
+                    setShowRuleForm(true);
+                  }}
+                  className="text-indigo-600 hover:text-indigo-700 font-bold text-xs flex items-center gap-1"
+                >
+                  <Plus size={14} />
+                  قانون اتوماسیون جدید
+                </button>
+              )}
+            </div>
+
+            {/* Add Rule Form */}
+            {showRuleForm && (
+              <form onSubmit={handleAddRule} className="bg-indigo-50/30 p-4 rounded-xl border border-indigo-100 space-y-3">
+                <span className="block text-[11px] font-bold text-indigo-900">تعریف گردش‌کار خودکار جدید:</span>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">هنگام اتمام نقطه حیاتی *</label>
+                    <select
+                      value={newRuleMilestoneId}
+                      onChange={(e) => setNewRuleMilestoneId(e.target.value)}
+                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                      required
+                    >
+                      {projectMilestones.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">نوع اقدام خودکار *</label>
+                    <select
+                      value={newRuleActionType}
+                      onChange={(e) => setNewRuleActionType(e.target.value as any)}
+                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                      required
+                    >
+                      <option value="create_task">ایجاد خودکار وظیفه (تسک)</option>
+                      <option value="send_notification">ارسال اعلان سیستمی</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 block">عنوان وظیفه / اعلان *</label>
+                  <input
+                    type="text"
+                    value={newRuleTitle}
+                    onChange={(e) => setNewRuleTitle(e.target.value)}
+                    placeholder="مثال: پیگیری دریافت ۲۰ درصد قرارداد بابت خرید کالا"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 block">توضیحات و راهنمایی برای پرسنل</label>
+                  <textarea
+                    value={newRuleDesc}
+                    onChange={(e) => setNewRuleDesc(e.target.value)}
+                    placeholder="مثال: با توجه به اتمام خرید خارجی کالا در این پروژه، مسئول مالی موظف است صورت وضعیت ۲۰ درصد را ارسال و پیگیری کند."
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">مسئول انجام / مخاطب *</label>
+                    <select
+                      value={newRuleAssignedTo}
+                      onChange={(e) => setNewRuleAssignedTo(e.target.value)}
+                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                      required
+                    >
+                      <option value="">-- انتخاب کاربر --</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.fullName}>{u.fullName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">اولویت</label>
+                    <select
+                      value={newRulePriority}
+                      onChange={(e) => setNewRulePriority(e.target.value as any)}
+                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white"
+                    >
+                      <option value="پایین">پایین</option>
+                      <option value="متوسط">متوسط</option>
+                      <option value="بالا">بالا</option>
+                      <option value="فوری">فوری</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">مهلت انجام (روز پس از رویداد)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={newRuleDueDays}
+                      onChange={(e) => setNewRuleDueDays(parseInt(e.target.value) || 0)}
+                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-white text-left font-mono"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setShowRuleForm(false)}
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-1.5 px-3 rounded-lg transition-all"
+                  >
+                    انصراف
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newRuleTitle.trim() || !newRuleAssignedTo}
+                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-1.5 px-4 rounded-lg transition-all shadow-sm"
+                  >
+                    ثبت قانون اتوماسیون
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {projectMilestones.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs bg-slate-50 rounded-xl border border-slate-150">
+                جهت تعریف قانون اتوماسیون، ابتدا باید حداقل یک نقطه حیاتی در پنل سمت راست تعریف کنید.
+              </div>
+            ) : projectRules.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                هیچ قانون اتوماسیونی برای این پروژه تعریف نشده است.
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                {projectRules.map((rule) => {
+                  const triggerMilestone = projectMilestones.find(m => m.id === rule.triggerMilestoneId);
+                  return (
+                    <div key={rule.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex items-start justify-between gap-2 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="bg-indigo-100 text-indigo-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                              رویداد: اتمام «{triggerMilestone?.name || 'حذف‌شده'}»
+                            </span>
+                            <span className="text-slate-400">⚡️</span>
+                            <span className="bg-sky-100 text-sky-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                              {rule.actionType === 'create_task' ? 'ایجاد خودکار تسک' : 'ارسال اعلان'}
+                            </span>
+                          </div>
+                          <span className="font-bold text-slate-800 block text-xs">
+                            {rule.taskTitle}
+                          </span>
+                          {rule.taskDesc && (
+                            <p className="text-[10px] text-slate-500 leading-relaxed">
+                              {rule.taskDesc}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 pt-1">
+                            <span>ارجاع به: <strong className="text-slate-700">{rule.assignedTo}</strong></span>
+                            <span>اولویت: <strong className="text-slate-700">{rule.priority}</strong></span>
+                            <span>مهلت: <strong className="text-slate-700">{rule.dueDaysOffset || 0} روز</strong></span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRule(rule.id)}
+                          className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg transition-all"
+                          title="حذف قانون اتوماسیون"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
   const renderProjectDocuments = (project: Project) => {
     const { folders, folderFiles } = getProjectFoldersAndFiles(project);
 
@@ -2731,6 +3250,12 @@ export default function ProjectsView({
                         </button>
                       )}
                     </div>
+                    <div className="mt-2">
+                      <CustomerAgreementAlert 
+                        customer={customers.find(c => c.id === customerId)} 
+                        moduleName="projects" 
+                      />
+                    </div>
                   </div>
 
                   {/* End User */}
@@ -3508,6 +4033,18 @@ export default function ProjectsView({
                   <Briefcase size={15} />
                   <span>وضعیت تامین کالاها (انبار / سفارش)</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setModalTab('milestones')}
+                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+                    modalTab === 'milestones'
+                      ? 'border-sky-500 text-sky-600 font-extrabold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Flag size={15} />
+                  <span>نقاط حیاتی و اتوماسیون (Milestones)</span>
+                </button>
               </div>
 
               {modalTab === 'activities' ? (
@@ -4093,6 +4630,8 @@ export default function ProjectsView({
               </div>
               ) : modalTab === 'documents' ? (
                 renderProjectDocuments(selectedProjectForActivities)
+              ) : modalTab === 'milestones' ? (
+                renderProjectMilestones(selectedProjectForActivities)
               ) : (
                 renderProjectSupplyStatus(selectedProjectForActivities)
               )}

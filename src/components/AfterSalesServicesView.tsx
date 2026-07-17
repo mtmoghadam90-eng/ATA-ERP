@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AfterSalesService, AfterSalesServiceItem, Project, Proforma, User, ERPSettings } from '../types';
+import { AfterSalesService, AfterSalesServiceItem, Project, Proforma, User, ERPSettings, Customer } from '../types';
 import { 
   Wrench, 
   Search, 
@@ -21,10 +21,13 @@ import { SearchableSelect } from './SearchableSelect';
 import { getTodayShamsi } from '../dateUtils';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
+import ModuleNotesSection from './ModuleNotesSection';
+import CustomerAgreementAlert from './CustomerAgreementAlert';
 
 interface AfterSalesServicesViewProps {
   afterSalesServices: AfterSalesService[];
   projects: Project[];
+  customers: Customer[];
   proformas: Proforma[];
   addAfterSalesService: (service: Omit<AfterSalesService, 'id' | 'createdAt'>) => void;
   updateAfterSalesService: (service: AfterSalesService) => void;
@@ -36,6 +39,7 @@ interface AfterSalesServicesViewProps {
 export default function AfterSalesServicesView({
   afterSalesServices,
   projects,
+  customers,
   proformas,
   addAfterSalesService,
   updateAfterSalesService,
@@ -546,6 +550,14 @@ export default function AfterSalesServicesView({
                     placeholder="انتخاب پروژه..."
                     required
                   />
+                  {selectedProjectId && (
+                    <div className="mt-2">
+                      <CustomerAgreementAlert 
+                        customer={customers?.find(c => c.id === projects?.find(p => p.id === selectedProjectId)?.customerId)} 
+                        moduleName="after_sales" 
+                      />
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
@@ -796,6 +808,41 @@ export default function AfterSalesServicesView({
                   </div>
                 </div>
               </div>
+
+              {/* بخش ۳: یادداشت‌ها و توافقات پس از فروش (فقط در حالت ویرایش پرونده فعال) */}
+              {editingService && (
+                <div className="pt-4 text-right">
+                  <ModuleNotesSection
+                    notes={editingService.moduleNotes || []}
+                    currentUser={currentUser}
+                    title="توافقات و یادداشت‌های پرونده خدمات پس از فروش"
+                    placeholder="مثال: توافق با مشتری درباره نحوه عودت، هزینه تعمیرات، یا کامنت تیکت پشتیبانی..."
+                    onAddNote={(text) => {
+                      const newNote = {
+                        id: `note-${Date.now()}`,
+                        text,
+                        createdAt: getTodayShamsi(),
+                        author: currentUser?.fullName || currentUser?.username || 'کاربر سیستم'
+                      };
+                      const updated = {
+                        ...editingService,
+                        moduleNotes: [...(editingService.moduleNotes || []), newNote]
+                      };
+                      updateAfterSalesService(updated);
+                      setEditingService(updated);
+                    }}
+                    onDeleteNote={(id) => {
+                      const updatedNotes = (editingService.moduleNotes || []).filter(n => n.id !== id);
+                      const updated = {
+                        ...editingService,
+                        moduleNotes: updatedNotes
+                      };
+                      updateAfterSalesService(updated);
+                      setEditingService(updated);
+                    }}
+                  />
+                </div>
+              )}
 
               {/* دکمه‌های فرم */}
               <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">

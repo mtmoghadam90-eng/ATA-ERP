@@ -91,6 +91,8 @@ export default function CustomersView({
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [tags, setTags] = useState('');
+  const [specialAgreements, setSpecialAgreements] = useState('');
+  const [moduleAgreements, setModuleAgreements] = useState<{id: string; moduleName: string; text: string; createdAt: string;}[]>([]);
 
   // Legal-specific (مشتری حقوقی)
   const [companyName, setCompanyName] = useState('');
@@ -211,6 +213,8 @@ export default function CustomersView({
     setAddress('');
     setNotes('');
     setTags('');
+    setSpecialAgreements('');
+    setModuleAgreements([]);
 
     setCompanyName('');
     setEconomicCode('');
@@ -241,6 +245,8 @@ export default function CustomersView({
     setAddress(customer.address || '');
     setNotes(customer.notes || '');
     setTags(customer.tags || '');
+    setSpecialAgreements(customer.specialAgreements || '');
+    setModuleAgreements(customer.moduleAgreements || []);
 
     setCompanyName(customer.companyName || '');
     setEconomicCode(customer.economicCode || '');
@@ -400,6 +406,8 @@ export default function CustomersView({
       address,
       notes,
       tags,
+      specialAgreements,
+      moduleAgreements,
       linkedCustomerIds: finalSelectedLinks,
       customValues,
       companyName: mainCompanyName,
@@ -1285,6 +1293,118 @@ export default function CustomersView({
                     placeholder="برچسب‌ها را با کاما جدا کنید (مثال: کارفرما، خوش‌حساب، EPC)"
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
                   />
+                </div>
+
+                {/* توافقات خاص و یادآور خودکار (تفکیک شده بر اساس ماژول) */}
+                <div className="space-y-4 md:col-span-2 border border-indigo-100 bg-indigo-50/30 rounded-xl p-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-indigo-700 flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                      توافقات خاص و یادآورهای هوشمند (بر اساس ماژول)
+                    </label>
+                    <p className="text-[10px] text-slate-500">
+                      این توافقات در ماژول انتخاب شده، به محض انتخاب این مشتری به صورت پاپ‌آپ یا هشدار زرد رنگ به کاربر نمایش داده می‌شوند.
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <select
+                      id="newAgreementModule"
+                      className="w-1/3 border border-indigo-200 rounded-lg px-2 py-2 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-right bg-white"
+                    >
+                      <option value="proformas">پیش‌فاکتورها</option>
+                      <option value="purchase_orders">سفارشات خرید (PO)</option>
+                      <option value="packaging">بسته‌بندی و ارسال</option>
+                      <option value="projects">پروژه‌ها</option>
+                      <option value="after_sales">خدمات پس از فروش</option>
+                      <option value="general">عمومی (همه جا)</option>
+                    </select>
+                    <input
+                      type="text"
+                      id="newAgreementText"
+                      placeholder="متن توافق یا یادآور را بنویسید..."
+                      className="flex-1 border border-indigo-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-right bg-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const moduleInput = document.getElementById('newAgreementModule') as HTMLSelectElement;
+                          const textInput = document.getElementById('newAgreementText') as HTMLInputElement;
+                          if (textInput.value.trim()) {
+                            setModuleAgreements([
+                              ...moduleAgreements,
+                              {
+                                id: `agr-${Date.now()}`,
+                                moduleName: moduleInput.value,
+                                text: textInput.value.trim(),
+                                createdAt: new Date().toISOString()
+                              }
+                            ]);
+                            textInput.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const moduleInput = document.getElementById('newAgreementModule') as HTMLSelectElement;
+                        const textInput = document.getElementById('newAgreementText') as HTMLInputElement;
+                        if (textInput.value.trim()) {
+                          setModuleAgreements([
+                            ...moduleAgreements,
+                            {
+                              id: `agr-${Date.now()}`,
+                              moduleName: moduleInput.value,
+                              text: textInput.value.trim(),
+                              createdAt: new Date().toISOString()
+                            }
+                          ]);
+                          textInput.value = '';
+                        }
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                    >
+                      افزودن
+                    </button>
+                  </div>
+
+                  {moduleAgreements.length > 0 && (
+                    <div className="space-y-2 mt-3">
+                      {moduleAgreements.map(agr => (
+                        <div key={agr.id} className="flex items-center justify-between bg-white border border-indigo-100 rounded-lg p-2 px-3 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                              {agr.moduleName === 'proformas' ? 'پیش‌فاکتور' :
+                               agr.moduleName === 'purchase_orders' ? 'سفارش خرید' :
+                               agr.moduleName === 'packaging' ? 'بسته‌بندی' :
+                               agr.moduleName === 'projects' ? 'پروژه' :
+                               agr.moduleName === 'after_sales' ? 'خدمات' : 'عمومی'}
+                            </span>
+                            <span className="text-xs text-slate-700">{agr.text}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setModuleAgreements(moduleAgreements.filter(a => a.id !== agr.id))}
+                            className="text-rose-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Backward compatibility for old special agreements */}
+                  <div className="mt-4 pt-4 border-t border-indigo-200/50">
+                    <label className="text-xs font-bold text-slate-600 mb-1 block">توافقات پیش‌فاکتور (قدیمی)</label>
+                    <textarea
+                      rows={1}
+                      value={specialAgreements}
+                      onChange={(e) => setSpecialAgreements(e.target.value)}
+                      placeholder="متن توافق قدیمی..."
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                    />
+                  </div>
                 </div>
 
                 {/* Status Field */}
