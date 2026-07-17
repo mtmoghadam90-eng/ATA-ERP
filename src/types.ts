@@ -71,6 +71,21 @@ export interface ProductVariant {
   stockLevel: number;
   minStockLevel: number;
   priceRIYAL?: number;
+  priceForeign?: number;
+  currencyForeign?: string;
+
+  // Custom calculator values persisted on the variant
+  calcPriceForeign?: number;
+  calcExchangeRate?: number;
+  calcRemittanceFee?: number;
+  calcRemittancePct?: number;
+  calcShippingCost?: number;
+  calcCustomsDutyRIYAL?: number;
+  calcOtherCostsForeign?: number;
+  calcOtherCostsRIYAL?: number;
+  calcProfitPct?: number;
+  calcProfitRIYAL?: number;
+  calcMarginType?: 'PERCENT' | 'FIXED';
 }
 
 export interface Product {
@@ -92,6 +107,21 @@ export interface Product {
   features?: ProductFeature[]; // ویژگی‌های قابل تنظیم
   hasVariants?: boolean;
   variants?: ProductVariant[];
+
+  // Simple product price details
+  priceForeign?: number;
+  currencyForeign?: string;
+  calcPriceForeign?: number;
+  calcExchangeRate?: number;
+  calcRemittanceFee?: number;
+  calcRemittancePct?: number;
+  calcShippingCost?: number;
+  calcCustomsDutyRIYAL?: number;
+  calcOtherCostsForeign?: number;
+  calcOtherCostsRIYAL?: number;
+  calcProfitPct?: number;
+  calcProfitRIYAL?: number;
+  calcMarginType?: 'PERCENT' | 'FIXED';
 }
 
 export interface Supplier {

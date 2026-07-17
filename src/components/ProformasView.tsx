@@ -31,6 +31,7 @@ import {
   Customer,
   Project,
   Product,
+  ProductVariant,
   ProformaItem,
   ERPSettings,
   ExchangeRate,
@@ -446,7 +447,7 @@ export default function ProformasView({
         productCode: products[0]?.code || "",
         brand: products[0]?.brand || "",
         quantity: 1,
-        unitPriceRIYAL: products[0]?.basePriceRIYAL || 0,
+        unitPriceRIYAL: 0,
         techSpecs: "",
         selectedImage:
           products[0]?.images && products[0]?.images.length > 0
@@ -602,7 +603,7 @@ export default function ProformasView({
         productCode: firstProd.code,
         brand: firstProd.brand,
         quantity: qty,
-        unitPriceRIYAL: Math.round(basePriceInSelectedCurrency * 100) / 100,
+        unitPriceRIYAL: 0,
         techSpecs: "",
         selectedImage:
           firstProd.images && firstProd.images.length > 0
@@ -680,18 +681,72 @@ export default function ProformasView({
       );
     }
   };
+  // Get product or variant price in proforma's active currency
+  const getProductOrVariantPriceInProformaCurrency = (
+    product: Product,
+    variant?: ProductVariant
+  ): number => {
+    const proformaCurrencyEng = mapPersianCurrencyToEnglish(currency || "ریال");
+    const proformaRateObj = proformaCurrencyEng
+      ? exchangeRates?.find((r) => r.currency === proformaCurrencyEng)
+      : undefined;
+    const proformaRate = proformaRateObj ? proformaRateObj.rateToRIYAL : 1;
+
+    // 1. If variant is specified, look at variant price
+    if (variant) {
+      if (variant.priceForeign) {
+        const variantCurrencyEng = mapPersianCurrencyToEnglish(variant.currencyForeign || "یورو");
+        const variantRateObj = variantCurrencyEng
+          ? exchangeRates?.find((r) => r.currency === variantCurrencyEng)
+          : undefined;
+        const variantRate = variantRateObj ? variantRateObj.rateToRIYAL : 1;
+        const priceInRial = variant.priceForeign * variantRate;
+
+        if (currency === "ریال") {
+          return Math.round(priceInRial);
+        } else {
+          return Math.round((priceInRial / proformaRate) * 100) / 100;
+        }
+      } else if (variant.priceRIYAL !== undefined) {
+        if (currency === "ریال") {
+          return variant.priceRIYAL;
+        } else {
+          return Math.round((variant.priceRIYAL / proformaRate) * 100) / 100;
+        }
+      }
+    }
+
+    // 2. If no variant or variant doesn't have a price, look at product price
+    if (product.priceForeign) {
+      const prodCurrencyEng = mapPersianCurrencyToEnglish(product.currencyForeign || "یورو");
+      const prodRateObj = prodCurrencyEng
+        ? exchangeRates?.find((r) => r.currency === prodCurrencyEng)
+        : undefined;
+      const prodRate = prodRateObj ? prodRateObj.rateToRIYAL : 1;
+      const priceInRial = product.priceForeign * prodRate;
+
+      if (currency === "ریال") {
+        return Math.round(priceInRial);
+      } else {
+        return Math.round((priceInRial / proformaRate) * 100) / 100;
+      }
+    } else {
+      const baseRial = product.basePriceRIYAL || 0;
+      if (currency === "ریال") {
+        return baseRial;
+      } else {
+        return Math.round((baseRial / proformaRate) * 100) / 100;
+      }
+    }
+  };
+
   // Handle Item Select product
   const handleItemProductChange = (index: number, prodId: string) => {
     const prod = products.find((p) => p.id === prodId);
     if (!prod) return;
-    // Convert product's basePriceRIYAL to current currency
-    const engCurrency = mapPersianCurrencyToEnglish(currency || "ریال");
-    const rateObj = engCurrency
-      ? exchangeRates.find((r) => r.currency === engCurrency)
-      : undefined;
-    const rate = rateObj ? rateObj.rateToRIYAL : 1;
-    const basePriceInSelectedCurrency =
-      currency === "ریال" ? prod.basePriceRIYAL : prod.basePriceRIYAL / rate;
+
+    const basePriceInSelectedCurrency = getProductOrVariantPriceInProformaCurrency(prod);
+
     const newItems = [...items];
 
     let currentQty = newItems[index].quantity;
@@ -715,7 +770,7 @@ export default function ProformasView({
       brand: prod.brand,
       supplyMethod: prod.supplyType === "ORDER" ? "ORDER" : "INVENTORY",
       quantity: currentQty,
-      unitPriceRIYAL: Math.round(basePriceInSelectedCurrency * 100) / 100,
+      unitPriceRIYAL: basePriceInSelectedCurrency,
       techSpecs: newItems[index].techSpecs || "",
       selectedImage:
         prod.images && prod.images.length > 0 ? prod.images[0] : undefined,
@@ -756,13 +811,15 @@ export default function ProformasView({
     const newGeneratedLines = Object.entries(variant.attributes).map(([k, v]) => `${k}: ${v}`);
     const newTechSpecs = [...filteredLines, ...newGeneratedLines].filter(Boolean).join('\n');
 
+    const variantPrice = getProductOrVariantPriceInProformaCurrency(prod, variant);
+
     newItems[index] = {
       ...item,
       variantId: variant.id,
       productCode: variant.sku,
       quantity: currentQty,
       supplyMethod: effectiveSupplyType === "ORDER" ? "ORDER" : "INVENTORY",
-      unitPriceRIYAL: variant.priceRIYAL || item.unitPriceRIYAL,
+      unitPriceRIYAL: variantPrice || item.unitPriceRIYAL,
       techSpecs: newTechSpecs,
     };
     setItems(newItems);
@@ -819,7 +876,7 @@ export default function ProformasView({
       if (selectedProj && selectedProj.customerId !== customerId) {
         const confirmProjCustomer = window.confirm(
           `هشدار مغایرت مشتری:\n` +
-            `خریدار انتخاب شده در پیش‌فاکتور با مشتری ثبت شده در پروژه مادری (${selectedProj.customerName}) مغایرت دارد.\n` +
+            `خریدار انتخاب شده در پیش‌فاکتور با مشتری ثبت شده در پروژه (${selectedProj.customerName}) مغایرت دارد.\n` +
             `آیا اطمینان دارید که می‌خواهید پیش‌فاکتور را برای خریدار متفاوتی ثبت کنید؟`,
         );
         if (!confirmProjCustomer) {
@@ -961,8 +1018,8 @@ export default function ProformasView({
   // Filter proformas
   const filteredProformas = proformas.filter((p) => {
     const matchesSearch =
-      p.proformaNumber.toLowerCase().includes(search.toLowerCase()) ||
-      p.customerName.toLowerCase().includes(search.toLowerCase()) ||
+      (p.proformaNumber || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.customerName || '').toLowerCase().includes(search.toLowerCase()) ||
       (p.projectName &&
         p.projectName.toLowerCase().includes(search.toLowerCase()));
     const matchesStatus =
@@ -2117,7 +2174,7 @@ export default function ProformasView({
                   <div>
                     <h3 className="font-bold text-sm text-slate-900">
                       {isNoProject
-                        ? "پیش‌فاکتورهای عمومی و خرید مستقیم (بدون پروژه مادری)"
+                        ? "پیش‌فاکتورهای عمومی و خرید مستقیم (بدون پروژه)"
                         : `پروژه: ${project?.name || "نامشخص"} (${project?.code || ""})`}
                     </h3>
                     <p className="text-[11px] text-slate-500 mt-0.5">
@@ -2565,7 +2622,7 @@ export default function ProformasView({
               <p className="text-slate-500 text-xs">
                 چنانچه بعضی از ردیف‌های پیش‌فاکتور برنده و بعضی دیگر بازنده
                 شده‌اند، وضعیت هر ردیف را به صورت مستقل به همراه علت باخت ثبت
-                کنید. این کار به صورت اتوماتیک وضعیت کل پروژه مادری را نیز
+                کنید. این کار به صورت اتوماتیک وضعیت کل پروژه را نیز
                 همگام‌سازی خواهد کرد.
               </p>
 
@@ -2807,7 +2864,7 @@ export default function ProformasView({
                 {/* Project Select */}
                 <div className="space-y-1.5 w-full min-w-0">
                   <label className="text-xs font-semibold text-slate-500">
-                    کد پروژه مادری *
+                    کد پروژه *
                   </label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
                     <SearchableSelect
@@ -2864,7 +2921,7 @@ export default function ProformasView({
                                   productCode: (prod && item.variantId ? prod.variants?.find(v => v.id === item.variantId)?.sku : prod?.code) || "",
                                   brand: prod?.brand || "",
                                   quantity: qty,
-                                  unitPriceRIYAL: prod?.basePriceRIYAL || 0,
+                                  unitPriceRIYAL: prod ? getProductOrVariantPriceInProformaCurrency(prod, prod.variants?.find(v => v.id === item.variantId)) : 0,
                                   deliveryRange: "۳-۴",
                                   deliveryUnit: "هفته" as const,
                                   deliveryType: "کاری" as const,
@@ -3014,7 +3071,7 @@ export default function ProformasView({
                     return (
                       <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 rounded-lg px-2.5 py-1.5 mt-1.5 flex items-center gap-1.5 font-bold animate-pulse">
                         <AlertCircle size={12} className="flex-shrink-0" />
-                        مشتری انتخاب‌شده با مشتری پروژه مادری (
+                        مشتری انتخاب‌شده با مشتری پروژه (
                         {selectedProjObj?.customerName}) مغایرت دارد!
                       </p>
                     );
@@ -3562,7 +3619,7 @@ export default function ProformasView({
                                         currency === "ریال"
                                           ? firstP.basePriceRIYAL
                                           : firstP.basePriceRIYAL / rate;
-                                      newItems[idx].unitPriceRIYAL =
+                                      newItems[idx].unitPriceRIYAL = getProductOrVariantPriceInProformaCurrency(firstP); //
                                         Math.round(basePrice * 100) / 100;
                                     }
                                   }
@@ -4167,7 +4224,7 @@ export default function ProformasView({
                 newItems[itemIdx].variantId = matchedVariantId;
                 if (variant) {
                     newItems[itemIdx].productCode = variant.sku;
-                    newItems[itemIdx].unitPriceRIYAL = variant.priceRIYAL || item.unitPriceRIYAL;
+                    newItems[itemIdx].unitPriceRIYAL = getProductOrVariantPriceInProformaCurrency(prod, variant);
                     const effectiveSupplyType = variant.stockLevel === 0 ? "ORDER" : (prod.supplyType || "INVENTORY");
                     newItems[itemIdx].supplyMethod = effectiveSupplyType === "ORDER" ? "ORDER" : "INVENTORY";
                 }

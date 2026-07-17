@@ -529,9 +529,9 @@ export default function ProjectsView({
   };
   const filteredProjects = projects.filter((p) => {
     const matchesSearch = !search || 
-      p.name.toLowerCase().includes(search.toLowerCase()) || 
-      p.code.toLowerCase().includes(search.toLowerCase()) || 
-      p.customerName.toLowerCase().includes(search.toLowerCase()) ||
+      (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
+      (p.code || '').toLowerCase().includes(search.toLowerCase()) || 
+      (p.customerName || '').toLowerCase().includes(search.toLowerCase()) ||
       p.itemsNeeded?.some(item => item.tagNumber?.toLowerCase().includes(search.toLowerCase()));
     const matchesStatus = selectedStatus === "all" || p.status === selectedStatus;
     if (!(matchesSearch && matchesStatus)) return false;
@@ -562,19 +562,19 @@ export default function ProjectsView({
       if (!filterValue) return true;
       const fVal = String(filterValue).toLowerCase();
       if (colId === "code") {
-        return p.code.toLowerCase().includes(fVal);
+        return (p.code || "").toLowerCase().includes(fVal);
       }
       if (colId === "name") {
-        return p.name.toLowerCase().includes(fVal);
+        return (p.name || "").toLowerCase().includes(fVal);
       }
       if (colId === "customerName") {
-        return p.customerName.toLowerCase().includes(fVal);
+        return (p.customerName || "").toLowerCase().includes(fVal);
       }
       if (colId === "estimatedValueRIYAL") {
-        return String(getPipelineValue(p.id)).toLowerCase().includes(fVal);
+        return String(getPipelineValue(p.id) || "").toLowerCase().includes(fVal);
       }
       if (colId === "status") {
-        return p.status.toLowerCase().includes(fVal);
+        return (p.status || "").toLowerCase().includes(fVal);
       }
       if (colId === "expectedCloseDate") {
         return (p.expectedCloseDate || "").toLowerCase().includes(fVal);

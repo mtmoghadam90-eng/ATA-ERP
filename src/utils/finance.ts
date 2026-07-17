@@ -175,7 +175,7 @@ export const calculateProformaFinance = (
   
   // 4. Find linked receipts
   const activeTransactions = transactions.filter(t => 
-    t.type === 'دریافت' && 
+    (t.type === 'دریافت' || t.type === 'پرداخت') && 
     t.status !== 'پیش‌نویس' && 
     t.status !== 'لغو شده' &&
     t.status !== 'برگشت شده'
@@ -196,7 +196,8 @@ export const calculateProformaFinance = (
     
   for (const t of linkedTx) {
     const isReversal = !!t.reversalOfTransactionId;
-    const sign = isReversal ? -1 : 1;
+    const isPayment = t.type === 'پرداخت';
+    const sign = (isReversal ? -1 : 1) * (isPayment ? -1 : 1);
     
     let txRiyal = (t.amountRIYAL || 0) * sign;
     let txRate = t.exchangeRate || 0;
@@ -378,17 +379,22 @@ export const calculateProjectFinance = (
   );
   
   // 3. Find unallocated transactions at the project level
-  // These are receipts linked to this project but NOT assigned to any proforma
+  // These are receipts/payments linked to this project but NOT assigned to any proforma
   const projectReceipts = allTransactions.filter(t => 
     t.projectId === project.id && 
-    t.type === 'دریافت' && 
+    (t.type === 'دریافت' || t.type === 'پرداخت') && 
     t.status !== 'پیش‌نویس' && 
     t.status !== 'لغو شده' &&
     t.status !== 'برگشت شده'
   );
   
   const unallocatedTx = projectReceipts.filter(t => !t.proformaId);
-  const directUnallocatedRiyal = unallocatedTx.reduce((sum, t) => sum + ((t.amountRIYAL || 0) * (t.reversalOfTransactionId ? -1 : 1)), 0);
+  const directUnallocatedRiyal = unallocatedTx.reduce((sum, t) => {
+    const isReversal = !!t.reversalOfTransactionId;
+    const isPayment = t.type === 'پرداخت';
+    const sign = (isReversal ? -1 : 1) * (isPayment ? -1 : 1);
+    return sum + ((t.amountRIYAL || 0) * sign);
+  }, 0);
   
   // 4. Sum up
   let totalSalesHistoricalRiyal: number | null = 0;
@@ -557,15 +563,20 @@ export const calculateCompanyFinanceSummary = (
     }
   }
   
-  // Also include general (project-less) receipts in total received
+  // Also include general (project-less) receipts/payments in total received
   const generalReceipts = allTransactions.filter(t => 
     !t.projectId && 
-    t.type === 'دریافت' && 
+    (t.type === 'دریافت' || t.type === 'پرداخت') && 
     t.status !== 'پیش‌نویس' && 
     t.status !== 'لغو شده' &&
     t.status !== 'برگشت شده'
   );
-  const generalReceivedRiyal = generalReceipts.reduce((sum, t) => sum + ((t.amountRIYAL || 0) * (t.reversalOfTransactionId ? -1 : 1)), 0);
+  const generalReceivedRiyal = generalReceipts.reduce((sum, t) => {
+    const isReversal = !!t.reversalOfTransactionId;
+    const isPayment = t.type === 'پرداخت';
+    const sign = (isReversal ? -1 : 1) * (isPayment ? -1 : 1);
+    return sum + ((t.amountRIYAL || 0) * sign);
+  }, 0);
   totalReceivedRiyal += generalReceivedRiyal;
   
   return {

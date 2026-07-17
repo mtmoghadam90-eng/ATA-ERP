@@ -282,6 +282,7 @@ export default function App() {
             categories={store.settings.dropdownItems.categories}
             units={store.settings.dropdownItems.units}
             settings={store.settings}
+            exchangeRates={store.exchangeRates}
           />
         );
       case 'proformas':

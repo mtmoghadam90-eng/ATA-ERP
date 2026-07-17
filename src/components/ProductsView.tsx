@@ -7,9 +7,13 @@ import {
   Package, 
   Edit, 
   Trash2, 
-  X
+  X,
+  Calculator,
+  Percent,
+  Info,
+  TrendingUp
 } from 'lucide-react';
-import { Product, ProductVariant, ERPSettings, InventoryTransaction, ProductFeature } from '../types';
+import { Product, ProductVariant, ERPSettings, InventoryTransaction, ProductFeature, ExchangeRate } from '../types';
 import { toShamsiStr, toGregorianStr } from '../dateUtils';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -39,6 +43,7 @@ interface ProductsViewProps {
   categories: string[];
   units: string[];
   settings: ERPSettings;
+  exchangeRates?: ExchangeRate[];
 }
 
 export default function ProductsView({
@@ -50,7 +55,8 @@ export default function ProductsView({
   batchImportProducts,
   categories,
   settings,
-  inventoryTransactions
+  inventoryTransactions,
+  exchangeRates = []
 }: ProductsViewProps) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'PRODUCTS' | 'TRANSACTIONS'>('PRODUCTS');
@@ -79,9 +85,109 @@ export default function ProductsView({
   const [hasVariants, setHasVariants] = useState(false);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
 
+  // Simple Product Price States
+  const [simplePriceForeign, setSimplePriceForeign] = useState<string>('');
+  const [simpleCurrencyForeign, setSimpleCurrencyForeign] = useState<string>('یورو');
+  const [simplePriceRIYAL, setSimplePriceRIYAL] = useState<string>('');
+  const [simpleCalcDetails, setSimpleCalcDetails] = useState<Partial<ProductVariant>>({});
+
   // Batch upload modal state
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [batchFile, setBatchFile] = useState<File | null>(null);
+
+  // Selling Price Calculator State
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [calcVariantIndex, setCalcVariantIndex] = useState<number | null>(null);
+  const [calcPriceForeign, setCalcPriceForeign] = useState<string>('0');
+  const [calcCurrency, setCalcCurrency] = useState<string>('یورو');
+  const [calcExchangeRate, setCalcExchangeRate] = useState<string>('0');
+  const [calcRemittanceFee, setCalcRemittanceFee] = useState<string>('0');
+  const [calcRemittancePct, setCalcRemittancePct] = useState<string>('0');
+  const [calcShippingCost, setCalcShippingCost] = useState<string>('0');
+  const [calcCustomsDutyRIYAL, setCalcCustomsDutyRIYAL] = useState<string>('0');
+  const [calcOtherCostsForeign, setCalcOtherCostsForeign] = useState<string>('0');
+  const [calcOtherCostsRIYAL, setCalcOtherCostsRIYAL] = useState<string>('0');
+  const [calcProfitPct, setCalcProfitPct] = useState<string>('55');
+  const [calcProfitRIYAL, setCalcProfitRIYAL] = useState<string>('0');
+  const [calcMarginType, setCalcMarginType] = useState<'PERCENT' | 'FIXED'>('PERCENT');
+
+  const handleOpenCalculator = (variant: ProductVariant, index: number) => {
+    setCalcVariantIndex(index);
+    const initialPriceForeign = variant.calcPriceForeign !== undefined ? variant.calcPriceForeign : (variant.priceForeign || 0);
+    setCalcPriceForeign(String(initialPriceForeign));
+    const curr = variant.currencyForeign || 'یورو';
+    setCalcCurrency(curr);
+    
+    // Find rate in exchangeRates
+    const mappedEng = curr === 'دلار' ? 'USD' : curr === 'یورو' ? 'EUR' : curr === 'درهم' ? 'AED' : curr === 'یوان' ? 'CNY' : null;
+    const storeRate = mappedEng ? exchangeRates.find(r => r.currency === mappedEng)?.rateToRIYAL : null;
+    const defaultRate = storeRate ? String(storeRate) : '700000';
+
+    setCalcExchangeRate(variant.calcExchangeRate !== undefined ? String(variant.calcExchangeRate) : defaultRate);
+    setCalcRemittanceFee(variant.calcRemittanceFee !== undefined ? String(variant.calcRemittanceFee) : '0');
+    setCalcRemittancePct(variant.calcRemittancePct !== undefined ? String(variant.calcRemittancePct) : '0');
+    setCalcShippingCost(variant.calcShippingCost !== undefined ? String(variant.calcShippingCost) : '0');
+    setCalcCustomsDutyRIYAL(variant.calcCustomsDutyRIYAL !== undefined ? String(variant.calcCustomsDutyRIYAL) : '0');
+    setCalcOtherCostsForeign(variant.calcOtherCostsForeign !== undefined ? String(variant.calcOtherCostsForeign) : '0');
+    setCalcOtherCostsRIYAL(variant.calcOtherCostsRIYAL !== undefined ? String(variant.calcOtherCostsRIYAL) : '0');
+    setCalcProfitPct(variant.calcProfitPct !== undefined ? String(variant.calcProfitPct) : '55');
+    setCalcProfitRIYAL(variant.calcProfitRIYAL !== undefined ? String(variant.calcProfitRIYAL) : '0');
+    setCalcMarginType(variant.calcMarginType || 'PERCENT');
+    setShowCalculator(true);
+  };
+
+  const handleApplyCalculatedPrice = (enteredPriceForeign: number, finalPriceRial: number, details: Partial<ProductVariant>) => {
+    if (calcVariantIndex === null) return;
+    if (calcVariantIndex === -1) {
+      setSimplePriceForeign(String(enteredPriceForeign));
+      setSimplePriceRIYAL(String(Math.round(finalPriceRial)));
+      setSimpleCurrencyForeign(calcCurrency);
+      setSimpleCalcDetails(details);
+    } else {
+      const newV = [...variants];
+      newV[calcVariantIndex] = {
+        ...newV[calcVariantIndex],
+        priceForeign: enteredPriceForeign,
+        priceRIYAL: Math.round(finalPriceRial),
+        currencyForeign: calcCurrency,
+        ...details
+      };
+      setVariants(newV);
+    }
+    setShowCalculator(false);
+  };
+
+  const calculateAutoRialPrice = (priceForeign: number, currency: string, variantDetails: Partial<ProductVariant>) => {
+    const mappedEng = currency === 'دلار' ? 'USD' : currency === 'یورو' ? 'EUR' : currency === 'درهم' ? 'AED' : currency === 'یوان' ? 'CNY' : null;
+    const storeRate = mappedEng ? exchangeRates.find(r => r.currency === mappedEng)?.rateToRIYAL : null;
+    const defaultRate = storeRate || 700000;
+
+    const baseOrig = priceForeign;
+    const remitPct = variantDetails.calcRemittancePct !== undefined ? variantDetails.calcRemittancePct : 0;
+    const remitFee = variantDetails.calcRemittanceFee !== undefined ? variantDetails.calcRemittanceFee : 0;
+    const shipCost = variantDetails.calcShippingCost !== undefined ? variantDetails.calcShippingCost : 0;
+    const otherCostForeign = variantDetails.calcOtherCostsForeign !== undefined ? variantDetails.calcOtherCostsForeign : 0;
+    const rate = variantDetails.calcExchangeRate !== undefined ? variantDetails.calcExchangeRate : defaultRate;
+    const customsDuty = variantDetails.calcCustomsDutyRIYAL !== undefined ? variantDetails.calcCustomsDutyRIYAL : 0;
+    const otherCostRial = variantDetails.calcOtherCostsRIYAL !== undefined ? variantDetails.calcOtherCostsRIYAL : 0;
+    const profitPct = variantDetails.calcProfitPct !== undefined ? variantDetails.calcProfitPct : 55;
+    const profitRial = variantDetails.calcProfitRIYAL !== undefined ? variantDetails.calcProfitRIYAL : 0;
+    const marginType = variantDetails.calcMarginType || 'PERCENT';
+
+    const calculatedRemittanceForeign = remitFee + (baseOrig * remitPct / 100);
+    const totalForeignCost = baseOrig + calculatedRemittanceForeign + shipCost + otherCostForeign;
+    const rawRialCost = totalForeignCost * rate;
+    const finalLandedRialCost = rawRialCost + customsDuty + otherCostRial;
+
+    let finalSellingPriceRial = 0;
+    if (marginType === 'PERCENT') {
+      finalSellingPriceRial = finalLandedRialCost * (1 + profitPct / 100);
+    } else {
+      finalSellingPriceRial = finalLandedRialCost + profitRial;
+    }
+
+    return Math.round(finalSellingPriceRial);
+  };
 
   // Stock adjust modal state
   const [stockModalOpen, setStockModalOpen] = useState(false);
@@ -106,6 +212,10 @@ export default function ProductsView({
     setFeatures([]);
     setHasVariants(false);
     setVariants([]);
+    setSimplePriceForeign('');
+    setSimpleCurrencyForeign('یورو');
+    setSimplePriceRIYAL('');
+    setSimpleCalcDetails({});
     setShowModal(true);
   };
 
@@ -123,6 +233,22 @@ export default function ProductsView({
     setFeatures(prod.features || []);
     setHasVariants(prod.hasVariants || false);
     setVariants(prod.variants || []);
+    setSimplePriceForeign(prod.priceForeign !== undefined ? String(prod.priceForeign) : '');
+    setSimpleCurrencyForeign(prod.currencyForeign || 'یورو');
+    setSimplePriceRIYAL(prod.basePriceRIYAL !== undefined ? String(prod.basePriceRIYAL) : '');
+    setSimpleCalcDetails({
+      calcPriceForeign: prod.calcPriceForeign,
+      calcExchangeRate: prod.calcExchangeRate,
+      calcRemittanceFee: prod.calcRemittanceFee,
+      calcRemittancePct: prod.calcRemittancePct,
+      calcShippingCost: prod.calcShippingCost,
+      calcCustomsDutyRIYAL: prod.calcCustomsDutyRIYAL,
+      calcOtherCostsForeign: prod.calcOtherCostsForeign,
+      calcOtherCostsRIYAL: prod.calcOtherCostsRIYAL,
+      calcProfitPct: prod.calcProfitPct,
+      calcProfitRIYAL: prod.calcProfitRIYAL,
+      calcMarginType: prod.calcMarginType
+    });
     setShowModal(true);
   };
 
@@ -144,19 +270,24 @@ export default function ProductsView({
       { header: "تاریخ", key: "date", width: 15 },
       { header: "توضیحات", key: "notes", width: 30 },
       { header: "ویژگی‌های قابل تنظیم", key: "features", width: 35 },
+      { header: "قیمت ارزی", key: "priceForeign", width: 15 },
+      { header: "نوع ارز", key: "currencyForeign", width: 15 },
+      { header: "قیمت فروش (ریال)", key: "priceRIYAL", width: 20 },
     ];
 
     // Add some sample rows
     worksheet.addRow({
       code: "EQ-12345", name: "پرشر ترانسمیتر", category: categories.length > 0 ? categories[0] : "ابزار دقیق - فشار", brand: "WIKA",
       supplyType: "INVENTORY", amount: 10, type: "IN", date: "1403/05/12", 
- notes: "خرید جدید",
-      features: "سایز:۱ اینچ،۲ اینچ|متریال بدنه:استیل،برنج"
+      notes: "خرید جدید",
+      features: "سایز:۱ اینچ،۲ اینچ|متریال بدنه:استیل،برنج",
+      priceForeign: 120, currencyForeign: "یورو", priceRIYAL: 145000000
     });
     worksheet.addRow({
       code: "EQ-67890", name: "", category: "", brand: "",
       supplyType: "", amount: 5, type: "OUT", date: "", 
- notes: "مصرف پروژه"
+      notes: "مصرف پروژه",
+      priceForeign: "", currencyForeign: "", priceRIYAL: ""
     });
 
     // Add data validations for 200 rows
@@ -186,6 +317,13 @@ export default function ProductsView({
         type: 'list',
         allowBlank: true,
         formulae: ['"IN,OUT"']
+      };
+
+      // Currency Dropdown (Column L)
+      worksheet.getCell(`L${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"یورو,دلار,درهم,یوان"']
       };
     }
 
@@ -238,6 +376,9 @@ export default function ProductsView({
           const brand = row["برند"] || "";
           const supplyType = (row["نوع تامین"] === 'ORDER' ? 'ORDER' : 'INVENTORY') as 'INVENTORY' | 'ORDER';
           const featuresRaw = row["ویژگی‌های قابل تنظیم"] || "";
+          const priceForeign = row["قیمت ارزی"] !== undefined && row["قیمت ارزی"] !== "" ? Number(row["قیمت ارزی"]) : undefined;
+          const currencyForeign = row["نوع ارز"] || undefined;
+          const priceRIYAL = row["قیمت فروش (ریال)"] !== undefined && row["قیمت فروش (ریال)"] !== "" ? Number(row["قیمت فروش (ریال)"]) : undefined;
 
           return {
             code,
@@ -249,7 +390,10 @@ export default function ProductsView({
             amt,
             type,
             dateVal,
-            featuresRaw
+            featuresRaw,
+            priceForeign,
+            currencyForeign,
+            priceRIYAL
           };
         });
 
@@ -306,7 +450,21 @@ export default function ProductsView({
         customValues,
         features,
         hasVariants,
-        variants
+        variants,
+        basePriceRIYAL: Number(simplePriceRIYAL) || 0,
+        priceForeign: simplePriceForeign ? Number(simplePriceForeign) : undefined,
+        currencyForeign: simpleCurrencyForeign,
+        calcPriceForeign: simpleCalcDetails.calcPriceForeign,
+        calcExchangeRate: simpleCalcDetails.calcExchangeRate,
+        calcRemittanceFee: simpleCalcDetails.calcRemittanceFee,
+        calcRemittancePct: simpleCalcDetails.calcRemittancePct,
+        calcShippingCost: simpleCalcDetails.calcShippingCost,
+        calcCustomsDutyRIYAL: simpleCalcDetails.calcCustomsDutyRIYAL,
+        calcOtherCostsForeign: simpleCalcDetails.calcOtherCostsForeign,
+        calcOtherCostsRIYAL: simpleCalcDetails.calcOtherCostsRIYAL,
+        calcProfitPct: simpleCalcDetails.calcProfitPct,
+        calcProfitRIYAL: simpleCalcDetails.calcProfitRIYAL,
+        calcMarginType: simpleCalcDetails.calcMarginType,
       });
     } else {
       addProduct({
@@ -320,13 +478,26 @@ export default function ProductsView({
         code: productCode.trim(),
         modelNumber: "N/A",
         unit: "عدد",
-        basePriceRIYAL: 0,
+        basePriceRIYAL: Number(simplePriceRIYAL) || 0,
         minStockLevel: 0,
         stockLevel: supplyType === 'INVENTORY' ? (hasVariants ? variants.reduce((sum, v) => sum + (v.stockLevel || 0), 0) : Number(initialStock) || 0) : 0,
         customValues,
         features,
         hasVariants,
-        variants
+        variants,
+        priceForeign: simplePriceForeign ? Number(simplePriceForeign) : undefined,
+        currencyForeign: simpleCurrencyForeign,
+        calcPriceForeign: simpleCalcDetails.calcPriceForeign,
+        calcExchangeRate: simpleCalcDetails.calcExchangeRate,
+        calcRemittanceFee: simpleCalcDetails.calcRemittanceFee,
+        calcRemittancePct: simpleCalcDetails.calcRemittancePct,
+        calcShippingCost: simpleCalcDetails.calcShippingCost,
+        calcCustomsDutyRIYAL: simpleCalcDetails.calcCustomsDutyRIYAL,
+        calcOtherCostsForeign: simpleCalcDetails.calcOtherCostsForeign,
+        calcOtherCostsRIYAL: simpleCalcDetails.calcOtherCostsRIYAL,
+        calcProfitPct: simpleCalcDetails.calcProfitPct,
+        calcProfitRIYAL: simpleCalcDetails.calcProfitRIYAL,
+        calcMarginType: simpleCalcDetails.calcMarginType,
       });
     }
     setShowModal(false);
@@ -729,6 +900,93 @@ export default function ProductsView({
 
                 </div>
 
+                {!hasVariants && (
+                  <div className="space-y-4 pt-4 border-t border-slate-100">
+                    <h4 className="text-sm font-bold text-slate-800">قیمت‌گذاری محصول</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                      {/* Foreign Price and Currency */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">قیمت ارزی</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <div className="flex gap-2 flex-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={simplePriceForeign}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setSimplePriceForeign(val);
+                                if (val !== "") {
+                                  const calculatedRial = calculateAutoRialPrice(Number(val), simpleCurrencyForeign, simpleCalcDetails);
+                                  setSimplePriceRIYAL(String(calculatedRial));
+                                } else {
+                                  setSimplePriceRIYAL("");
+                                }
+                              }}
+                              placeholder="0"
+                              className="flex-1 min-w-[80px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono"
+                            />
+                            <select
+                              value={simpleCurrencyForeign}
+                              onChange={(e) => {
+                                const curr = e.target.value;
+                                setSimpleCurrencyForeign(curr);
+                                if (simplePriceForeign !== "") {
+                                  const calculatedRial = calculateAutoRialPrice(Number(simplePriceForeign), curr, simpleCalcDetails);
+                                  setSimplePriceRIYAL(String(calculatedRial));
+                                }
+                              }}
+                              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none bg-white min-w-[75px]"
+                            >
+                              <option value="یورو">یورو</option>
+                              <option value="دلار">دلار</option>
+                              <option value="درهم">درهم</option>
+                              <option value="یوان">یوان</option>
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCalculator({
+                              priceForeign: simplePriceForeign ? Number(simplePriceForeign) : undefined,
+                              currencyForeign: simpleCurrencyForeign,
+                              priceRIYAL: simplePriceRIYAL ? Number(simplePriceRIYAL) : undefined,
+                              ...simpleCalcDetails
+                            }, -1)}
+                            className="px-3 py-2 bg-sky-50 border border-sky-200 text-sky-600 rounded-lg hover:bg-sky-100 transition-colors flex items-center justify-center gap-1.5 text-xs font-bold whitespace-nowrap w-full sm:w-auto"
+                            title="محاسبه‌گر حرفه‌ای قیمت فروش"
+                          >
+                            <Calculator size={15} />
+                            محاسبه‌گر
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Selling Price (Rials) */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">قیمت فروش (ریال)</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={simplePriceRIYAL ? Number(simplePriceRIYAL).toLocaleString('fa-IR') : ''}
+                            onChange={(e) => {
+                              const rawVal = e.target.value
+                                .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+                                .replace(/[^\d]/g, '');
+                              setSimplePriceRIYAL(rawVal);
+                            }}
+                            placeholder="۰"
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono font-bold text-slate-800"
+                          />
+                          {simplePriceRIYAL && (
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">ریال</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Product Images */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">تصاویر محصول</label>
@@ -1029,6 +1287,8 @@ export default function ProductsView({
                                   <th className="py-2 px-3 text-xs font-semibold text-slate-600">کد SKU</th>
                                   <th className="py-2 px-3 text-xs font-semibold text-slate-600">ترکیب</th>
                                   {supplyType === 'INVENTORY' && <th className="py-2 px-3 text-xs font-semibold text-slate-600">موجودی اولیه</th>}
+                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">قیمت ارزی</th>
+                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">قیمت فروش (ریال)</th>
                                   <th className="py-2 px-3 text-xs font-semibold text-slate-600">عملیات</th>
                                 </tr>
                               </thead>
@@ -1066,6 +1326,71 @@ export default function ProductsView({
                                         />
                                       </td>
                                     )}
+                                    <td className="py-2 px-3">
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          value={variant.priceForeign !== undefined ? variant.priceForeign : ""}
+                                          onChange={(e) => {
+                                            const newV = [...variants];
+                                            const val = e.target.value === "" ? undefined : Number(e.target.value);
+                                            newV[vIdx].priceForeign = val;
+                                            if (val !== undefined) {
+                                              newV[vIdx].priceRIYAL = calculateAutoRialPrice(val, newV[vIdx].currencyForeign || "یورو", newV[vIdx]);
+                                            } else {
+                                              newV[vIdx].priceRIYAL = undefined;
+                                            }
+                                            setVariants(newV);
+                                          }}
+                                          placeholder="0"
+                                          className="w-20 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center"
+                                        />
+                                        <select
+                                          value={variant.currencyForeign || "یورو"}
+                                          onChange={(e) => {
+                                            const newV = [...variants];
+                                            const curr = e.target.value;
+                                            newV[vIdx].currencyForeign = curr;
+                                            if (newV[vIdx].priceForeign !== undefined) {
+                                              newV[vIdx].priceRIYAL = calculateAutoRialPrice(newV[vIdx].priceForeign!, curr, newV[vIdx]);
+                                            }
+                                            setVariants(newV);
+                                          }}
+                                          className="border border-slate-200 rounded px-1 py-1 text-[11px] outline-none focus:border-sky-500 bg-white"
+                                        >
+                                          <option value="یورو">یورو</option>
+                                          <option value="دلار">دلار</option>
+                                          <option value="درهم">درهم</option>
+                                          <option value="یوان">یوان</option>
+                                        </select>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenCalculator(variant, vIdx)}
+                                          className="p-1 text-sky-600 hover:bg-sky-50 hover:text-sky-700 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 border border-sky-100 bg-white"
+                                          title="محاسبه‌گر حرفه‌ای قیمت فروش"
+                                        >
+                                          <Calculator size={13} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <input
+                                        type="text"
+                                        value={variant.priceRIYAL !== undefined ? Number(variant.priceRIYAL).toLocaleString('fa-IR') : ""}
+                                        onChange={(e) => {
+                                          const rawVal = e.target.value
+                                            .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+                                            .replace(/[^\d]/g, '');
+                                          const newV = [...variants];
+                                          newV[vIdx].priceRIYAL = rawVal === "" ? undefined : Number(rawVal);
+                                          setVariants(newV);
+                                        }}
+                                        placeholder="۰"
+                                        className="w-28 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center font-bold text-slate-800"
+                                      />
+                                    </td>
                                     <td className="py-2 px-3">
                                       <button
                                         type="button"
@@ -1324,6 +1649,365 @@ export default function ProductsView({
           </div>
         </div>
       )}
+
+
+      {/* Selling Price Calculator Modal */}
+      {showCalculator && calcVariantIndex !== null && (() => {
+        // Calculations
+        const baseOrig = Number(calcPriceForeign) || 0;
+        const remitPct = Number(calcRemittancePct) || 0;
+        const remitFee = Number(calcRemittanceFee) || 0;
+        const shipCost = Number(calcShippingCost) || 0;
+        const otherCostForeign = Number(calcOtherCostsForeign) || 0;
+        const rate = Number(calcExchangeRate) || 0;
+        const customsDuty = Number(calcCustomsDutyRIYAL) || 0;
+        const otherCostRial = Number(calcOtherCostsRIYAL) || 0;
+        const profitPct = Number(calcProfitPct) || 0;
+        const profitRial = Number(calcProfitRIYAL) || 0;
+
+        // 1. Remittance fee in foreign currency
+        const calculatedRemittanceForeign = remitFee + (baseOrig * remitPct / 100);
+
+        // 2. Total foreign amount at origin + foreign costs (FOB/Landed foreign)
+        const totalForeignCost = baseOrig + calculatedRemittanceForeign + shipCost + otherCostForeign;
+
+        // 3. Convert foreign cost to Rial
+        const rawRialCost = totalForeignCost * rate;
+
+        // 4. Add Rial costs (customs & others)
+        const finalLandedRialCost = rawRialCost + customsDuty + otherCostRial;
+
+        // 5. Equivalent landed foreign currency cost
+        const finalLandedForeignCost = totalForeignCost + (rate > 0 ? (customsDuty + otherCostRial) / rate : 0);
+
+        // 6. Calculate selling price based on margin
+        let finalSellingPriceRial = 0;
+        let finalProfitAmountRial = 0;
+
+        if (calcMarginType === 'PERCENT') {
+          finalSellingPriceRial = finalLandedRialCost * (1 + profitPct / 100);
+          finalProfitAmountRial = finalSellingPriceRial - finalLandedRialCost;
+        } else {
+          finalSellingPriceRial = finalLandedRialCost + profitRial;
+          finalProfitAmountRial = profitRial;
+        }
+
+        // 7. Selling price in Foreign Currency (equivalent)
+        const finalSellingPriceForeign = rate > 0 ? (finalSellingPriceRial / rate) : 0;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-55 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-150 w-full max-w-2xl overflow-hidden animate-scale-in flex flex-col my-8">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <Calculator className="text-sky-500" size={20} />
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm">محاسبه‌گر بهای تمام‌شده و قیمت فروش</h3>
+                    <p className="text-[10px] text-slate-500">
+                      {calcVariantIndex === -1 ? "محصول ساده (فاقد ویژگی)" : `برای ردیف SKU: ${variants[calcVariantIndex]?.sku}`}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowCalculator(false)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto text-right">
+                
+                {/* Result Display Box */}
+                <div className="bg-slate-900 text-white p-5 rounded-2xl relative overflow-hidden shadow-inner">
+                  <div className="absolute top-0 left-0 w-24 h-24 bg-sky-500/10 rounded-full blur-2xl"></div>
+                  <div className="absolute bottom-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
+                  
+                  <div className="grid grid-cols-2 gap-4 divide-x divide-x-reverse divide-slate-800 relative z-10">
+                    <div className="text-center space-y-1">
+                      <p className="text-[10px] text-slate-400 font-medium">بهای تمام‌شده ارزی (Landed Cost)</p>
+                      <h4 className="text-xl font-black text-sky-400 font-mono">
+                        {finalLandedForeignCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-sans text-slate-300">{calcCurrency}</span>
+                      </h4>
+                      <p className="text-[10px] text-slate-300 font-mono">
+                        {Math.round(finalLandedRialCost).toLocaleString('fa-IR')} ریال
+                      </p>
+                    </div>
+
+                    <div className="text-center space-y-1">
+                      <p className="text-[10px] text-emerald-400 font-bold">قیمت فروش پیشنهادی (ارزی)</p>
+                      <h4 className="text-xl font-black text-emerald-400 font-mono">
+                        {finalSellingPriceForeign.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-sans text-slate-100">{calcCurrency}</span>
+                      </h4>
+                      <p className="text-[10px] text-emerald-300 font-mono">
+                        {Math.round(finalSellingPriceRial).toLocaleString('fa-IR')} ریال
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-800 mt-4 pt-3 flex justify-between items-center text-[10px] text-slate-400 relative z-10">
+                    <span>سود ناخالص فروش: {finalProfitAmountRial > 0 ? `${Math.round(finalProfitAmountRial).toLocaleString('fa-IR')} ریال` : '۰'}</span>
+                    <span className="font-mono bg-slate-800/60 px-2 py-0.5 rounded text-sky-300">ارز مرجع: {calcCurrency} | نرخ تسعیر: {rate.toLocaleString('fa-IR')}</span>
+                  </div>
+                </div>
+
+                {/* Form Inputs Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  
+                  {/* Left Side: Foreign/Origin Costs */}
+                  <div className="space-y-3.5 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                    <h4 className="text-xs font-extrabold text-indigo-700 flex items-center gap-1.5 pb-2 border-b border-dashed border-slate-200">
+                      <TrendingUp size={14} />
+                      هزینه‌های ارزی خرید و مبدا
+                    </h4>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">قیمت خرید در مبدا</label>
+                        <input
+                          type="number"
+                          value={calcPriceForeign}
+                          onChange={(e) => setCalcPriceForeign(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">نوع ارز</label>
+                        <select
+                          value={calcCurrency}
+                          onChange={(e) => {
+                            const newCurr = e.target.value;
+                            setCalcCurrency(newCurr);
+                            // Find matching rate
+                            const mappedEng = newCurr === 'دلار' ? 'USD' : newCurr === 'یورو' ? 'EUR' : newCurr === 'درهم' ? 'AED' : newCurr === 'یوان' ? 'CNY' : null;
+                            const storeRate = mappedEng ? exchangeRates.find(r => r.currency === mappedEng)?.rateToRIYAL : null;
+                            if (storeRate) setCalcExchangeRate(String(storeRate));
+                          }}
+                          className="w-full border border-slate-200 rounded-lg px-1.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-sky-500/20 bg-white"
+                        >
+                          <option value="یورو">یورو</option>
+                          <option value="دلار">دلار</option>
+                          <option value="درهم">درهم</option>
+                          <option value="یوان">یوان</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">درصد کارمزد حواله</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={calcRemittancePct}
+                            onChange={(e) => setCalcRemittancePct(e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg pr-2 pl-6 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                          />
+                          <Percent size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">کارمزد ثابت حواله ({calcCurrency})</label>
+                        <input
+                          type="number"
+                          value={calcRemittanceFee}
+                          onChange={(e) => setCalcRemittanceFee(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">هزینه حمل ارزی ({calcCurrency})</label>
+                        <input
+                          type="number"
+                          value={calcShippingCost}
+                          onChange={(e) => setCalcShippingCost(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">سایر هزینه‌های ارزی ({calcCurrency})</label>
+                        <input
+                          type="number"
+                          value={calcOtherCostsForeign}
+                          onChange={(e) => setCalcOtherCostsForeign(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Side: Domestic/Rial Costs & Margin */}
+                  <div className="space-y-3.5 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                    <h4 className="text-xs font-extrabold text-emerald-700 flex items-center gap-1.5 pb-2 border-b border-dashed border-slate-200">
+                      <Info size={14} />
+                      ترخیص ریالی و سود فروش
+                    </h4>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500">نرخ تسعیر ارز (ریال)</label>
+                      <input
+                        type="number"
+                        value={calcExchangeRate}
+                        onChange={(e) => setCalcExchangeRate(e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">ترخیص و گمرک (ریال)</label>
+                        <input
+                          type="number"
+                          value={calcCustomsDutyRIYAL}
+                          onChange={(e) => setCalcCustomsDutyRIYAL(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500">سایر مخارج ریالی (ریال)</label>
+                        <input
+                          type="number"
+                          value={calcOtherCostsRIYAL}
+                          onChange={(e) => setCalcOtherCostsRIYAL(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono text-center outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-lg border border-slate-150 space-y-2">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                        <span>نوع سود فروش</span>
+                        <div className="flex gap-2 bg-slate-100 p-0.5 rounded-lg border">
+                          <button
+                            type="button"
+                            onClick={() => setCalcMarginType('PERCENT')}
+                            className={`px-2 py-0.5 rounded-md text-[9px] font-semibold transition ${calcMarginType === 'PERCENT' ? 'bg-white shadow-xs text-sky-600' : 'text-slate-500'}`}
+                          >
+                            درصدی
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCalcMarginType('FIXED')}
+                            className={`px-2 py-0.5 rounded-md text-[9px] font-semibold transition ${calcMarginType === 'FIXED' ? 'bg-white shadow-xs text-sky-600' : 'text-slate-500'}`}
+                          >
+                            ثابت (ریال)
+                          </button>
+                        </div>
+                      </div>
+
+                      {calcMarginType === 'PERCENT' ? (
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-400">درصد سود روی بهای تمام‌شده</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={calcProfitPct}
+                              onChange={(e) => setCalcProfitPct(e.target.value)}
+                              className="w-full border border-slate-200 rounded-lg pr-2.5 pl-6 py-1 text-xs font-mono text-center outline-none focus:ring-1 focus:ring-sky-500"
+                            />
+                            <Percent size={11} className="absolute left-2 top-2 text-slate-400" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-400">مبلغ سود ثابت (ریال)</label>
+                          <input
+                            type="number"
+                            value={calcProfitRIYAL}
+                            onChange={(e) => setCalcProfitRIYAL(e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono text-center outline-none focus:ring-1 focus:ring-sky-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+                </div>
+
+                {/* Math Step-by-Step Breakdown */}
+                <div className="bg-slate-50 p-4 rounded-xl space-y-2.5 font-mono text-[10px] leading-relaxed border border-slate-150">
+                  <p className="font-bold text-slate-700 pb-1.5 border-b border-dashed border-slate-200 font-sans text-xs flex items-center gap-1.5">
+                    <Info size={13} className="text-slate-500" />
+                    فرمول تسهیم و بهای تمام‌شده نهایی
+                  </p>
+                  
+                  <div className="flex justify-between text-slate-600">
+                    <span>۱. بهای خرید ارزی کالا:</span>
+                    <span>{baseOrig.toLocaleString()} {calcCurrency}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
+                    <span>۲. کارمزد صرافی حواله ارز:</span>
+                    <span>+{calculatedRemittanceForeign.toLocaleString()} {calcCurrency}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
+                    <span>۳. هزینه‌های جانبی ارزی (ترابری و غیره):</span>
+                    <span>+{(shipCost + otherCostForeign).toLocaleString()} {calcCurrency}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-700 border-t border-dashed pt-1.5">
+                    <span>مجموع بهای ارزی FOB/Landed:</span>
+                    <span className="font-bold text-indigo-700">{totalForeignCost.toLocaleString()} {calcCurrency}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500 pt-1">
+                    <span>معادل ریالی بهای ارزی کالا (تسعیر):</span>
+                    <span>{rawRialCost.toLocaleString()} ریال</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
+                    <span>مخارج ریالی داخل کشور (ترخیص و عوارض + سایر):</span>
+                    <span>+{(customsDuty + otherCostRial).toLocaleString()} ریال</span>
+                  </div>
+                  <div className="flex justify-between text-slate-800 border-t border-dashed pt-1.5 text-xs font-bold">
+                    <span className="font-sans">بهای تمام‌شده کل کالا (ریال):</span>
+                    <span className="text-sky-700">{Math.round(finalLandedRialCost).toLocaleString()} ریال</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-700 pt-1 text-xs font-bold">
+                    <span className="font-sans">سود فروش محاسبه شده ({calcMarginType === 'PERCENT' ? `${profitPct}%` : 'ثابت'}):</span>
+                    <span>+{Math.round(finalProfitAmountRial).toLocaleString()} ریال</span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Actions Footer */}
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCalculator(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-medium transition"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyCalculatedPrice(Number(finalSellingPriceForeign.toFixed(2)), finalSellingPriceRial, {
+                    calcPriceForeign: baseOrig,
+                    calcExchangeRate: rate,
+                    calcRemittanceFee: remitFee,
+                    calcRemittancePct: remitPct,
+                    calcShippingCost: shipCost,
+                    calcCustomsDutyRIYAL: customsDuty,
+                    calcOtherCostsForeign: otherCostForeign,
+                    calcOtherCostsRIYAL: otherCostRial,
+                    calcProfitPct: profitPct,
+                    calcProfitRIYAL: profitRial,
+                    calcMarginType: calcMarginType
+                  })}
+                  className="px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-sky-500/15 flex items-center gap-1.5"
+                >
+                  <Calculator size={14} />
+                  اعمال در ردیف کالا و ذخیره
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Confirm Delete Modal */}
       <ConfirmModal

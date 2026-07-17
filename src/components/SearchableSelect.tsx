@@ -53,8 +53,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const selectedOption = options.find((opt) => opt.value === value);
 
   // Normalize Persian characters for more accurate search
-  const normalizePersian = (str: string) => {
-    return str
+  const normalizePersian = (str: any) => {
+    if (str === undefined || str === null) return '';
+    return String(str)
       .replace(/ي/g, 'ی')
       .replace(/ك/g, 'ک')
       .replace(/‌/g, ' ') // zero-width space to normal space
@@ -62,7 +63,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   const filteredOptions = options.filter((opt) =>
-    normalizePersian(opt.label).includes(normalizePersian(searchTerm))
+    opt && normalizePersian(opt.label).includes(normalizePersian(searchTerm))
   );
 
   const handleSelect = (val: string) => {

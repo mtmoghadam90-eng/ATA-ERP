@@ -497,7 +497,7 @@ export default function TransactionsView({
       if (approvedPfs.length > 0) {
         const confirmUnallocated = window.confirm(
           `هشدار عدم تخصیص به پیش‌فاکتور:\n` +
-          `پروژه مادریِ انتخاب‌شده دارای ${approvedPfs.length} پیش‌فاکتور تایید شده است، اما این دریافت به هیچ پیش‌فاکتوری متصل نشده است.\n` +
+          `پروژهِ انتخاب‌شده دارای ${approvedPfs.length} پیش‌فاکتور تایید شده است، اما این دریافت به هیچ پیش‌فاکتوری متصل نشده است.\n` +
           `عدم تخصیص دریافتی‌ها به پیش‌فاکتور باعث می‌شود تا فاکتورهای مشتری تسویه‌نشده باقی مانده و مغایرت حسابداری ایجاد شود.\n\n` +
           `آیا مایل به ثبت دریافت به صورت آزاد در سطح کل پروژه هستید؟`
         );
@@ -546,9 +546,9 @@ export default function TransactionsView({
   const filteredTransactions = transactions.filter(t => {
     const pName = t.customerName || t.supplierName || 'متفرقه';
     const matchesSearch = 
-      t.documentNumber.toLowerCase().includes(search.toLowerCase()) ||
+      (t.documentNumber || '').toLowerCase().includes(search.toLowerCase()) ||
       pName.toLowerCase().includes(search.toLowerCase()) ||
-      t.referenceNumber.toLowerCase().includes(search.toLowerCase());
+      (t.referenceNumber || '').toLowerCase().includes(search.toLowerCase());
     
     const matchesType = selectedType === 'all' || t.type === selectedType;
 
@@ -1595,6 +1595,7 @@ export default function TransactionsView({
                       onChange={(val) => {
                         const projId = val;
                         setProjectId(projId);
+                        setProformaId(''); // Reset proforma selection when project changes
                         if (projId) {
                           const proj = projects.find(p => p.id === projId);
                           if (proj && proj.customerId) {
@@ -1621,6 +1622,36 @@ export default function TransactionsView({
                     )}
                   </div>
                 </div>
+
+                {/* Linked Proforma */}
+                {projectId && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">پیش‌فاکتور مرتبط (اختیاری)</label>
+                    <SearchableSelect
+                      value={proformaId}
+                      onChange={(val) => {
+                        setProformaId(val);
+                        // Automatically initialize currency details if proforma is foreign
+                        const pf = proformas.find(p => p.id === val);
+                        if (pf && pf.currency && pf.currency !== 'ریال') {
+                          if (!exchangeRate || exchangeRate === 0) {
+                            setExchangeRate(pf.historicalExchangeRate || 0);
+                          }
+                        }
+                      }}
+                      options={[
+                        { value: '', label: '-- فاقد پیش‌فاکتور (آزاد در سطح پروژه) --' },
+                        ...proformas
+                          .filter(pf => pf.projectId === projectId)
+                          .map(pf => ({
+                            value: pf.id,
+                            label: `${pf.proformaNumber} (${pf.currency || 'ریال'}) - مبلغ: ${pf.finalAmount?.toLocaleString('fa-IR')}`
+                          }))
+                      ]}
+                      placeholder="-- انتخاب پیش‌فاکتور --"
+                    />
+                  </div>
+                )}
 
                 {/* Payment Type */}
                 <div className="space-y-1.5">

@@ -141,6 +141,7 @@ export default function PurchaseOrdersView({
   const [receivedDate, setReceivedDate] = useState('');
 
   const [notes, setNotes] = useState('');
+  const [selectedInquiryId, setSelectedInquiryId] = useState('');
 
   const determineStatusFromDates = (
     ord: string,
@@ -196,6 +197,7 @@ export default function PurchaseOrdersView({
     setSupplierId(suppliers[0]?.id || '');
     setProjectId('');
     setProformaId('');
+    setSelectedInquiryId('');
     setOrderDate(getTodayShamsi());
     setStatus('پرداخت و سفارش به سازنده');
     setExpectedDeliveryDate(addDaysToShamsi(getTodayShamsi(), 45));
@@ -223,6 +225,7 @@ export default function PurchaseOrdersView({
     setSupplierId(po.supplierId);
     setProjectId(po.projectId || '');
     setProformaId(po.proformaId || '');
+    setSelectedInquiryId('');
     setOrderDate(po.orderDate);
     setExpectedDeliveryDate(po.expectedDeliveryDate);
     setCurrency(po.currency);
@@ -500,8 +503,8 @@ export default function PurchaseOrdersView({
   // Filter
   const filteredPOs = purchaseOrders.filter(po => {
     const matchesSearch = 
-      po.poNumber.toLowerCase().includes(search.toLowerCase()) ||
-      po.supplierName.toLowerCase().includes(search.toLowerCase()) ||
+      (po.poNumber || '').toLowerCase().includes(search.toLowerCase()) ||
+      (po.supplierName || '').toLowerCase().includes(search.toLowerCase()) ||
       (po.projectName && po.projectName.toLowerCase().includes(search.toLowerCase()));
     
     const matchesStatus = selectedStatus === 'all' || po.status === selectedStatus;
@@ -990,7 +993,7 @@ export default function PurchaseOrdersView({
                 
                 {/* Project Linked */}
                 <div className="space-y-1.5 w-full min-w-0">
-                  <label className="text-xs font-semibold text-slate-500">کد پروژه مادری *</label>
+                  <label className="text-xs font-semibold text-slate-500">کد پروژه *</label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
                     <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={projectId}
@@ -1074,10 +1077,11 @@ export default function PurchaseOrdersView({
                 {/* Winner Supplier Inquiry Selection */}
                 <div className="space-y-1.5 sm:col-span-2 mb-4 bg-amber-50 p-3 rounded-lg border border-amber-100">
                   <label className="text-xs font-semibold text-amber-800">تکمیل خودکار از طریق استعلام‌های برنده (اختیاری)</label>
-                  <select defaultValue=""
+                  <select value={selectedInquiryId}
                     className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm text-right bg-white focus:border-amber-400 outline-none mt-1.5"
                     onChange={(e) => {
                       const inqId = e.target.value;
+                      setSelectedInquiryId(inqId);
                       if (!inqId) return;
                       const inq = supplierInquiries.find(i => i.id === inqId);
                       if (inq) {
@@ -1098,7 +1102,6 @@ export default function PurchaseOrdersView({
                           supplierNotes: inqItem.notes || (inqItem.deliveryTime ? `زمان تحویل: ${inqItem.deliveryTime}` : '')
                         }));
                         setItems(poItems);
-                        e.target.value = ""; // Reset after loading
                       }
                     }}
                   >

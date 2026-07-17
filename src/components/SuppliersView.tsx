@@ -135,9 +135,9 @@ export default function SuppliersView({
 
   const filteredSuppliers = suppliers.filter(s => {
     const matchesSearch = !search || 
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.country.toLowerCase().includes(search.toLowerCase()) ||
-      s.contactName.toLowerCase().includes(search.toLowerCase());
+      (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.country || '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.contactName || '').toLowerCase().includes(search.toLowerCase());
 
     if (!matchesSearch) return false;
 
@@ -146,13 +146,13 @@ export default function SuppliersView({
       if (!filterValue) return true;
       const fVal = String(filterValue).toLowerCase();
       if (colId === 'name') {
-        return s.name.toLowerCase().includes(fVal);
+        return (s.name || '').toLowerCase().includes(fVal);
       }
       if (colId === 'country') {
-        return s.country.toLowerCase().includes(fVal);
+        return (s.country || '').toLowerCase().includes(fVal);
       }
       if (colId === 'contactName') {
-        return s.contactName.toLowerCase().includes(fVal);
+        return (s.contactName || '').toLowerCase().includes(fVal);
       }
       if (colId === 'phone') {
         return (s.phone || '').toLowerCase().includes(fVal);
@@ -161,13 +161,13 @@ export default function SuppliersView({
         return (s.email || '').toLowerCase().includes(fVal);
       }
       if (colId === 'providedCategories') {
-        return (s.providedCategories || []).some(cat => cat.toLowerCase().includes(fVal));
+        return (s.providedCategories || []).some(cat => (cat || '').toLowerCase().includes(fVal));
       }
       if (colId === 'description') {
         return (s.description || '').toLowerCase().includes(fVal);
       }
       if (colId === 'status') {
-        return s.status.toLowerCase().includes(fVal);
+        return (s.status || '').toLowerCase().includes(fVal);
       }
       return true;
     });
