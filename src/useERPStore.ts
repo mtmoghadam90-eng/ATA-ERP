@@ -1362,6 +1362,14 @@ export function useERPStore() {
     );
     
     autoLogFactActivity(updatedPO.projectId, 'سفارش خرید', `بروزرسانی سفارش خرید ${updatedPO.poNumber} برای تامین‌کننده ${updatedPO.supplierName || updatedPO.supplierId} - وضعیت: ${updatedPO.status}`);
+
+    if (before?.status !== updatedPO.status && updatedPO.status === 'تحویل شده (رسید انبار)') {
+      setCompletionPrompt({
+        projectId: updatedPO.projectId,
+        categoryName: 'سفارش خرید',
+        message: `سفارش خرید ${updatedPO.poNumber} به انبار تحویل شد. آیا می‌خواهید وضعیت فعالیت‌های سفارش خرید این پروژه را به «اتمام کار» تغییر دهید؟`
+      });
+    }
   };
 
   const deletePurchaseOrder = (id: string) => {
@@ -1485,11 +1493,23 @@ export function useERPStore() {
     autoLogFactActivity(newProforma.projectId, 'پیش‌فاکتور', `صدور پیش‌فاکتور جدید با شماره ${newProforma.proformaNumber} به مبلغ ${newProforma.totalPrice?.toLocaleString() || 0} و وضعیت ${newProforma.status}`);
   };
   const updateProforma = (updatedProforma: any) => {
+    const before = proformas.find(p => p.id === updatedProforma.id);
     const updated = proformas.map(p => p.id === updatedProforma.id ? updatedProforma : p);
     saveToStorage("erp_proformas", updated, setProformas);
     logAction("UPDATE", "پیش‌فاکتور", updatedProforma.id, `بروزرسانی پیش‌فاکتور`);
     
     autoLogFactActivity(updatedProforma.projectId, 'پیش‌فاکتور', `بروزرسانی پیش‌فاکتور ${updatedProforma.proformaNumber} - مبلغ: ${updatedProforma.totalPrice?.toLocaleString() || 0} - وضعیت: ${updatedProforma.status}`);
+
+    const oldOutcome = before?.status === 'تأیید شده (برنده)' ? 'تأیید شده (برنده)' : before?.status === 'لغو شده' ? 'لغو شده' : before?.status === 'باخته' ? 'باخته' : (before?.status === 'نیمه برنده' ? 'نیمه برنده' : 'نامشخص');
+    const newOutcome = updatedProforma.status === 'تأیید شده (برنده)' ? 'تأیید شده (برنده)' : updatedProforma.status === 'لغو شده' ? 'لغو شده' : updatedProforma.status === 'باخته' ? 'باخته' : (updatedProforma.status === 'نیمه برنده' ? 'نیمه برنده' : 'نامشخص');
+    
+    if (oldOutcome !== newOutcome && (newOutcome === 'تأیید شده (برنده)' || newOutcome === 'نیمه برنده')) {
+      setCompletionPrompt({
+        projectId: updatedProforma.projectId,
+        categoryName: 'پیش‌فاکتور',
+        message: `پیش‌فاکتور ${updatedProforma.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
+      });
+    }
   };
   const deleteProforma = (id: string) => {
     const updated = proformas.filter(p => p.id !== id);
@@ -1575,11 +1595,28 @@ export function useERPStore() {
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     processWorkflowRules('packaging_delivery_created', newPd);
     autoLogFactActivity(newPd.projectId, 'بسته‌بندی و تحویل کالا', `ثبت مرحله جدید: ${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${newPd.status}`);
+
+    if (newPd.actualDeliveryDate) {
+      setCompletionPrompt({
+        projectId: newPd.projectId,
+        categoryName: 'بسته‌بندی و تحویل کالا',
+        message: `تاریخ تحویل کالا به مشتری (${newPd.actualDeliveryDate}) ثبت شد. آیا می‌خواهید وضعیت دسته فعالیت بسته‌بندی را به «اتمام کار» تغییر دهید؟`
+      });
+    }
   };
   const updatePackagingDelivery = (updatedPd: any) => {
+    const before = packagingDeliveries.find(p => p.id === updatedPd.id);
     const updated = packagingDeliveries.map(p => p.id === updatedPd.id ? updatedPd : p);
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `بروزرسانی مرحله: ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${updatedPd.status}`);
+
+    if (!before?.actualDeliveryDate && updatedPd.actualDeliveryDate) {
+      setCompletionPrompt({
+        projectId: updatedPd.projectId,
+        categoryName: 'بسته‌بندی و تحویل کالا',
+        message: `تاریخ تحویل کالا به مشتری (${updatedPd.actualDeliveryDate}) ثبت گردید. آیا می‌خواهید وضعیت دسته فعالیت بسته‌بندی را به «اتمام کار» تغییر دهید؟`
+      });
+    }
   };
   const deletePackagingDelivery = (id: string) => {
     const updated = packagingDeliveries.filter(p => p.id !== id);
@@ -1593,9 +1630,18 @@ export function useERPStore() {
     autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات جدید بابت: ${newAss.issueDescription || ''} - وضعیت: ${newAss.status}`);
   };
   const updateAfterSalesService = (updatedAss: any) => {
+    const before = afterSalesServices.find(a => a.id === updatedAss.id);
     const updated = afterSalesServices.map(a => a.id === updatedAss.id ? updatedAss : a);
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
     autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `بروزرسانی درخواست خدمات بابت: ${updatedAss.issueDescription || ''} - وضعیت: ${updatedAss.status}`);
+
+    if (before?.status !== updatedAss.status && updatedAss.status === 'تحویل داده شده') {
+      setCompletionPrompt({
+        projectId: updatedAss.projectId,
+        categoryName: 'خدمات پس از فروش',
+        message: `کالای ${updatedAss.itemName} تحویل مشتری داده شد. آیا می‌خواهید وضعیت دسته فعالیت مربوط به خدمات پس از فروش را به «اتمام کار» تغییر دهید؟`
+      });
+    }
   };
   const deleteAfterSalesService = (id: string) => {
     const updated = afterSalesServices.filter(a => a.id !== id);
@@ -1771,10 +1817,10 @@ export function useERPStore() {
       triggerMilestonesForEvent(pId, 'category_complete', catName);
     }
   };
-  const resumeProjectCategoryGroup = (projectId: string, category: string) => {
+  const resumeProjectCategoryGroup = (categoryGroupId: string, createdBy?: string) => {
     const updated = projectCategoryGroups.map(g => {
-      if (g.projectId === projectId && g.categoryName === category) {
-        return { ...g, status: "pending", completedAt: undefined };
+      if (g.id === categoryGroupId) {
+        return { ...g, status: "جاری", completedAt: undefined };
       }
       return g;
     });
