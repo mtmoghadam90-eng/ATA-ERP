@@ -539,6 +539,52 @@ export function useERPStore() {
     }
   };
 
+  const autoLogFactActivity = (projectId: string | undefined, categoryName: string, text: string) => {
+    if (!projectId) return;
+
+    setProjectCategoryGroups((prevGroups: any[]) => {
+      let updatedGroups = [...prevGroups];
+      const existingGroupIndex = updatedGroups.findIndex(g => 
+        g.projectId === projectId && 
+        (g.categoryName || '').trim() === categoryName.trim()
+      );
+
+      const newActivity = {
+        id: 'act-' + Date.now() + Math.random().toString(36).substr(2, 5),
+        text,
+        createdAt: new Date().toISOString(),
+        attachment: null,
+        referral: null,
+        createdBy: currentUser?.fullName || "کاربر سیستم"
+      };
+
+      if (existingGroupIndex >= 0) {
+        const group = updatedGroups[existingGroupIndex];
+        updatedGroups[existingGroupIndex] = {
+          ...group,
+          activities: [...(group.activities || []), newActivity]
+        };
+      } else {
+        const newGroup = {
+          id: `catgrp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          projectId: projectId,
+          categoryId: `cat-fact-${Date.now()}`,
+          categoryName: categoryName,
+          status: 'جاری',
+          activities: [newActivity],
+          createdAt: new Date().toISOString()
+        };
+        updatedGroups.push(newGroup);
+      }
+      
+      try {
+        saveToServer("erp_project_category_groups", updatedGroups);
+      } catch (err) {}
+      
+      return updatedGroups;
+    });
+  };
+
   // --- Customers CRUD ---
   const addCustomer = (customer: Omit<Customer, "id">) => {
     const newId = `cust-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1249,12 +1295,16 @@ export function useERPStore() {
     };
     const updated = [newTr, ...transactions];
     saveToStorage("erp_transactions", updated, setTransactions);
+    
+    autoLogFactActivity(newTr.projectId, 'مالی', `ثبت تراکنش ${newTr.type === 'INCOME' ? 'دریافتی' : 'پرداختی'} جدید به مبلغ ${newTr.amount?.toLocaleString() || 0}`);
     return newTr;
   };
 
   const updateTransaction = (t: Transaction) => {
     const updated = transactions.map((tr) => (tr.id === t.id ? t : tr));
     saveToStorage("erp_transactions", updated, setTransactions);
+    
+    autoLogFactActivity(t.projectId, 'مالی', `بروزرسانی تراکنش ${t.type === 'INCOME' ? 'دریافتی' : 'پرداختی'} - مبلغ: ${t.amount?.toLocaleString() || 0} - بابت: ${t.description || ''}`);
   };
 
   const deleteTransaction = (id: string) => {
@@ -1288,6 +1338,8 @@ export function useERPStore() {
       undefined,
       newPO,
     );
+    
+    autoLogFactActivity(newPO.projectId, 'سفارش خرید', `ثبت سفارش خرید با شماره ${newPO.poNumber} برای تامین‌کننده ${newPO.supplierName || newPO.supplierId}`);
     return newPO;
   };
 
@@ -1305,6 +1357,8 @@ export function useERPStore() {
       before,
       updatedPO,
     );
+    
+    autoLogFactActivity(updatedPO.projectId, 'سفارش خرید', `بروزرسانی سفارش خرید ${updatedPO.poNumber} برای تامین‌کننده ${updatedPO.supplierName || updatedPO.supplierId} - وضعیت: ${updatedPO.status}`);
   };
 
   const deletePurchaseOrder = (id: string) => {
@@ -1424,11 +1478,15 @@ export function useERPStore() {
     const updated = [newProforma, ...proformas];
     saveToStorage("erp_proformas", updated, setProformas);
     logAction("CREATE", "پیش‌فاکتور", newProforma.id, `ایجاد پیش‌فاکتور: ${finalProformaNumber}`);
+    
+    autoLogFactActivity(newProforma.projectId, 'پیشفاکتور', `صدور پیش‌فاکتور جدید با شماره ${newProforma.proformaNumber} به مبلغ ${newProforma.totalPrice?.toLocaleString() || 0} و وضعیت ${newProforma.status}`);
   };
   const updateProforma = (updatedProforma: any) => {
     const updated = proformas.map(p => p.id === updatedProforma.id ? updatedProforma : p);
     saveToStorage("erp_proformas", updated, setProformas);
     logAction("UPDATE", "پیش‌فاکتور", updatedProforma.id, `بروزرسانی پیش‌فاکتور`);
+    
+    autoLogFactActivity(updatedProforma.projectId, 'پیشفاکتور', `بروزرسانی پیش‌فاکتور ${updatedProforma.proformaNumber} - مبلغ: ${updatedProforma.totalPrice?.toLocaleString() || 0} - وضعیت: ${updatedProforma.status}`);
   };
   const deleteProforma = (id: string) => {
     const updated = proformas.filter(p => p.id !== id);
@@ -1513,10 +1571,12 @@ export function useERPStore() {
     const updated = [...packagingDeliveries, newPd];
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     processWorkflowRules('packaging_delivery_created', newPd);
+    autoLogFactActivity(newPd.projectId, 'بسته‌بندی و تحویل کالا', `ثبت مرحله جدید: ${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${newPd.status}`);
   };
   const updatePackagingDelivery = (updatedPd: any) => {
     const updated = packagingDeliveries.map(p => p.id === updatedPd.id ? updatedPd : p);
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
+    autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `بروزرسانی مرحله: ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${updatedPd.status}`);
   };
   const deletePackagingDelivery = (id: string) => {
     const updated = packagingDeliveries.filter(p => p.id !== id);
@@ -1527,10 +1587,12 @@ export function useERPStore() {
     const newAss = { ...ass, id: `ass-${Date.now()}`, createdAt: new Date().toISOString() };
     const updated = [...afterSalesServices, newAss];
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
+    autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات جدید بابت: ${newAss.issueDescription || ''} - وضعیت: ${newAss.status}`);
   };
   const updateAfterSalesService = (updatedAss: any) => {
     const updated = afterSalesServices.map(a => a.id === updatedAss.id ? updatedAss : a);
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
+    autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `بروزرسانی درخواست خدمات بابت: ${updatedAss.issueDescription || ''} - وضعیت: ${updatedAss.status}`);
   };
   const deleteAfterSalesService = (id: string) => {
     const updated = afterSalesServices.filter(a => a.id !== id);
@@ -1541,11 +1603,13 @@ export function useERPStore() {
     const newSi = { ...si, id: `si-${Date.now()}`, createdAt: new Date().toISOString() };
     const updated = [...supplierInquiries, newSi];
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
+    autoLogFactActivity(newSi.projectId, 'استعلام قیمت از تامین کننده ها', `ثبت استعلام جدید برای تامین‌کننده ${newSi.supplierId || ''} - مبلغ: ${newSi.price?.toLocaleString() || 0} - وضعیت: ${newSi.status}`);
     return newSi;
   };
   const updateSupplierInquiry = (updatedSi: any) => {
     const updated = supplierInquiries.map(s => s.id === updatedSi.id ? updatedSi : s);
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
+    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت از تامین کننده ها', `بروزرسانی استعلام برای تامین‌کننده ${updatedSi.supplierId || ''} - مبلغ: ${updatedSi.price?.toLocaleString() || 0} - وضعیت: ${updatedSi.status}`);
   };
   const deleteSupplierInquiry = (id: string) => {
     const updated = supplierInquiries.filter(s => s.id !== id);
@@ -1736,7 +1800,7 @@ export function useERPStore() {
           referral,
           createdBy: createdBy || currentUser?.fullName || "کاربر سیستم"
         };
-        return { ...g, activities: [...g.activities, newActivity] };
+        return { ...g, activities: [...(g.activities || []), newActivity] };
       }
       return g;
     });
@@ -1746,7 +1810,7 @@ export function useERPStore() {
   const updateProjectActivity = (categoryGroupId: string, activity: any) => {
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
-        return { ...g, activities: g.activities.map(a => a.id === activity.id ? activity : a) };
+        return { ...g, activities: (g.activities || []).map((a: any) => a.id === activity.id ? activity : a) };
       }
       return g;
     });
@@ -1756,7 +1820,7 @@ export function useERPStore() {
   const deleteProjectActivity = (categoryGroupId: string, activityId: string) => {
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
-        return { ...g, activities: g.activities.filter(a => a.id !== activityId) };
+        return { ...g, activities: (g.activities || []).filter((a: any) => a.id !== activityId) };
       }
       return g;
     });
@@ -1768,7 +1832,7 @@ export function useERPStore() {
       if (g.id === categoryGroupId) {
         return {
           ...g,
-          activities: g.activities.map(a => {
+          activities: (g.activities || []).map((a: any) => {
             if (a.id === activityId && a.referral) {
               return {
                 ...a,
@@ -1800,7 +1864,7 @@ export function useERPStore() {
       if (g.id === categoryGroupId) {
         return {
           ...g,
-          activities: g.activities.map(a => {
+          activities: (g.activities || []).map((a: any) => {
             if (a.id === activityId && a.referral) {
               let updatedReferral = { ...a.referral };
               if (responseText || attachment) {
