@@ -699,14 +699,33 @@ export function useERPStore() {
   const autoLogFactActivity = (projectId: string | undefined, categoryName: string, text: string) => {
     if (!projectId) return;
 
-    // A robust normalize function to remove all spaces, ZWNJs, and convert to lowercase for exact matching
+    // A helper to normalize and map different variations of categories to formal standard ones
+    const getMappedCategoryName = (name: string): string => {
+      const norm = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
+      const n = norm(name);
+      if (n === norm('پیش‌فاکتور') || n === norm('پیش‌فاکتورها') || n === norm('پیش‌فاکتورها و مهندسی فروش')) {
+        return 'پیش‌فاکتورها و مهندسی فروش';
+      }
+      if (n === norm('سفارش خرید') || n === norm('سفارشات خرید تامین‌کنندگان') || n === norm('سفارشات خرید تامین کنندگان')) {
+        return 'سفارشات خرید تامین‌کنندگان';
+      }
+      if (n === norm('استعلام قیمت از تامین‌کننده‌ها') || n === norm('استعلام قیمت تأمین‌کنندگان') || n === norm('استعلام قیمت تامین کنندگان')) {
+        return 'استعلام قیمت تأمین‌کنندگان';
+      }
+      if (n === norm('مالی') || n === norm('تراکنش‌های مالی و پرداخت‌ها') || n === norm('تراکنش های مالی و پرداخت ها')) {
+        return 'تراکنش‌های مالی و پرداخت‌ها';
+      }
+      return name;
+    };
+
+    const finalCategoryName = getMappedCategoryName(categoryName);
     const normalize = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
 
     setProjectCategoryGroups((prevGroups: any[]) => {
       let updatedGroups = [...prevGroups];
       const existingGroupIndex = updatedGroups.findIndex(g => 
         g.projectId === projectId && 
-        normalize(g.categoryName) === normalize(categoryName)
+        normalize(g.categoryName) === normalize(finalCategoryName)
       );
 
       const newActivity = {
@@ -729,10 +748,11 @@ export function useERPStore() {
           id: `catgrp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           projectId: projectId,
           categoryId: `cat-fact-${Date.now()}`,
-          categoryName: categoryName,
+          categoryName: finalCategoryName,
           status: 'جاری',
           activities: [newActivity],
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          startDate: getTodayShamsi()
         };
         updatedGroups.push(newGroup);
       }
@@ -1415,7 +1435,7 @@ export function useERPStore() {
     const updated = [newTr, ...transactions];
     saveToStorage("erp_transactions", updated, setTransactions);
     
-    autoLogFactActivity(newTr.projectId, 'مالی', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} جدید به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0}`);
+    autoLogFactActivity(newTr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} جدید به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال`);
     return newTr;
   };
 
@@ -1423,7 +1443,7 @@ export function useERPStore() {
     const updated = transactions.map((tr) => (tr.id === t.id ? t : tr));
     saveToStorage("erp_transactions", updated, setTransactions);
     
-    autoLogFactActivity(t.projectId, 'مالی', `بروزرسانی تراکنش ${t.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} - مبلغ: ${t.amountRIYAL?.toLocaleString() || 0} - بابت: ${t.notes || ''}`);
+    autoLogFactActivity(t.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `بروزرسانی تراکنش ${t.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} - مبلغ: ${t.amountRIYAL?.toLocaleString() || 0} ریال - بابت: ${t.notes || ''}`);
   };
 
   const deleteTransaction = (id: string) => {
@@ -1458,7 +1478,9 @@ export function useERPStore() {
       newPO,
     );
     
-    autoLogFactActivity(newPO.projectId, 'سفارش خرید', `ثبت سفارش خرید با شماره ${newPO.poNumber} برای تامین‌کننده ${newPO.supplierName || newPO.supplierId}`);
+    const supplierObj = suppliers.find(s => s.id === newPO.supplierId);
+    const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newPO.supplierName || newPO.supplierId || '');
+    autoLogFactActivity(newPO.projectId, 'سفارشات خرید تامین‌کنندگان', `ثبت سفارش خرید با شماره ${newPO.poNumber} برای تامین‌کننده «${suppName}»`);
     return newPO;
   };
 
@@ -1477,12 +1499,14 @@ export function useERPStore() {
       updatedPO,
     );
     
-    autoLogFactActivity(updatedPO.projectId, 'سفارش خرید', `بروزرسانی سفارش خرید ${updatedPO.poNumber} برای تامین‌کننده ${updatedPO.supplierName || updatedPO.supplierId} - وضعیت: ${updatedPO.status}`);
+    const supplierObj = suppliers.find(s => s.id === updatedPO.supplierId);
+    const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedPO.supplierName || updatedPO.supplierId || '');
+    autoLogFactActivity(updatedPO.projectId, 'سفارشات خرید تامین‌کنندگان', `بروزرسانی سفارش خرید ${updatedPO.poNumber} برای تامین‌کننده «${suppName}» - وضعیت: ${updatedPO.status}`);
 
     if (before?.status !== updatedPO.status && updatedPO.status === 'تحویل شده (رسید انبار)') {
       setCompletionPrompt({
         projectId: updatedPO.projectId,
-        categoryName: 'سفارش خرید',
+        categoryName: 'سفارشات خرید تامین‌کنندگان',
         message: `سفارش خرید ${updatedPO.poNumber} به انبار تحویل شد. آیا می‌خواهید وضعیت فعالیت‌های سفارش خرید این پروژه را به «اتمام کار» تغییر دهید؟`
       });
     }
@@ -1621,7 +1645,7 @@ export function useERPStore() {
     const statusLabel = newProforma.status;
     autoLogFactActivity(
       newProforma.projectId,
-      'پیش‌فاکتور',
+      'پیش‌فاکتورها و مهندسی فروش',
       `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`
     );
   }
@@ -1672,12 +1696,12 @@ export function useERPStore() {
     const syncedProjects = syncProjectStatus(finalUpdatedPf.projectId, updated, projects);
     saveToStorage('erp_projects', syncedProjects, setProjects);
 
-    autoLogFactActivity(finalUpdatedPf.projectId, 'پیش‌فاکتور', logText);
+    autoLogFactActivity(finalUpdatedPf.projectId, 'پیش‌فاکتورها و مهندسی فروش', logText);
 
     if (outcomeChanged && (newOutcome === 'تأیید شده (برنده)' || newOutcome === 'نیمه برنده')) {
       setCompletionPrompt({
         projectId: finalUpdatedPf.projectId,
-        categoryName: 'پیش‌فاکتور',
+        categoryName: 'پیش‌فاکتورها و مهندسی فروش',
         message: `پیش‌فاکتور ${finalUpdatedPf.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
       });
     }
@@ -1751,7 +1775,7 @@ export function useERPStore() {
     const reasonStr = newStatus === 'باخته' && lossReason ? ` (علت باخت: ${lossReason})` : '';
     autoLogFactActivity(
       oldProforma.projectId,
-      'پیش‌فاکتور',
+      'پیش‌فاکتورها و مهندسی فروش',
       `وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'} به «${newStatus}» تغییر یافت.${reasonStr}`
     );
   }
@@ -1787,7 +1811,7 @@ export function useERPStore() {
       if (oldProforma.projectId && (newOutcome === 'تأیید شده (برنده)' || newOutcome === 'نیمه برنده')) {
         setCompletionPrompt({
           projectId: oldProforma.projectId,
-          categoryName: 'پیش‌فاکتور',
+          categoryName: 'پیش‌فاکتورها و مهندسی فروش',
           message: `پیش‌فاکتور ${oldProforma.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
         });
       }
@@ -1967,13 +1991,19 @@ export function useERPStore() {
     const newSi = { ...si, id: `si-${Date.now()}`, createdAt: new Date().toISOString() };
     const updated = [...supplierInquiries, newSi];
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
-    autoLogFactActivity(newSi.projectId, 'استعلام قیمت از تامین‌کننده‌ها', `ثبت استعلام جدید برای تامین‌کننده ${newSi.supplierId || ''} - مبلغ: ${newSi.price?.toLocaleString() || 0} - وضعیت: ${newSi.status}`);
+    
+    const supplierObj = suppliers.find(s => s.id === newSi.supplierId);
+    const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newSi.supplierName || newSi.supplierId || '');
+    autoLogFactActivity(newSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `ثبت استعلام قیمت جدید برای تأمین‌کننده «${suppName}» به مبلغ ${newSi.price?.toLocaleString('fa-IR') || 0} ریال در وضعیت «${newSi.status}»`);
     return newSi;
   };
   const updateSupplierInquiry = (updatedSi: any) => {
     const updated = supplierInquiries.map(s => s.id === updatedSi.id ? updatedSi : s);
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
-    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت از تامین‌کننده‌ها', `بروزرسانی استعلام برای تامین‌کننده ${updatedSi.supplierId || ''} - مبلغ: ${updatedSi.price?.toLocaleString() || 0} - وضعیت: ${updatedSi.status}`);
+    
+    const supplierObj = suppliers.find(s => s.id === updatedSi.supplierId);
+    const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedSi.supplierName || updatedSi.supplierId || '');
+    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `بروزرسانی استعلام قیمت برای تأمین‌کننده «${suppName}» به مبلغ ${updatedSi.price?.toLocaleString('fa-IR') || 0} ریال - وضعیت جدید: «${updatedSi.status}»`);
   };
   const deleteSupplierInquiry = (id: string) => {
     const updated = supplierInquiries.filter(s => s.id !== id);
@@ -2038,12 +2068,31 @@ export function useERPStore() {
   };
 
   const completeCategoryGroup = (projectId: string, categoryName: string) => {
+    const getMappedCategoryName = (name: string): string => {
+      const norm = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
+      const n = norm(name);
+      if (n === norm('پیش‌فاکتور') || n === norm('پیش‌فاکتورها') || n === norm('پیش‌فاکتورها و مهندسی فروش')) {
+        return 'پیش‌فاکتورها و مهندسی فروش';
+      }
+      if (n === norm('سفارش خرید') || n === norm('سفارشات خرید تامین‌کنندگان') || n === norm('سفارشات خرید تامین کنندگان')) {
+        return 'سفارشات خرید تامین‌کنندگان';
+      }
+      if (n === norm('استعلام قیمت از تامین‌کننده‌ها') || n === norm('استعلام قیمت تأمین‌کنندگان') || n === norm('استعلام قیمت تامین کنندگان')) {
+        return 'استعلام قیمت تأمین‌کنندگان';
+      }
+      if (n === norm('مالی') || n === norm('تراکنش‌های مالی و پرداخت‌ها') || n === norm('تراکنش های مالی و پرداخت ها')) {
+        return 'تراکنش‌های مالی و پرداخت‌ها';
+      }
+      return name;
+    };
+
+    const finalCategoryName = getMappedCategoryName(categoryName);
     const normalize = (str: string) => str.replace(/[\s‌]/g, "").trim();
     setProjectCategoryGroups((prevGroups) => {
       const updatedGroups = prevGroups.map((g) => {
         if (
           g.projectId === projectId &&
-          normalize(g.categoryName) === normalize(categoryName)
+          normalize(g.categoryName) === normalize(finalCategoryName)
         ) {
           return {
             ...g,
@@ -2061,13 +2110,18 @@ export function useERPStore() {
     triggerMilestonesForEvent(projectId, 'category_complete', categoryName);
   };
 
-  const addProjectCategoryGroup = (projectIdOrGroup: any, categoryId?: string, categoryName?: string) => {
+  const addProjectCategoryGroup = (projectIdOrGroup: any, categoryId?: string, categoryName?: string, startDate?: string) => {
     let newGroup: any;
     let pId = "";
     let catName = "";
 
     if (typeof projectIdOrGroup === 'object' && projectIdOrGroup !== null) {
-      newGroup = { ...projectIdOrGroup, id: `catgrp-${Date.now()}`, createdAt: new Date().toISOString() };
+      newGroup = { 
+        ...projectIdOrGroup, 
+        id: `catgrp-${Date.now()}`, 
+        createdAt: new Date().toISOString(),
+        startDate: projectIdOrGroup.startDate || startDate || getTodayShamsi()
+      };
       pId = projectIdOrGroup.projectId;
       catName = projectIdOrGroup.categoryName;
     } else {
@@ -2078,7 +2132,8 @@ export function useERPStore() {
         status: 'جاری',
         activities: [],
         id: `catgrp-${Date.now()}`,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        startDate: startDate || getTodayShamsi()
       };
       pId = projectIdOrGroup;
       catName = categoryName || "";
@@ -2093,6 +2148,11 @@ export function useERPStore() {
     }
 
     return { success: true };
+  };
+
+  const updateProjectCategoryGroup = (group: any) => {
+    const updated = projectCategoryGroups.map(g => g.id === group.id ? group : g);
+    saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
   };
   const deleteProjectCategoryGroup = (id: string) => {
     const updated = projectCategoryGroups.filter(g => g.id !== id);
@@ -2111,6 +2171,7 @@ export function useERPStore() {
             id: 'act-' + Date.now(),
             createdAt: new Date().toISOString(),
             date: getTodayShamsi(),
+            text: `اتمام کار دسته‌بندی «${g.categoryName}»`,
             description: 'اتمام کار',
             createdBy: createdBy || 'سیستم',
             type: 'اتمام کار'
@@ -2135,7 +2196,22 @@ export function useERPStore() {
   const resumeProjectCategoryGroup = (categoryGroupId: string, createdBy?: string) => {
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
-        return { ...g, status: "جاری", completedAt: undefined };
+        const newActivity = {
+          id: 'act-' + Date.now(),
+          createdAt: new Date().toISOString(),
+          date: getTodayShamsi(),
+          text: `بازگشایی مجدد دسته‌بندی «${g.categoryName}»`,
+          description: 'بازگشایی مجدد',
+          createdBy: createdBy || currentUser?.fullName || 'سیستم',
+          type: 'بازگشایی مجدد'
+        };
+        return {
+          ...g,
+          status: "جاری",
+          completedAt: undefined,
+          endDate: undefined,
+          activities: [...(g.activities || []), newActivity]
+        };
       }
       return g;
     });
@@ -2161,7 +2237,16 @@ export function useERPStore() {
           text,
           createdAt: new Date().toISOString(),
           attachment,
-          referral,
+          referral: referral ? {
+            id: referral.id || 'ref-' + Date.now(),
+            assignedTo: referral.assignedTo,
+            actionRequired: referral.actionRequired,
+            assignedBy: referral.assignedBy,
+            createdAt: referral.createdAt || new Date().toISOString(),
+            status: referral.status || 'در انتظار اقدام',
+            response: referral.response || null,
+            messages: referral.messages || []
+          } : null,
           createdBy: createdBy || currentUser?.fullName || "کاربر سیستم"
         };
         return { ...g, activities: [...(g.activities || []), newActivity] };
@@ -2236,7 +2321,7 @@ export function useERPStore() {
                   id: 'msg-' + Date.now(),
                   text: responseText,
                   responder: responderName,
-                  
+                  createdAt: new Date().toISOString(),
                   attachment: attachment || null
                 };
                 updatedReferral.messages = [...(updatedReferral.messages || []), newMessage];
@@ -2293,7 +2378,7 @@ export function useERPStore() {
     addProject, updateProject, deleteProject,
     addProforma, updateProforma, deleteProforma, updateProformaStatus, batchUpdateProjectProformasStatus,
     addProjectActivity, updateProjectActivity, deleteProjectActivity,
-    addProjectCategoryGroup, deleteProjectCategoryGroup, completeProjectCategoryGroup, resumeProjectCategoryGroup,
+    addProjectCategoryGroup, updateProjectCategoryGroup, deleteProjectCategoryGroup, completeProjectCategoryGroup, resumeProjectCategoryGroup,
     addTask, updateTask, deleteTask,
     addPackagingDelivery, updatePackagingDelivery, deletePackagingDelivery,
     addAfterSalesService, updateAfterSalesService, deleteAfterSalesService,

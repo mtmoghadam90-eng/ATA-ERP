@@ -500,7 +500,7 @@ export default function AfterSalesServicesView({
             </div>
             <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
               <span>ثبت کننده: {service.createdBy}</span>
-              <span className="font-mono">{service.createdAt.split(' ')[0]}</span>
+              <span className="font-mono">{(service.createdAt || '').split(' ')[0] || service.createdAt || ''}</span>
             </div>
           </div>
         ))}

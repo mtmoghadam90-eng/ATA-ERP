@@ -220,3 +220,19 @@ export function parsePersianDate(shamsiStr: string): Date {
   const gStr = toGregorianStr(shamsiStr);
   return new Date(gStr);
 }
+
+export function formatDateTimeToShamsi(dateInput: any): string {
+  if (!dateInput) return '';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) {
+    if (typeof dateInput === 'string' && /^(13|14)\d{2}/.test(dateInput)) {
+      return dateInput;
+    }
+    return String(dateInput);
+  }
+  const shamsiDate = toShamsiStr(d);
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  return `${shamsiDate} ساعت ${hours}:${minutes}:${seconds}`;
+}

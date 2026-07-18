@@ -360,6 +360,7 @@ export default function App() {
             settings={store.settings}
             projectCategoryGroups={store.projectCategoryGroups}
             addProjectCategoryGroup={store.addProjectCategoryGroup}
+            updateProjectCategoryGroup={store.updateProjectCategoryGroup}
             addProjectActivity={store.addProjectActivity}
             completeProjectCategoryGroup={store.completeProjectCategoryGroup}
             resumeProjectCategoryGroup={store.resumeProjectCategoryGroup}
@@ -540,7 +541,7 @@ export default function App() {
         }
         messages.forEach((msg: any, idx: number) => {
            if ((isResponsible || act.referral?.assignedBy === currentUserName) && msg.responder !== currentUserName) {
-             const id = msg.id || `${act.id}-msg-${msg.timestamp || parseInt(act.id.split('-').pop() || '0', 10) + idx + 1}`;
+             const id = msg.id || `${act.id}-msg-${msg.timestamp || parseInt((act.id || '').split('-').pop() || '0', 10) + idx + 1}`;
              if (!readItems.has(id)) groupedNotifsUnread++;
            }
         });
@@ -552,7 +553,7 @@ export default function App() {
   const totalUnreadCount = unreadNotifsCount + groupedNotifsUnread;
 
   const pendingReferrals = (store.projectCategoryGroups || []).flatMap(g => g.activities || [])
-    .filter(a => a.referral && a.referral.status === 'در انتظار اقدام' && a.referral.assignedTo === currentUserName);
+    .filter(a => a.referral && (a.referral.status || 'در انتظار اقدام') === 'در انتظار اقدام' && a.referral.assignedTo === currentUserName);
 
   const activeTemplate = store.settings?.proformaTemplates?.find(t => t.name === store.settings?.activeTemplateId) || store.settings?.proformaTemplates?.[0];
   const logoUrl = activeTemplate?.logoUrl;

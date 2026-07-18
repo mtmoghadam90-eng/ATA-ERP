@@ -108,7 +108,7 @@ export default function ReferralsView({
   // Group referrals by category group
   const groupedReferrals = projectCategoryGroups.map(group => {
     const groupReferrals = (group.activities || [])
-      .filter(act => act.referral !== null)
+      .filter(act => act.referral !== null && act.referral !== undefined)
       .map(act => ({
         activity: act,
         referral: act.referral!
@@ -124,8 +124,8 @@ export default function ReferralsView({
       })
       // Sort referrals inside the group chronologically (older first, newer below)
       .sort((a, b) => {
-        const timeA = parseInt(a.referral.id.split('-')[1] || '0', 10);
-        const timeB = parseInt(b.referral.id.split('-')[1] || '0', 10);
+        const timeA = parseInt((a.referral.id || '').split('-')[1] || '0', 10);
+        const timeB = parseInt((b.referral.id || '').split('-')[1] || '0', 10);
         return timeA - timeB;
       });
 
@@ -136,21 +136,21 @@ export default function ReferralsView({
   }).filter(g => g.referrals.length > 0)
   .sort((a, b) => {
     // Sort groups: groups with pending actions first, then by most recent activity
-    const hasPendingA = a.referrals.some(r => r.referral.status === 'در انتظار اقدام');
-    const hasPendingB = b.referrals.some(r => r.referral.status === 'در انتظار اقدام');
+    const hasPendingA = a.referrals.some(r => (r.referral.status || 'در انتظار اقدام') === 'در انتظار اقدام');
+    const hasPendingB = b.referrals.some(r => (r.referral.status || 'در انتظار اقدام') === 'در انتظار اقدام');
     
     if (hasPendingA && !hasPendingB) return -1;
     if (!hasPendingA && hasPendingB) return 1;
 
-    const latestTimeA = Math.max(...a.referrals.map(r => parseInt(r.referral.id.split('-')[1] || '0', 10)));
-    const latestTimeB = Math.max(...b.referrals.map(r => parseInt(r.referral.id.split('-')[1] || '0', 10)));
+    const latestTimeA = Math.max(...a.referrals.map(r => parseInt((r.referral.id || '').split('-')[1] || '0', 10)));
+    const latestTimeB = Math.max(...b.referrals.map(r => parseInt((r.referral.id || '').split('-')[1] || '0', 10)));
 
     return latestTimeB - latestTimeA;
   });
 
   // Calculate pending count for badge
   const pendingToMeCount = projectCategoryGroups.flatMap(g => 
-    (g.activities || []).filter(a => a.referral?.assignedTo === currentUserName && a.referral?.status === 'در انتظار اقدام')
+    (g.activities || []).filter(a => a.referral?.assignedTo === currentUserName && (a.referral?.status || 'در انتظار اقدام') === 'در انتظار اقدام')
   ).length;
 
   // Extract unique projects for filter dropdown
@@ -174,7 +174,7 @@ export default function ReferralsView({
           items.push({
             type: 'activity',
             activity: act,
-            timestamp: parseInt(act.id.split('-').pop() || '0', 10)
+            timestamp: parseInt((act.id || '').split('-').pop() || '0', 10)
           });
         }
 
@@ -192,7 +192,7 @@ export default function ReferralsView({
                  type: 'message',
                  activity: act,
                  message: msg,
-                 timestamp: msg.id ? parseInt(msg.id.split('-').pop() || '0', 10) : parseInt(act.id.split('-').pop() || '0', 10) + idx + 1
+                 timestamp: msg.id ? parseInt((msg.id || '').split('-').pop() || '0', 10) : parseInt((act.id || '').split('-').pop() || '0', 10) + idx + 1
                });
              }
           });
@@ -512,7 +512,7 @@ export default function ReferralsView({
           </div>
         ) : (
           groupedReferrals.map(({ group, referrals }, idx) => {
-            const isPending = referrals.some(r => r.referral.status === 'در انتظار اقدام');
+            const isPending = referrals.some(r => (r.referral.status || 'در انتظار اقدام') === 'در انتظار اقدام');
             const proj = projects.find(p => p.id === group.projectId);
             const isExpanded = expandedCards[group.id] ?? false; // Collapsed by default
 
@@ -583,7 +583,7 @@ export default function ReferralsView({
                       </span>
                       <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
                         <Calendar size={12} />
-                        {referrals[referrals.length - 1].referral.createdAt}
+                        {referrals[referrals.length - 1]?.referral?.createdAt || ''}
                       </span>
                     </div>
                     <div className="text-slate-400 bg-white p-1 rounded-full shadow-sm border border-slate-100">
@@ -597,7 +597,7 @@ export default function ReferralsView({
                   <div className="p-6 space-y-8 animate-fade-in">
                     {referrals.map((item, refIdx) => {
                     const { activity, referral } = item;
-                    const isItemPending = referral.status === 'در انتظار اقدام';
+                    const isItemPending = (referral.status || 'در انتظار اقدام') === 'در انتظار اقدام';
 
                     return (
                       <div key={`${activity.id}-${refIdx}`} className={`${refIdx !== 0 ? 'pt-8 border-t-2 border-slate-100' : ''} space-y-4`}>

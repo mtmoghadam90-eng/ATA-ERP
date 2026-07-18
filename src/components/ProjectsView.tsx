@@ -7,7 +7,7 @@ import {
   ChevronRight, Loader2, Image as ImageIcon, Maximize2, Minimize2, ArrowLeftRight, Flag, Zap, MessageSquare
 } from 'lucide-react';
 
-import { getTodayShamsi, addDaysToShamsi, addWorkingDaysToShamsi } from '../dateUtils';
+import { getTodayShamsi, addDaysToShamsi, addWorkingDaysToShamsi, formatDateTimeToShamsi } from '../dateUtils';
 import { getProformaOutcomeStatus } from '../useERPStore';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
@@ -39,6 +39,7 @@ export interface ProjectsViewProps {
   addProduct: (p: any) => any;
   projectCategoryGroups?: ProjectCategoryGroup[];
   addProjectCategoryGroup: any;
+  updateProjectCategoryGroup?: any;
   addProjectActivity: any;
   completeProjectCategoryGroup: any;
   resumeProjectCategoryGroup: any;
@@ -55,7 +56,7 @@ export default function ProjectsView({
   onOpenDocument, projects, customers, products, proformas,
   packagingDeliveries = [], transactions = [], purchaseOrders = [], afterSalesServices = [], supplierInquiries = [],
   addProject, updateProject, deleteProject, settings, addCustomer, addProduct,
-  projectCategoryGroups = [], addProjectCategoryGroup, addProjectActivity,
+  projectCategoryGroups = [], addProjectCategoryGroup, updateProjectCategoryGroup, addProjectActivity,
   completeProjectCategoryGroup, resumeProjectCategoryGroup, deleteProjectCategoryGroup,
   updateProjectActivity, deleteProjectActivity, currentUser, users = [],
   initialSelectedProjectId, onClearInitialSelectedProject
@@ -112,6 +113,9 @@ export default function ProjectsView({
   const [referralAssignedTo, setReferralAssignedTo] = useState<any>({});
   const [referralAction, setReferralAction] = useState<any>({});
   const [selectedCategoryToCreate, setSelectedCategoryToCreate] = useState("");
+  const [categoryStartDate, setCategoryStartDate] = useState(getTodayShamsi());
+  const [editingGroupIdForStartDate, setEditingGroupIdForStartDate] = useState<string | null>(null);
+  const [editingGroupIdForEndDate, setEditingGroupIdForEndDate] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<any>({});
   const [customValues, setCustomValues] = useState<any>({});
 
@@ -137,6 +141,9 @@ export default function ProjectsView({
   const [activityDeleteConfirmOpen, setActivityDeleteConfirmOpen] = useState(false);
   const [activityToDeleteGroupId, setActivityToDeleteGroupId] = useState<any>(null);
   const [activityToDeleteId, setActivityToDeleteId] = useState<any>(null);
+  const [completeGroupConfirmOpen, setCompleteGroupConfirmOpen] = useState(false);
+  const [groupToCompleteId, setGroupToCompleteId] = useState<any>(null);
+  const [groupToCompleteName, setGroupToCompleteName] = useState("");
   const [name, setName] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState("جدید");
@@ -3844,7 +3851,11 @@ export default function ProjectsView({
                         <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
                           <div className="flex flex-col overflow-hidden max-w-[85%]">
                             <span className="truncate font-semibold text-slate-700" title={file.name}>{file.name}</span>
-                            <span className="text-[10px] text-slate-400">{(file.size / 1024).toFixed(1)} KB</span>
+                            <span className="text-[10px] text-slate-400">
+                              {file.size && !isNaN(Number(file.size)) 
+                                ? `${(Number(file.size) / 1024).toFixed(1)} KB` 
+                                : 'پیوست'}
+                            </span>
                           </div>
                           <div className="flex gap-2">
                             <a href={file.url} target="_blank" rel="noreferrer" className="text-sky-600 hover:text-sky-800" title="مشاهده">
@@ -3887,9 +3898,17 @@ export default function ProjectsView({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-sky-500/15"
+                  disabled={isUploading}
+                  className={`px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-sky-500/15 flex items-center gap-1.5 ${isUploading ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                  {editingProject ? 'ثبت تغییرات پروژه' : 'ایجاد پروژه'}
+                  {isUploading ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>درحال بارگذاری فایل...</span>
+                    </>
+                  ) : (
+                    editingProject ? 'ثبت تغییرات پروژه' : 'ایجاد پروژه'
+                  )}
                 </button>
               </div>
 
@@ -4114,6 +4133,14 @@ export default function ProjectsView({
                         </select>
                       </div>
 
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-slate-500 block">تاریخ شروع فعالیت *</label>
+                        <ShamsiDatePicker
+                          value={categoryStartDate}
+                          onChange={(val) => setCategoryStartDate(val)}
+                        />
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => {
@@ -4125,12 +4152,13 @@ export default function ProjectsView({
                           if (!cat) return;
                           
                           if (addProjectCategoryGroup) {
-                            const res = addProjectCategoryGroup(selectedProjectForActivities.id, cat.id, cat.name);
+                            const res = addProjectCategoryGroup(selectedProjectForActivities.id, cat.id, cat.name, categoryStartDate);
                             if (!res.success) {
                               alert(res.error);
                             } else {
                               alert(`دسته‌بندی «${cat.name}» با موفقیت برای این پروژه فعال شد.`);
                               setSelectedCategoryToCreate('');
+                              setCategoryStartDate(getTodayShamsi());
                             }
                           }
                         }}
@@ -4237,9 +4265,62 @@ export default function ProjectsView({
                                 </div>
 
                                 <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                                  <div className="text-[9px] text-slate-400 font-mono flex flex-col text-left">
-                                    <span>شروع: {group.startDate}</span>
-                                    {group.endDate && <span className="text-rose-500 font-bold">پایان: {group.endDate}</span>}
+                                  <div className="text-[10px] text-slate-500 font-mono flex flex-col text-left">
+                                    {editingGroupIdForStartDate === group.id ? (
+                                      <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded p-1" onClick={(e) => e.stopPropagation()}>
+                                        <span className="text-[9px] font-bold text-slate-500">شروع:</span>
+                                        <ShamsiDatePicker
+                                          value={group.startDate || getTodayShamsi()}
+                                          onChange={(val) => {
+                                            if (updateProjectCategoryGroup) {
+                                              updateProjectCategoryGroup({ ...group, startDate: val });
+                                            }
+                                            setEditingGroupIdForStartDate(null);
+                                          }}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div 
+                                        className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1 rounded transition text-slate-600 font-semibold"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingGroupIdForStartDate(group.id);
+                                        }}
+                                        title="کلیک برای ویرایش تاریخ شروع"
+                                      >
+                                        <span>شروع: {group.startDate || 'ثبت نشده'}</span>
+                                        <span className="text-[9px] text-sky-600 font-normal hover:underline opacity-80">(ویرایش)</span>
+                                      </div>
+                                    )}
+                                    
+                                    {group.endDate && (
+                                      editingGroupIdForEndDate === group.id ? (
+                                        <div className="flex items-center gap-1 mt-1 bg-slate-50 border border-slate-200 rounded p-1" onClick={(e) => e.stopPropagation()}>
+                                          <span className="text-[9px] font-bold text-slate-500">پایان:</span>
+                                          <ShamsiDatePicker
+                                            value={group.endDate}
+                                            onChange={(val) => {
+                                              if (updateProjectCategoryGroup) {
+                                                updateProjectCategoryGroup({ ...group, endDate: val });
+                                              }
+                                              setEditingGroupIdForEndDate(null);
+                                            }}
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div 
+                                          className="flex items-center gap-1 mt-0.5 cursor-pointer hover:bg-slate-100 p-1 rounded transition text-rose-600 font-bold"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingGroupIdForEndDate(group.id);
+                                          }}
+                                          title="کلیک برای ویرایش تاریخ پایان"
+                                        >
+                                          <span>پایان: {group.endDate}</span>
+                                          <span className="text-[9px] text-rose-500 font-normal hover:underline opacity-80">(ویرایش)</span>
+                                        </div>
+                                      )
+                                    )}
                                   </div>
                                   
                                   {/* Delete Category Group Button (only for non-system) */}
@@ -4275,7 +4356,9 @@ export default function ProjectsView({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (completeProjectCategoryGroup) completeProjectCategoryGroup(group.id, currentUser?.fullName || 'کاربر سیستم');
+                                        setGroupToCompleteId(group.id);
+                                        setGroupToCompleteName(group.categoryName);
+                                        setCompleteGroupConfirmOpen(true);
                                       }}
                                       className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold transition shadow-sm flex items-center gap-1"
                                     >
@@ -4299,7 +4382,7 @@ export default function ProjectsView({
                                       <div key={act.id} className="bg-slate-50/50 p-3.5 rounded-lg border border-slate-100 space-y-2.5 text-xs text-right">
                                         <div className="flex justify-between items-center text-[10px] text-slate-400">
                                           <div className="flex items-center gap-2">
-                                            <span className="font-mono">{act.createdAt}</span>
+                                            <span className="font-mono">{formatDateTimeToShamsi(act.createdAt)}</span>
                                             {act.createdBy && (
                                               <span className="text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1">
                                                 <User size={10} />
@@ -4402,9 +4485,9 @@ export default function ProjectsView({
                                             <div className="flex justify-between items-center text-[9px] border-b border-slate-100 pb-1.5">
                                               <span className="text-sky-700 font-bold">ارجاع کار برای اقدام:</span>
                                               <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                                                act.referral.status === 'در انتظار اقدام' ? 'bg-sky-50 text-sky-700 border border-sky-100 animate-pulse' : 'bg-emerald-50 text-emerald-800'
+                                                (act.referral.status || 'در انتظار اقدام') === 'در انتظار اقدام' ? 'bg-sky-50 text-sky-700 border border-sky-100 animate-pulse' : 'bg-emerald-50 text-emerald-800'
                                               }`}>
-                                                {act.referral.status}
+                                                {act.referral.status || 'در انتظار اقدام'}
                                               </span>
                                             </div>
                                             <div className="text-[10px] text-slate-500">
@@ -4420,7 +4503,7 @@ export default function ProjectsView({
                                               <div key={msgIdx} className="mt-2 pt-2 border-t border-slate-100 bg-emerald-50/20 p-2 rounded-md border border-emerald-100 space-y-1 text-right">
                                                 <div className="flex justify-between items-center text-[8px] text-emerald-800 font-bold">
                                                   <span>پاسخ اقدام:</span>
-                                                  <span className="font-mono">{msg.createdAt}</span>
+                                                  <span className="font-mono">{formatDateTimeToShamsi(msg.createdAt)}</span>
                                                 </div>
                                                 <p className="text-[11px] text-slate-800 font-semibold leading-relaxed bg-white/70 p-2 rounded border border-emerald-100">
                                                   {msg.text}
@@ -4607,9 +4690,14 @@ export default function ProjectsView({
                                                 return;
                                               }
                                               referralData = {
+                                                id: 'ref-' + Date.now(),
                                                 assignedTo,
                                                 actionRequired: action.trim(),
-                                                assignedBy: currentUser?.fullName || 'محمد توکل مقدم'
+                                                assignedBy: currentUser?.fullName || 'محمد توکل مقدم',
+                                                createdAt: new Date().toISOString(),
+                                                status: 'در انتظار اقدام',
+                                                response: null,
+                                                messages: []
                                               };
                                             }
 
@@ -4714,6 +4802,25 @@ export default function ProjectsView({
         }}
         title="حذف فعالیت پروژه"
         message="آیا از حذف این فعالیت اطمینان دارید؟ این عمل غیرقابل بازگشت است."
+      />
+
+      {/* Confirm Complete Category Group Modal */}
+      <ConfirmModal
+        isOpen={completeGroupConfirmOpen}
+        onClose={() => {
+          setCompleteGroupConfirmOpen(false);
+          setGroupToCompleteId(null);
+          setGroupToCompleteName('');
+        }}
+        onConfirm={() => {
+          if (completeProjectCategoryGroup && groupToCompleteId) {
+            completeProjectCategoryGroup(groupToCompleteId, currentUser?.fullName || 'کاربر سیستم');
+          }
+        }}
+        title="اتمام کار دسته‌بندی"
+        message={`آیا از تغییر وضعیت دسته‌بندی "${groupToCompleteName}" به «اتمام کار» اطمینان دارید؟`}
+        variant="warning"
+        confirmText="بله، اتمام کار ثبت شود"
       />
 
       {/* Quick Customer Add Modal */}

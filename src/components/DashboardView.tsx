@@ -143,7 +143,7 @@ export default function DashboardView({
   const myReferrals = projectCategoryGroups.flatMap(group => 
     (group.activities || []).filter(act => 
       act.referral && 
-      act.referral.status === 'در انتظار اقدام' && 
+      (act.referral.status !== 'انجام شده') && 
       (!currentUser || act.referral.assignedTo === currentUser.fullName)
     ).map(act => ({
       activityId: act.id,
@@ -479,7 +479,7 @@ export default function DashboardView({
                 <p className="text-xs text-slate-700 font-medium line-clamp-2">{ref.referral.actionRequired}</p>
                 <div className="flex justify-between items-center border-t border-indigo-100/20 pt-1.5 mt-1 text-[9px] text-slate-400">
                   <span className="truncate max-w-[150px]">پروژه: {ref.projectName}</span>
-                  <span className="font-mono">{ref.referral.createdAt.split(' - ')[0]}</span>
+                  <span className="font-mono">{(ref.referral.createdAt || '').split(' - ')[0] || ref.referral.createdAt || ''}</span>
                 </div>
               </div>
             ))}

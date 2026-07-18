@@ -122,25 +122,30 @@ async function startServer() {
           return res.status(400).json({ success: false, error: "حجم عکس نباید بیشتر از ۱۰ مگابایت باشد." });
         }
 
-        let pipeline = sharp(buffer);
-        const metadata = await pipeline.metadata();
+        try {
+          let pipeline = sharp(buffer);
+          const metadata = await pipeline.metadata();
 
-        if (metadata.width && metadata.height && (metadata.width > 1200 || metadata.height > 1200)) {
-          pipeline = pipeline.resize({
-            width: metadata.width > metadata.height ? 1200 : undefined,
-            height: metadata.height >= metadata.width ? 1200 : undefined,
-            fit: "inside",
-            withoutEnlargement: true
-          });
+          if (metadata.width && metadata.height && (metadata.width > 1200 || metadata.height > 1200)) {
+            pipeline = pipeline.resize({
+              width: metadata.width > metadata.height ? 1200 : undefined,
+              height: metadata.height >= metadata.width ? 1200 : undefined,
+              fit: "inside",
+              withoutEnlargement: true
+            });
+          }
+
+          if (metadata.format === "png") {
+            pipeline = pipeline.png({ quality: 80, compressionLevel: 8 });
+          } else {
+            pipeline = pipeline.jpeg({ quality: 80, progressive: true });
+          }
+
+          await pipeline.toFile(targetPath);
+        } catch (sharpErr) {
+          console.error("Sharp processing failed, falling back to raw write:", sharpErr);
+          await fs.promises.writeFile(targetPath, buffer);
         }
-
-        if (metadata.format === "png") {
-          pipeline = pipeline.png({ quality: 80, compressionLevel: 8 });
-        } else {
-          pipeline = pipeline.jpeg({ quality: 80, progressive: true });
-        }
-
-        await pipeline.toFile(targetPath);
       } else {
         if (buffer.length > 20 * 1024 * 1024) {
           return res.status(400).json({ success: false, error: "حجم فایل نباید بیشتر از ۲۰ مگابایت باشد." });

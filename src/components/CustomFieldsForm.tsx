@@ -166,7 +166,11 @@ export default function CustomFieldsForm({
                       <div className="flex items-center gap-2 overflow-hidden">
                         <Paperclip size={14} className="text-sky-500 shrink-0" />
                         <span className="text-sky-700 font-bold truncate" title={value.name}>{value.name}</span>
-                        <span className="text-slate-400 text-[10px] shrink-0">({(value.size / 1024).toFixed(1)} KB)</span>
+                        <span className="text-slate-400 text-[10px] shrink-0">
+                          ({value.size && !isNaN(Number(value.size)) 
+                            ? `${(Number(value.size) / 1024).toFixed(1)} KB` 
+                            : 'سند'})
+                        </span>
                       </div>
                       <button
                         type="button"
