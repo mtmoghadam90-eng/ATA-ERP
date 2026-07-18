@@ -3092,23 +3092,6 @@ export default function ProformasView({
                       </p>
                     );
                   })()}
-                  
-                  {/* Dynamic special agreement reminder for selected customer */}
-                  {(() => {
-                    const selectedCustObj = customers.find(c => c.id === customerId);
-                    if (!selectedCustObj || !selectedCustObj.specialAgreements) return null;
-                    return (
-                      <div className="text-[11px] text-indigo-850 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 mt-1.5 flex items-start gap-2 animate-fade-in font-bold">
-                        <AlertCircle size={14} className="flex-shrink-0 text-indigo-600 mt-0.5" />
-                        <div className="space-y-0.5 text-right">
-                          <span className="block text-indigo-900 font-extrabold text-[11px]">💡 توافق خاص و یادآور مهم این مشتری:</span>
-                          <p className="text-[10px] text-slate-700 leading-relaxed font-normal">
-                            {selectedCustObj.specialAgreements}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })()}
                 </div>
                 {/* Prefix for Individual (حقیقی) Customer (rendered after Customer Name) */}
                 {(() => {

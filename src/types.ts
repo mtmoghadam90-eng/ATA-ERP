@@ -61,7 +61,6 @@ export interface Customer {
   customValues?: Record<string, any>;
 
   // Special Agreements & Auto Reminders
-  specialAgreements?: string;
 
   // Backward compatibility fields
   contactName?: string;

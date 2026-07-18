@@ -91,7 +91,6 @@ export default function CustomersView({
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [tags, setTags] = useState('');
-  const [specialAgreements, setSpecialAgreements] = useState('');
   const [moduleAgreements, setModuleAgreements] = useState<{id: string; moduleName: string; text: string; createdAt: string;}[]>([]);
 
   // Legal-specific (مشتری حقوقی)
@@ -213,7 +212,6 @@ export default function CustomersView({
     setAddress('');
     setNotes('');
     setTags('');
-    setSpecialAgreements('');
     setModuleAgreements([]);
 
     setCompanyName('');
@@ -245,7 +243,6 @@ export default function CustomersView({
     setAddress(customer.address || '');
     setNotes(customer.notes || '');
     setTags(customer.tags || '');
-    setSpecialAgreements(customer.specialAgreements || '');
     setModuleAgreements(customer.moduleAgreements || []);
 
     setCompanyName(customer.companyName || '');
@@ -406,7 +403,6 @@ export default function CustomersView({
       address,
       notes,
       tags,
-      specialAgreements,
       moduleAgreements,
       linkedCustomerIds: finalSelectedLinks,
       customValues,
@@ -1393,18 +1389,6 @@ export default function CustomersView({
                       ))}
                     </div>
                   )}
-
-                  {/* Backward compatibility for old special agreements */}
-                  <div className="mt-4 pt-4 border-t border-indigo-200/50">
-                    <label className="text-xs font-bold text-slate-600 mb-1 block">توافقات پیش‌فاکتور (قدیمی)</label>
-                    <textarea
-                      rows={1}
-                      value={specialAgreements}
-                      onChange={(e) => setSpecialAgreements(e.target.value)}
-                      placeholder="متن توافق قدیمی..."
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
-                    />
-                  </div>
                 </div>
 
                 {/* Status Field */}

@@ -14,23 +14,6 @@ export default function CustomerAgreementAlert({ customer, moduleName }: Custome
     (agr) => agr.moduleName === moduleName || agr.moduleName === 'general'
   );
 
-  // Fallback to specialAgreements for backward compatibility if we are in proformas module
-  if (relevantAgreements.length === 0 && customer.specialAgreements && moduleName === 'proformas') {
-    return (
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 animate-fade-in shadow-sm">
-        <div className="flex gap-2">
-          <AlertCircle className="text-amber-500 flex-shrink-0 mt-0.5" size={16} />
-          <div className="text-right">
-            <h4 className="text-xs font-bold text-amber-800 mb-1">یادآور سیستم - توافقات با مشتری</h4>
-            <p className="text-[11px] text-amber-700 leading-relaxed font-bold">
-              {customer.specialAgreements}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (relevantAgreements.length === 0) return null;
 
   return (

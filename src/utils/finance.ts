@@ -178,10 +178,10 @@ export const calculateProformaFinance = (
   
   // 4. Find linked receipts
   const activeTransactions = transactions.filter(t => 
-    (t.type === 'دریافت' || t.type === 'پرداخت') && 
     t.status !== 'پیش‌نویس' && 
     t.status !== 'لغو شده' &&
-    t.status !== 'برگشت شده'
+    t.status !== 'برگشت شده' &&
+    (t.type === 'دریافت' || (t.type === 'پرداخت' && (t.customerId || t.proformaId || t.reversalOfTransactionId)))
   );
   
   let actualReceivedRiyal = 0;
@@ -383,12 +383,13 @@ export const calculateProjectFinance = (
   
   // 3. Find unallocated transactions at the project level
   // These are receipts/payments linked to this project but NOT assigned to any proforma
+  // Exclude supplier payments from project sales receipts
   const projectReceipts = allTransactions.filter(t => 
     t.projectId === project.id && 
-    (t.type === 'دریافت' || t.type === 'پرداخت') && 
     t.status !== 'پیش‌نویس' && 
     t.status !== 'لغو شده' &&
-    t.status !== 'برگشت شده'
+    t.status !== 'برگشت شده' &&
+    (t.type === 'دریافت' || (t.type === 'پرداخت' && (t.customerId || t.proformaId || t.reversalOfTransactionId)))
   );
   
   const unallocatedTx = projectReceipts.filter(t => !t.proformaId);
@@ -569,10 +570,10 @@ export const calculateCompanyFinanceSummary = (
   // Also include general (project-less) receipts/payments in total received
   const generalReceipts = allTransactions.filter(t => 
     !t.projectId && 
-    (t.type === 'دریافت' || t.type === 'پرداخت') && 
     t.status !== 'پیش‌نویس' && 
     t.status !== 'لغو شده' &&
-    t.status !== 'برگشت شده'
+    t.status !== 'برگشت شده' &&
+    (t.type === 'دریافت' || (t.type === 'پرداخت' && (t.customerId || t.proformaId || t.reversalOfTransactionId)))
   );
   const generalReceivedRiyal = generalReceipts.reduce((sum, t) => {
     const isReversal = !!t.reversalOfTransactionId;

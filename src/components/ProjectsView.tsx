@@ -77,7 +77,7 @@ export default function ProjectsView({
   const [selectedProjectForActivities, setSelectedProjectForActivities] = useState<any>(null);
   const [isActivitiesModalFullscreen, setIsActivitiesModalFullscreen] = useState(false);
   const [modalTab, setModalTab] = useState("activities");
-  const [isProjectDetailsExpanded, setIsProjectDetailsExpanded] = useState(true);
+  const [isProjectDetailsExpanded, setIsProjectDetailsExpanded] = useState(false);
   const [selectedFolderName, setSelectedFolderName] = useState<any>(null);
   const [supplyFilter, setSupplyFilter] = useState("ALL");
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);

@@ -722,6 +722,7 @@ export default function TransactionsView({
                           <div>{partyName}</div>
                           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                             {t.projectName && <span className="text-[10px] text-slate-400 font-normal">پروژه: {t.projectName}</span>}
+                            {t.proformaId && <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">پ.ف: {proformas.find(p => p.id === t.proformaId)?.proformaNumber || 'ناشناس'}</span>}
                             {t.receiptType && (
                               <span className="px-1.5 py-0.5 bg-sky-50 text-sky-700 text-[10px] rounded font-bold border border-sky-100">
                                 {t.receiptType}
