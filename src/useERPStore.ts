@@ -61,36 +61,30 @@ export const getProformaOutcomeStatus = (
   | "باخته"
   | "نیمه برنده"
   | "جاری" => {
-  if (pf.isCancelled || pf.status === "لغو شده") return "لغو شده";
+  if (pf.isCancelled) return "لغو شده";
 
   const items = pf.items || [];
   if (items.length === 0) {
-    if (
-      pf.status === "تأیید شده (برنده)" ||
-      pf.status === "باخته" ||
-      pf.status === "نیمه برنده"
-    ) {
-      return pf.status;
-    }
-    return pf.status === "پیش‌نویس" ? "پیش‌نویس" : "جاری";
+    if (pf.status === "پیش‌نویس") return "پیش‌نویس";
+    return pf.status === "ارسال شده" ? "ارسال شده" : "جاری";
   }
 
   const wonCount = items.filter((i) => i.status === "برنده").length;
   const lostCount = items.filter((i) => i.status === "بازنده").length;
+  const cancelledCount = items.filter((i) => i.status === "لغو شده").length;
+  const totalCount = items.length;
 
-  if (wonCount === items.length) return "تأیید شده (برنده)";
-  if (lostCount === items.length) return "باخته";
-  if (wonCount > 0) return "نیمه برنده";
-
-  if (
-    pf.status === "تأیید شده (برنده)" ||
-    pf.status === "باخته" ||
-    pf.status === "نیمه برنده"
-  ) {
-    return pf.status;
+  if (wonCount === totalCount) return "تأیید شده (برنده)";
+  if (cancelledCount === totalCount) return "لغو شده";
+  if (lostCount === totalCount) return "باخته";
+  if (lostCount + cancelledCount === totalCount) {
+    return cancelledCount > 0 ? "لغو شده" : "باخته";
   }
 
+  if (wonCount > 0) return "نیمه برنده";
+
   if (pf.status === "پیش‌نویس") return "پیش‌نویس";
+  if (pf.status === "ارسال شده") return "ارسال شده";
   return "جاری";
 };
 
@@ -1718,12 +1712,13 @@ export function useERPStore() {
   if (!oldPf) return;
 
   const finalUpdatedPf = { ...updatedPf };
+  const newOutcome = getProformaOutcomeStatus(finalUpdatedPf);
+  finalUpdatedPf.status = newOutcome;
 
   const updated = proformas.map(p => p.id === updatedPf.id ? finalUpdatedPf : p);
   saveToStorage('erp_proformas', updated, setProformas);
 
   const oldOutcome = getProformaOutcomeStatus(oldPf);
-  const newOutcome = getProformaOutcomeStatus(finalUpdatedPf);
   const outcomeChanged = oldOutcome !== newOutcome;
 
   let logText = `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`;
@@ -1949,8 +1944,10 @@ export function useERPStore() {
         let updatedItems = p.items || [];
         if (status === 'تأیید شده (برنده)') {
           updatedItems = updatedItems.map(item => ({ ...item, status: 'برنده' as const }));
-        } else if (status === 'باخته' || status === 'لغو شده') {
+        } else if (status === 'باخته') {
           updatedItems = updatedItems.map(item => ({ ...item, status: 'بازنده' as const, lossReason: lossReason || item.lossReason }));
+        } else if (status === 'لغو شده') {
+          updatedItems = updatedItems.map(item => ({ ...item, status: 'لغو شده' as const }));
         } else if (status === 'پیش‌نویس' || status === 'ارسال شده') {
           updatedItems = updatedItems.map(item => ({ ...item, status: 'جاری' as const }));
         }

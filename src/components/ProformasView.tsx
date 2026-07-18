@@ -2552,34 +2552,8 @@ export default function ProformasView({
                 >
                   <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
                   <option value="ارسال شده">ارسال شده به کارفرما (Sent)</option>
-                  <option value="تأیید شده (برنده)">
-                    تأیید شده / برنده (Won) ★
-                  </option>
-                  <option value="نیمه برنده">نیمه برنده (Semi-Won)</option>
-                  <option value="باخته">باخته (Lost)</option>
-                  <option value="لغو شده">لغو شده (Cancelled)</option>
                 </select>
               </div>
-              {newStatusSelected === "باخته" && (
-                <div className="space-y-1.5 animate-fade-in">
-                  <label className="text-xs font-semibold text-rose-500">
-                    علت باخت پیش‌فاکتور *
-                  </label>
-                  <select
-                    value={lossReason}
-                    onChange={(e) => setLossReason(e.target.value)}
-                    required
-                    className="w-full border border-rose-200 focus:border-rose-400 rounded-lg px-3 py-2 text-sm bg-white text-right font-medium text-rose-700 outline-none"
-                  >
-                    <option value="">-- انتخاب علت باخت --</option>
-                    {settings.lossReasons?.map((reason, i) => (
-                      <option key={i} value={reason}>
-                        {reason}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -2744,6 +2718,7 @@ export default function ProformasView({
                             <option value="جاری">جاری / در حال مذاکره</option>
                             <option value="برنده">برنده شده (Won) ★</option>
                             <option value="بازنده">بازنده شده (Lost)</option>
+                            <option value="لغو شده">لغو شده (Cancelled)</option>
                           </select>
                         </td>
                         <td className="py-3 px-4 text-center">

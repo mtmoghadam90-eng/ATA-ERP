@@ -168,7 +168,7 @@ export interface ProformaItem {
   unitPriceRIYAL: number;
   totalPriceRIYAL: number;
   supplyMethod?: 'INVENTORY' | 'ORDER' | 'NONE';
-  status?: 'جاری' | 'برنده' | 'بازنده';
+  status?: 'جاری' | 'برنده' | 'بازنده' | 'لغو شده';
   lossReason?: string;
   techSpecs?: string;
   selectedFeatures?: Record<string, string>;
@@ -194,7 +194,7 @@ export interface Proforma {
   issueDate: string;
   expiryDate: string;
   deliveryDate?: string; // تاریخ تحویل پیش‌فاکتور تایید شده
-  status: 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده';
+  status: 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده' | 'جاری';
   isCancelled?: boolean;
   lossReason?: string; // e.g. "قیمت بالا", "زمان تحویل طولانی"
   currency?: 'دلار' | 'یورو' | 'درهم' | 'ریال' | 'یوان';

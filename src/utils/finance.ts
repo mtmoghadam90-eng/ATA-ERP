@@ -27,29 +27,32 @@ export const mapCurrencyToEnglish = (persian: string | undefined): 'USD' | 'EUR'
 };
 
 // Helper to determine proforma literal status self-contained
-export const getProformaLiteralStatus = (pf: Proforma): 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده' => {
-  if (pf.isCancelled || pf.status === 'لغو شده') return 'لغو شده';
-  
+export const getProformaLiteralStatus = (pf: Proforma): 'پیش‌نویس' | 'ارسال شده' | 'تأیید شده (برنده)' | 'لغو شده' | 'باخته' | 'نیمه برنده' | 'جاری' => {
+  if (pf.isCancelled) return "لغو شده";
+
   const items = pf.items || [];
   if (items.length === 0) {
-    if (pf.status === 'تأیید شده (برنده)' || pf.status === 'باخته' || pf.status === 'نیمه برنده') {
-      return pf.status;
-    }
-    return pf.status === 'پیش‌نویس' ? 'پیش‌نویس' : 'ارسال شده';
+    if (pf.status === "پیش‌نویس") return "پیش‌نویس";
+    return pf.status === "ارسال شده" ? "ارسال شده" : "جاری";
   }
 
-  const wonCount = items.filter(i => i.status === 'برنده').length;
-  const lostCount = items.filter(i => i.status === 'بازنده').length;
+  const wonCount = items.filter((i) => i.status === "برنده").length;
+  const lostCount = items.filter((i) => i.status === "بازنده").length;
+  const cancelledCount = items.filter((i) => i.status === "لغو شده").length;
+  const totalCount = items.length;
 
-  if (wonCount === items.length) return 'تأیید شده (برنده)';
-  if (lostCount === items.length) return 'باخته';
-  if (wonCount > 0) return 'نیمه برنده';
-  
-  if (pf.status === 'تأیید شده (برنده)' || pf.status === 'باخته' || pf.status === 'نیمه برنده') {
-    return pf.status;
+  if (wonCount === totalCount) return "تأیید شده (برنده)";
+  if (cancelledCount === totalCount) return "لغو شده";
+  if (lostCount === totalCount) return "باخته";
+  if (lostCount + cancelledCount === totalCount) {
+    return cancelledCount > 0 ? "لغو شده" : "باخته";
   }
 
-  return pf.status || 'پیش‌نویس';
+  if (wonCount > 0) return "نیمه برنده";
+
+  if (pf.status === "پیش‌نویس") return "پیش‌نویس";
+  if (pf.status === "ارسال شده") return "ارسال شده";
+  return "جاری";
 };
 
 // Helper to check if a proforma counts as a won/sales proforma
