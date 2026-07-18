@@ -11,7 +11,7 @@ import { getTodayShamsi, addDaysToShamsi, addWorkingDaysToShamsi, formatDateTime
 import { getProformaOutcomeStatus } from '../useERPStore';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
-import { uploadFile, compressImage } from '../imageUtils';
+import { uploadFile, compressImage, downloadFileFromServer } from '../imageUtils';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import { exportToCSV } from '../excelUtils';
 import ConfirmModal from './ConfirmModal';
@@ -2306,16 +2306,14 @@ export default function ProjectsView({
                               </button>
                             )}
                             {doc.url !== '#' && (
-                              <a
-                                href={doc.url}
-                                download={doc.name}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-800 transition flex items-center"
+                              <button
+                                type="button"
+                                onClick={() => downloadFileFromServer(doc.url, doc.name)}
+                                className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-800 transition flex items-center cursor-pointer"
                                 title="دانلود مستقیم"
                               >
                                 <Download size={14} />
-                              </a>
+                              </button>
                             )}
                           </div>
                         </td>
@@ -2348,16 +2346,14 @@ export default function ProjectsView({
             </div>
             <div className="flex items-center gap-2">
               {doc.url !== '#' && (
-                <a
-                  href={doc.url}
-                  download={doc.name}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1"
+                <button
+                  type="button"
+                  onClick={() => downloadFileFromServer(doc.url, doc.name)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                 >
                   <Download size={13} />
                   <span>دانلود فایل</span>
-                </a>
+                </button>
               )}
               <button
                 type="button"

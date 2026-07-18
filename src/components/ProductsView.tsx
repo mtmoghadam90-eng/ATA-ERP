@@ -11,14 +11,16 @@ import {
   Calculator,
   Percent,
   Info,
-  TrendingUp
+  TrendingUp,
+  Image as ImageIcon,
+  Download
 } from 'lucide-react';
 import { Product, ProductVariant, ERPSettings, InventoryTransaction, ProductFeature, ExchangeRate } from '../types';
 import { toShamsiStr, toGregorianStr } from '../dateUtils';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import ConfirmModal from './ConfirmModal';
-import { uploadFile } from '../imageUtils';
+import { uploadFile, downloadFileFromServer } from '../imageUtils';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -71,6 +73,7 @@ export default function ProductsView({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [productToDeleteId, setProductToDeleteId] = useState<string | null>(null);
   const [productToDeleteName, setProductToDeleteName] = useState<string>('');
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   // Form states (Only Category, Equipment Type, and Technical Specs are managed in UI)
   const [displayName, setDisplayName] = useState('');
@@ -155,6 +158,13 @@ export default function ProductsView({
       setVariants(newV);
     }
     setShowCalculator(false);
+  };
+
+  const convertForeignToRialSimple = (priceForeign: number, currency: string) => {
+    const mappedEng = currency === 'دلار' ? 'USD' : currency === 'یورو' ? 'EUR' : currency === 'درهم' ? 'AED' : currency === 'یوان' ? 'CNY' : null;
+    const storeRate = mappedEng ? exchangeRates.find(r => r.currency === mappedEng)?.rateToRIYAL : null;
+    const rate = storeRate || 700000;
+    return Math.round(priceForeign * rate);
   };
 
   const calculateAutoRialPrice = (priceForeign: number, currency: string, variantDetails: Partial<ProductVariant>) => {
@@ -608,12 +618,19 @@ export default function ProductsView({
                     <td className="p-4">
                       <div className="flex items-start gap-3">
                         {p.images && p.images.length > 0 ? (
-                          <img
-                            src={p.images[0]}
-                            alt={p.displayName}
-                            className="w-12 h-12 object-cover rounded-lg border border-slate-200 bg-slate-50 flex-shrink-0"
-                            referrerPolicy="no-referrer"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setLightboxUrl(p.images[0])}
+                            className="w-12 h-12 rounded-lg border border-slate-200 bg-slate-50 flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-85 transition relative group"
+                            title="مشاهده و دانلود تصویر"
+                          >
+                            <img
+                              src={p.images[0]}
+                              alt={p.displayName}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </button>
                         ) : (
                           <div className="w-12 h-12 rounded-lg border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 flex-shrink-0">
                             <Package size={18} />
@@ -903,67 +920,69 @@ export default function ProductsView({
                 {!hasVariants && (
                   <div className="space-y-4 pt-4 border-t border-slate-100">
                     <h4 className="text-sm font-bold text-slate-800">قیمت‌گذاری محصول</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl items-end">
                       {/* Foreign Price and Currency */}
-                      <div className="space-y-1.5">
+                      <div className="md:col-span-5 space-y-1.5 w-full">
                         <label className="text-xs font-semibold text-slate-500">قیمت ارزی</label>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <div className="flex gap-2 flex-1">
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={simplePriceForeign}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setSimplePriceForeign(val);
-                                if (val !== "") {
-                                  const calculatedRial = calculateAutoRialPrice(Number(val), simpleCurrencyForeign, simpleCalcDetails);
-                                  setSimplePriceRIYAL(String(calculatedRial));
-                                } else {
-                                  setSimplePriceRIYAL("");
-                                }
-                              }}
-                              placeholder="0"
-                              className="flex-1 min-w-[80px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono"
-                            />
-                            <select
-                              value={simpleCurrencyForeign}
-                              onChange={(e) => {
-                                const curr = e.target.value;
-                                setSimpleCurrencyForeign(curr);
-                                if (simplePriceForeign !== "") {
-                                  const calculatedRial = calculateAutoRialPrice(Number(simplePriceForeign), curr, simpleCalcDetails);
-                                  setSimplePriceRIYAL(String(calculatedRial));
-                                }
-                              }}
-                              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none bg-white min-w-[75px]"
-                            >
-                              <option value="یورو">یورو</option>
-                              <option value="دلار">دلار</option>
-                              <option value="درهم">درهم</option>
-                              <option value="یوان">یوان</option>
-                            </select>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenCalculator({
-                              priceForeign: simplePriceForeign ? Number(simplePriceForeign) : undefined,
-                              currencyForeign: simpleCurrencyForeign,
-                              priceRIYAL: simplePriceRIYAL ? Number(simplePriceRIYAL) : undefined,
-                              ...simpleCalcDetails
-                            }, -1)}
-                            className="px-3 py-2 bg-sky-50 border border-sky-200 text-sky-600 rounded-lg hover:bg-sky-100 transition-colors flex items-center justify-center gap-1.5 text-xs font-bold whitespace-nowrap w-full sm:w-auto"
-                            title="محاسبه‌گر حرفه‌ای قیمت فروش"
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={simplePriceForeign}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSimplePriceForeign(val);
+                              if (val !== "") {
+                                const calculatedRial = convertForeignToRialSimple(Number(val), simpleCurrencyForeign);
+                                setSimplePriceRIYAL(String(calculatedRial));
+                              } else {
+                                setSimplePriceRIYAL("");
+                              }
+                            }}
+                            placeholder="0"
+                            className="flex-1 min-w-[80px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono bg-white"
+                          />
+                          <select
+                            value={simpleCurrencyForeign}
+                            onChange={(e) => {
+                              const curr = e.target.value;
+                              setSimpleCurrencyForeign(curr);
+                              if (simplePriceForeign !== "") {
+                                const calculatedRial = convertForeignToRialSimple(Number(simplePriceForeign), curr);
+                                setSimplePriceRIYAL(String(calculatedRial));
+                              }
+                            }}
+                            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none bg-white min-w-[75px]"
                           >
-                            <Calculator size={15} />
-                            محاسبه‌گر
-                          </button>
+                            <option value="یورو">یورو</option>
+                            <option value="دلار">دلار</option>
+                            <option value="درهم">درهم</option>
+                            <option value="یوان">یوان</option>
+                          </select>
                         </div>
                       </div>
 
+                      {/* Calculator Button */}
+                      <div className="md:col-span-2 w-full">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCalculator({
+                            priceForeign: simplePriceForeign ? Number(simplePriceForeign) : undefined,
+                            currencyForeign: simpleCurrencyForeign,
+                            priceRIYAL: simplePriceRIYAL ? Number(simplePriceRIYAL) : undefined,
+                            ...simpleCalcDetails
+                          }, -1)}
+                          className="w-full h-[38px] bg-sky-50 border border-sky-200 text-sky-600 rounded-lg hover:bg-sky-100 transition-colors flex items-center justify-center gap-1.5 text-xs font-bold whitespace-nowrap"
+                          title="محاسبه‌گر حرفه‌ای قیمت فروش"
+                        >
+                          <Calculator size={15} />
+                          محاسبه‌گر
+                        </button>
+                      </div>
+
                       {/* Selling Price (Rials) */}
-                      <div className="space-y-1.5">
+                      <div className="md:col-span-5 space-y-1.5 w-full">
                         <label className="text-xs font-semibold text-slate-500">قیمت فروش (ریال)</label>
                         <div className="relative">
                           <input
@@ -976,7 +995,7 @@ export default function ProductsView({
                               setSimplePriceRIYAL(rawVal);
                             }}
                             placeholder="۰"
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono font-bold text-slate-800"
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono font-bold text-slate-800 bg-white"
                           />
                           {simplePriceRIYAL && (
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">ریال</span>
@@ -1024,12 +1043,19 @@ export default function ProductsView({
                     <div className="grid grid-cols-4 gap-3 pt-2">
                       {images.map((img, idx) => (
                         <div key={idx} className="relative group aspect-square rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
-                          <img
-                            src={img}
-                            alt={`Product image ${idx + 1}`}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setLightboxUrl(img)}
+                            className="w-full h-full text-right outline-none cursor-pointer"
+                            title="بزرگنمایی و دانلود تصویر"
+                          >
+                            <img
+                              src={img}
+                              alt={`Product image ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </button>
                           <button
                             type="button"
                             onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}
@@ -1339,7 +1365,7 @@ export default function ProductsView({
                                             const val = e.target.value === "" ? undefined : Number(e.target.value);
                                             newV[vIdx].priceForeign = val;
                                             if (val !== undefined) {
-                                              newV[vIdx].priceRIYAL = calculateAutoRialPrice(val, newV[vIdx].currencyForeign || "یورو", newV[vIdx]);
+                                              newV[vIdx].priceRIYAL = convertForeignToRialSimple(val, newV[vIdx].currencyForeign || "یورو");
                                             } else {
                                               newV[vIdx].priceRIYAL = undefined;
                                             }
@@ -1355,7 +1381,7 @@ export default function ProductsView({
                                             const curr = e.target.value;
                                             newV[vIdx].currencyForeign = curr;
                                             if (newV[vIdx].priceForeign !== undefined) {
-                                              newV[vIdx].priceRIYAL = calculateAutoRialPrice(newV[vIdx].priceForeign!, curr, newV[vIdx]);
+                                              newV[vIdx].priceRIYAL = convertForeignToRialSimple(newV[vIdx].priceForeign!, curr);
                                             }
                                             setVariants(newV);
                                           }}
@@ -2027,6 +2053,56 @@ export default function ProductsView({
         title="حذف کالا/تجهیز"
         message={`آیا از حذف کالا "${productToDeleteName}" اطمینان دارید؟ این عمل غیرقابل بازگشت است.`}
       />
+
+      {/* Product Image Lightbox Modal */}
+      {lightboxUrl && (
+        <div 
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[150] flex flex-col items-center justify-center p-4" 
+          dir="rtl"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div 
+            className="bg-white max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center text-right">
+              <div className="flex items-center gap-2">
+                <ImageIcon size={18} className="text-sky-400" />
+                <h3 className="font-bold text-xs sm:text-sm">مشاهده تصویر کالا</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadFileFromServer(lightboxUrl, 'product-image.png')}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Download size={13} />
+                  <span>دانلود مستقیم تصویر</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLightboxUrl(null)}
+                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
+                  title="بستن"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 overflow-auto bg-slate-50 flex items-center justify-center">
+              <img
+                src={lightboxUrl}
+                alt="Product High Resolution"
+                className="max-w-full max-h-[70vh] rounded-lg border border-slate-200 shadow-sm object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

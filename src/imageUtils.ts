@@ -1,3 +1,5 @@
+import { saveAs } from 'file-saver';
+
 export async function compressAndResizeImage(
   file: File,
   maxWidth: number,
@@ -17,6 +19,24 @@ export function compressImage(file: File, callback: (dataUrl: string, size: stri
     console.error("Error uploading image in compressImage helper:", err);
     alert(err.message || "خطا در بارگذاری فایل");
   });
+}
+
+export async function downloadFileFromServer(url: string, filename: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Network response was not ok");
+    const blob = await response.blob();
+    saveAs(blob, filename);
+  } catch (err) {
+    console.warn("Blob download failed, falling back to direct link:", err);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 }
 
 export async function uploadFile(file: File): Promise<string> {

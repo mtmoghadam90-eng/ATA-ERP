@@ -1,6 +1,7 @@
 import React from 'react';
 import { Paperclip, Calendar, CheckSquare, Square, Download } from 'lucide-react';
 import { CustomField } from '../types';
+import { downloadFileFromServer } from '../imageUtils';
 
 interface CustomFieldsDetailViewProps {
   module: 'customers' | 'projects' | 'products' | 'proformas' | 'suppliers' | 'purchaseOrders' | 'transactions' | 'tasks';
@@ -87,16 +88,16 @@ export default function CustomFieldsDetailView({
                 {field.type === 'file' && typeof value === 'object' && value.name && (
                   <div className="flex items-center gap-1.5">
                     {value.dataUrl ? (
-                      <a
-                        href={value.dataUrl}
-                        download={value.name}
-                        className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2 py-1 rounded font-bold text-[10px] transition"
+                      <button
+                        type="button"
+                        onClick={() => downloadFileFromServer(value.dataUrl, value.name)}
+                        className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2 py-1 rounded font-bold text-[10px] transition cursor-pointer"
                         title="دانلود فایل پیوست"
                       >
                         <Paperclip size={11} />
                         <span className="max-w-[100px] truncate">{value.name}</span>
                         <Download size={11} className="ml-0.5 opacity-70" />
-                      </a>
+                      </button>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-[10px]">
                         <Paperclip size={11} />

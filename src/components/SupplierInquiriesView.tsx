@@ -41,6 +41,7 @@ import {
 import ConfirmModal from './ConfirmModal';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import { getTodayShamsi } from '../dateUtils';
+import { downloadFileFromServer } from '../imageUtils';
 
 interface SupplierInquiriesViewProps {
   projects: Project[];
@@ -417,16 +418,14 @@ export default function SupplierInquiriesView({
                               {/* Document Attachments */}
                               <div className="grid grid-cols-2 gap-2">
                                 {inq.technicalOfferUrl ? (
-                                  <a 
-                                    href={inq.technicalOfferUrl} 
-                                    download 
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center justify-center gap-1 py-1.5 px-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg border border-emerald-100 text-[10px] font-bold transition text-center"
+                                  <button 
+                                    type="button"
+                                    onClick={() => downloadFileFromServer(inq.technicalOfferUrl, `technical-offer-${inq.supplierName || 'supplier'}`)}
+                                    className="flex items-center justify-center gap-1 py-1.5 px-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg border border-emerald-100 text-[10px] font-bold transition text-center cursor-pointer"
                                   >
                                     <FileDown size={12} />
                                     پیوست فنی
-                                  </a>
+                                  </button>
                                 ) : (
                                   <div className="flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-50 text-slate-400 rounded-lg border border-slate-100 text-[10px] font-bold">
                                     پیوست فنی ندارد
@@ -434,16 +433,14 @@ export default function SupplierInquiriesView({
                                 )}
 
                                 {inq.financialOfferUrl ? (
-                                  <a 
-                                    href={inq.financialOfferUrl} 
-                                    download 
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center justify-center gap-1 py-1.5 px-2 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg border border-sky-100 text-[10px] font-bold transition text-center"
+                                  <button 
+                                    type="button"
+                                    onClick={() => downloadFileFromServer(inq.financialOfferUrl, `financial-offer-${inq.supplierName || 'supplier'}`)}
+                                    className="flex items-center justify-center gap-1 py-1.5 px-2 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg border border-sky-100 text-[10px] font-bold transition text-center cursor-pointer"
                                   >
                                     <FileDown size={12} />
                                     پیوست مالی
-                                  </a>
+                                  </button>
                                 ) : (
                                   <div className="flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-50 text-slate-400 rounded-lg border border-slate-100 text-[10px] font-bold">
                                     پیوست مالی ندارد
