@@ -2249,13 +2249,12 @@ export function useERPStore() {
               finalAssignedTo = proj?.salesExpert || payload.salesExpert || 'admin';
             }
 
-            const dueDate = new Date();
-            dueDate.setDate(dueDate.getDate() + (config.dueDaysOffset || 0));
+            const dueDate = addDaysToShamsi(getTodayShamsi(), config.dueDaysOffset || 0);
 
             addTask({
               title: replaceTemplateVars(config.titleTemplate, payload) || `وظیفه خودکار: ${rule.name}`,
               description: replaceTemplateVars(config.descTemplate, payload) || '',
-              dueDate: dueDate.toISOString(),
+              dueDate: dueDate,
               priority: config.priority || 'متوسط',
               status: 'در انتظار',
               assignedTo: finalAssignedTo
