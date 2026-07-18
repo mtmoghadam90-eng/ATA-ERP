@@ -2313,12 +2313,18 @@ export function useERPStore() {
 
       const updatedGroups = projectCategoryGroups.map(g => {
         if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('بسته‌بندی و تحویل کالا')) {
+          const remainingActivities = (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text));
           return {
             ...g,
-            activities: (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text))
+            activities: remainingActivities
           };
         }
         return g;
+      }).filter(g => {
+        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('بسته‌بندی و تحویل کالا')) {
+          return (g.activities || []).length > 0;
+        }
+        return true;
       });
       saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
     } else {
@@ -2380,12 +2386,18 @@ export function useERPStore() {
 
       const updatedGroups = projectCategoryGroups.map(g => {
         if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('خدمات پس از فروش')) {
+          const remainingActivities = (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text));
           return {
             ...g,
-            activities: (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text))
+            activities: remainingActivities
           };
         }
         return g;
+      }).filter(g => {
+        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('خدمات پس از فروش')) {
+          return (g.activities || []).length > 0;
+        }
+        return true;
       });
       saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
     } else {
@@ -2445,12 +2457,18 @@ export function useERPStore() {
 
       const updatedGroups = projectCategoryGroups.map(g => {
         if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('استعلام قیمت تأمین‌کنندگان')) {
+          const remainingActivities = (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text));
           return {
             ...g,
-            activities: (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text))
+            activities: remainingActivities
           };
         }
         return g;
+      }).filter(g => {
+        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('استعلام قیمت تأمین‌کنندگان')) {
+          return (g.activities || []).length > 0;
+        }
+        return true;
       });
       saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
     } else {
