@@ -785,7 +785,7 @@ export default function ProductsView({
                     <td colSpan={5} className="text-center p-12 text-slate-400">هیچ تراکنشی یافت نشد.</td>
                  </tr>
               )}
-              {inventoryTransactions.sort((a, b) => parsePersianDate(b.date).getTime() - parsePersianDate(a.date).getTime()).map(tr => {
+              {inventoryTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(tr => {
                 const p = products.find(prod => prod.id === tr.productId);
                 return (
                   <tr key={tr.id} className="hover:bg-slate-50/50 transition">
