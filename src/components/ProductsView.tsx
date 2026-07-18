@@ -280,7 +280,7 @@ export default function ProductsView({
       code: "EQ-12345", name: "پرشر ترانسمیتر", category: categories.length > 0 ? categories[0] : "ابزار دقیق - فشار", brand: "WIKA",
       supplyType: "INVENTORY", amount: 10, type: "IN", date: "1403/05/12", 
       notes: "خرید جدید",
-      features: "سایز:۱ اینچ،۲ اینچ|متریال بدنه:استیل،برنج",
+      features: "سایز(sz):۱ اینچ،۲ اینچ|متریال بدنه(mat):استیل،برنج",
       priceForeign: 120, currencyForeign: "یورو", priceRIYAL: 145000000
     });
     worksheet.addRow({
@@ -1284,7 +1284,7 @@ export default function ProductsView({
                             <table className="w-full text-right border-collapse">
                               <thead>
                                 <tr className="border-b border-slate-200">
-                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">کد SKU</th>
+                                  <th className="w-56 min-w-[220px] py-2 px-3 text-xs font-semibold text-slate-600">کد SKU</th>
                                   <th className="py-2 px-3 text-xs font-semibold text-slate-600">ترکیب</th>
                                   {supplyType === 'INVENTORY' && <th className="py-2 px-3 text-xs font-semibold text-slate-600">موجودی اولیه</th>}
                                   <th className="py-2 px-3 text-xs font-semibold text-slate-600">قیمت ارزی</th>
@@ -1305,7 +1305,8 @@ export default function ProductsView({
                                           setVariants(newV);
                                         }}
                                         placeholder="SKU"
-                                        className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500"
+                                        className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-left tracking-wider"
+                                        dir="ltr"
                                       />
                                     </td>
                                     <td className="py-2 px-3 text-xs text-slate-700 whitespace-nowrap">
@@ -1601,7 +1602,8 @@ export default function ProductsView({
                 برای ویرایش موجودی یا <strong>تعریف گروهی تجهیزات جدید</strong>، ابتدا فایل نمونه را دانلود کنید. <br/>
                 - <strong>نوع تامین</strong>: برای کالاهای موجود در انبار مقدار <code>INVENTORY</code> و برای کالاهای سفارشی مقدار <code>ORDER</code> را وارد کنید.<br/>
                 - <strong>کد کالا</strong>: اگر خالی باشد، سیستم به صورت خودکار یک کد جدید برای کالا ایجاد می‌کند.<br/>
-                - <strong>تاریخ</strong>: تاریخ را می‌توانید به صورت شمسی (مثل 1403/05/12) وارد کنید. اگر خالی باشد، تاریخ امروز ثبت می‌شود.
+                - <strong>تاریخ</strong>: تاریخ را می‌توانید به صورت شمسی (مثل 1403/05/12) وارد کنید. اگر خالی باشد، تاریخ امروز ثبت می‌شود.<br/>
+                - <strong>کد ویژگی‌ها</strong>: می‌توانید کد ویژگی را با پرانتز یا کروشه در ستون ویژگی‌های قابل تنظیم وارد کنید تا به ابتدای شماره سریال‌های SKUهای متغیرها اضافه شود؛ مثلاً: <code>سایز(sz): ۱ اینچ، ۲ اینچ</code>.
               </div>
               
               <div className="flex justify-center">

@@ -77,6 +77,7 @@ export default function ProjectsView({
   const [selectedProjectForActivities, setSelectedProjectForActivities] = useState<any>(null);
   const [isActivitiesModalFullscreen, setIsActivitiesModalFullscreen] = useState(false);
   const [modalTab, setModalTab] = useState("activities");
+  const [isProjectDetailsExpanded, setIsProjectDetailsExpanded] = useState(true);
   const [selectedFolderName, setSelectedFolderName] = useState<any>(null);
   const [supplyFilter, setSupplyFilter] = useState("ALL");
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
@@ -2979,9 +2980,9 @@ export default function ProjectsView({
                   <td className="p-3 text-slate-900">
                     <div className="font-bold text-sm text-slate-900">{p.name}</div>
                     
-                    {/* General & Contacts Info */}
-                    {(p.salesExpert || p.customerInquiryNumber) && (
-                      <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 text-[10px] text-slate-500 border-t border-slate-100 pt-1">
+                    {/* Compact Meta Row */}
+                    {(p.salesExpert || p.customerInquiryNumber || (p.itemsNeeded && p.itemsNeeded.length > 0) || (p.attachments && p.attachments.length > 0)) && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-1.5 text-[10px] text-slate-500 border-t border-slate-100 pt-1.5">
                         {p.salesExpert && (
                           <span>
                             کارشناس: <strong className="text-slate-800">{p.salesExpert}</strong>
@@ -2992,43 +2993,16 @@ export default function ProjectsView({
                             {p.salesExpert && ' | '}استعلام: <strong className="text-slate-800 font-mono">{p.customerInquiryNumber}</strong>
                           </span>
                         )}
-                      </div>
-                    )}
-
-                    {/* Marketing & Lead Tracking */}
-                    {p.referrerName && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        <span className="text-[9px] font-medium text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">
-                          معرف: {p.referrerName}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Items Needed */}
-                    {p.itemsNeeded && p.itemsNeeded.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2 bg-slate-50/50 p-1.5 rounded-lg border border-slate-100">
-                        <span className="text-[9px] font-extrabold text-slate-500">اقلام درخواستی:</span>
-                        {p.itemsNeeded.map((item, i) => (
-                          <span key={i} className="text-[9px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100 flex items-center gap-1">
-                            <span>{item.name} ({item.quantity} عدد - {item.supplyMethod === 'ORDER' ? 'سفارشی' : item.supplyMethod === 'NONE' ? 'بدون نیاز به تامین' : 'انباری'})</span>
-                            {item.tagNumber && (
-                              <span className="font-mono text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-100 text-[8px] font-bold">
-                                تگ: {item.tagNumber}
-                              </span>
-                            )}
+                        {p.itemsNeeded && p.itemsNeeded.length > 0 && (
+                          <span className="bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded text-[9px] font-bold border border-sky-100/80">
+                            {p.itemsNeeded.length} قلم کالا
                           </span>
-                        ))}
-                      </div>
-                    )}
-                    {/* Attachments Display */}
-                    {p.attachments && p.attachments.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 bg-slate-50/50 p-1.5 rounded-lg border border-slate-100">
-                        <span className="text-[9px] font-extrabold text-slate-500 flex items-center gap-0.5"><Paperclip size={10} /> پیوست‌ها:</span>
-                        {p.attachments.map((att, i) => (
-                          <a key={i} href={att.url} target="_blank" rel="noreferrer" className="text-[9px] font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 px-1.5 py-0.5 rounded border border-sky-200 transition">
-                            {att.name}
-                          </a>
-                        ))}
+                        )}
+                        {p.attachments && p.attachments.length > 0 && (
+                          <span className="bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded text-[9px] font-bold border border-slate-150 flex items-center gap-0.5">
+                            <Paperclip size={10} /> {p.attachments.length} پیوست
+                          </span>
+                        )}
                       </div>
                     )}
                   </td>
@@ -3973,83 +3947,328 @@ export default function ProjectsView({
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 text-right">
               
-              {/* Top Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-                <div>
-                  <span className="text-slate-400 font-bold">کارفرما/مشتری: </span>
-                  <strong className="text-slate-700">{selectedProjectForActivities.customerName}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold">کارشناس فروش مسئول: </span>
-                  <strong className="text-slate-700">{selectedProjectForActivities.salesExpert || 'مشخص نشده'}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold">وضعیت فرصت: </span>
-                  <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] border ${getStatusColor(selectedProjectForActivities.status)}`}>
-                    {selectedProjectForActivities.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Delivery Details Block */}
+              {/* Project Profile Section (Collapsible) */}
               {(() => {
-                const details = getProjectDeliveryDetails(selectedProjectForActivities.id);
-                const hasAgreed = details.agreedItems.length > 0;
-                const hasActual = details.actualItems.length > 0 || getActualDeliveryDate(selectedProjectForActivities.id);
-                if (!hasAgreed && !hasActual) return null;
+                const endUserObj = customers.find((c: any) => c.id === selectedProjectForActivities.endUser);
+                const endUserName = endUserObj ? endUserObj.companyName : null;
+
+                const financialContactObj = customers.find((c: any) => c.id === selectedProjectForActivities.financialContact);
+                const financialContactName = financialContactObj ? `${financialContactObj.firstName || ''} ${financialContactObj.lastName || ''}`.trim() : null;
+
+                const technicalContactObj = customers.find((c: any) => c.id === selectedProjectForActivities.technicalContact);
+                const technicalContactName = technicalContactObj ? `${technicalContactObj.firstName || ''} ${technicalContactObj.lastName || ''}`.trim() : null;
 
                 return (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 text-xs">
-                    {/* Agreed Delivery Section */}
-                    <div className="space-y-2">
-                      <h4 className="font-bold text-sky-800 flex items-center gap-1.5 border-b border-sky-100 pb-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                        <span>تعهدات زمان تحویل توافقی</span>
-                      </h4>
-                      {details.agreedItems.length > 0 ? (
-                        <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
-                          {details.agreedItems.map((item, i) => (
-                            <div key={i} className="flex justify-between items-center gap-2 bg-white p-1.5 rounded border border-slate-100 shadow-sm">
-                              <span className="text-slate-600 font-medium truncate max-w-[200px]" title={item.productName}>{item.productName}</span>
-                              <div className="flex items-center gap-2 font-mono">
-                                <span className="text-[10px] text-slate-400">({item.deliveryText})</span>
-                                <span className="text-sky-600 font-bold">{item.calculatedDate}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-slate-400 italic text-[10px] pr-2">تاریخ توافق‌شده ثبت نشده است.</div>
-                      )}
-                    </div>
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-right">
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectDetailsExpanded(!isProjectDetailsExpanded)}
+                      className="w-full bg-slate-50 hover:bg-slate-100 p-4 flex justify-between items-center transition font-bold text-slate-800 text-xs border-b border-slate-200"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Briefcase size={16} className="text-sky-500" />
+                        <span>📋 شناسنامه و مشخصات کامل پروژه ({selectedProjectForActivities.name})</span>
+                        <span className="text-[10px] text-slate-400 font-normal mr-2">
+                          ({isProjectDetailsExpanded ? 'کلیک برای جمع کردن' : 'کلیک برای مشاهده جزئیات ثبتی'})
+                        </span>
+                      </div>
+                      {isProjectDetailsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
 
-                    {/* Actual Delivery Section */}
-                    <div className="space-y-2">
-                      <h4 className="font-bold text-amber-800 flex items-center gap-1.5 border-b border-amber-100 pb-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                        <span>تاریخ تحویل قطعی (لجستیک)</span>
-                      </h4>
-                      {details.actualItems.length > 0 ? (
-                        <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
-                          {details.actualItems.map((item, i) => (
-                            <div key={i} className="flex justify-between items-center gap-2 bg-white p-1.5 rounded border border-slate-100 shadow-sm">
-                              <span className="text-slate-600 font-medium truncate max-w-[200px]" title={item.productName}>{item.productName}</span>
-                              <div className="flex items-center gap-2 font-mono">
-                                {item.boxNumber && <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">{item.boxNumber}</span>}
-                                <span className="text-amber-600 font-bold">{item.actualDate}</span>
+                    {isProjectDetailsExpanded && (
+                      <div className="p-4 space-y-4 text-xs">
+                        
+                        {/* Grid of details */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          {/* Column 1: General Info */}
+                          <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100 space-y-2">
+                            <h4 className="font-bold text-sky-800 border-b border-sky-100 pb-1 flex items-center gap-1.5">
+                              <span className="w-1.5 h-3 bg-sky-500 rounded-sm"></span>
+                              <span>مشخصات عمومی</span>
+                            </h4>
+                            <div className="space-y-1.5">
+                              <div>
+                                <span className="text-slate-400 font-semibold">مشتری/کارفرما:</span>
+                                <strong className="text-slate-700 block mt-0.5">{selectedProjectForActivities.customerName}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">مصرف‌کننده نهایی:</span>
+                                <strong className="text-slate-700 block mt-0.5">{endUserName || 'مشخص نشده'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">کارشناس فروش مسئول:</span>
+                                <strong className="text-slate-700 block mt-0.5">{selectedProjectForActivities.salesExpert || 'مشخص نشده'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">شماره استعلام مشتری:</span>
+                                <strong className="text-slate-700 block mt-0.5 font-mono">{selectedProjectForActivities.customerInquiryNumber || 'مشخص نشده'}</strong>
                               </div>
                             </div>
-                          ))}
+                          </div>
+
+                          {/* Column 2: Lead Tracking */}
+                          <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100 space-y-2">
+                            <h4 className="font-bold text-indigo-800 border-b border-indigo-100 pb-1 flex items-center gap-1.5">
+                              <span className="w-1.5 h-3 bg-indigo-500 rounded-sm"></span>
+                              <span>بازاریابی و لید</span>
+                            </h4>
+                            <div className="space-y-1.5">
+                              <div>
+                                <span className="text-slate-400 font-semibold">کانال بازاریابی:</span>
+                                <strong className="text-slate-700 block mt-0.5">{selectedProjectForActivities.marketingChannel || 'مشخص نشده'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">کیفیت لید (سرنخ):</span>
+                                <strong className="text-slate-700 block mt-0.5">{selectedProjectForActivities.leadQuality || 'مشخص نشده'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">روش ارتباط اصلی:</span>
+                                <strong className="text-slate-700 block mt-0.5">{selectedProjectForActivities.communicationMethod || 'مشخص نشده'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">نام معرف:</span>
+                                <strong className="text-slate-700 block mt-0.5">{selectedProjectForActivities.referrerName || 'مشخص نشده'}</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Column 3: Key People */}
+                          <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100 space-y-2">
+                            <h4 className="font-bold text-amber-800 border-b border-amber-100 pb-1 flex items-center gap-1.5">
+                              <span className="w-1.5 h-3 bg-amber-500 rounded-sm"></span>
+                              <span>افراد کلیدی کارفرما</span>
+                            </h4>
+                            <div className="space-y-1.5">
+                              <div>
+                                <span className="text-slate-400 font-semibold">فرد کلیدی مالی:</span>
+                                <strong className="text-slate-700 block mt-0.5">{financialContactName || 'مشخص نشده'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">فرد کلیدی فنی:</span>
+                                <strong className="text-slate-700 block mt-0.5">{technicalContactName || 'مشخص نشده'}</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Column 4: Timeline & Outcomes */}
+                          <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100 space-y-2">
+                            <h4 className="font-bold text-teal-800 border-b border-teal-100 pb-1 flex items-center gap-1.5">
+                              <span className="w-1.5 h-3 bg-teal-500 rounded-sm"></span>
+                              <span>زمان‌بندی و دستاورد</span>
+                            </h4>
+                            <div className="space-y-1.5">
+                              <div>
+                                <span className="text-slate-400 font-semibold">تاریخ ایجاد فرصت:</span>
+                                <strong className="text-slate-700 block mt-0.5 font-mono">{selectedProjectForActivities.opportunityDate || selectedProjectForActivities.creationDate || 'مشخص نشده'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold">وضعیت فرصت:</span>
+                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border mt-1 ${getStatusColor(selectedProjectForActivities.status)}`}>
+                                  {selectedProjectForActivities.status}
+                                </span>
+                              </div>
+                              {selectedProjectForActivities.status === 'باخته' && selectedProjectForActivities.lossReason && (
+                                <div>
+                                  <span className="text-rose-400 font-semibold">دلیل باخت پروژه:</span>
+                                  <strong className="text-rose-700 block mt-0.5">{selectedProjectForActivities.lossReason}</strong>
+                                </div>
+                              )}
+                              {(selectedProjectForActivities.status === 'برنده (موفق)' || selectedProjectForActivities.status === 'نیمه برنده') && (
+                                <>
+                                  {selectedProjectForActivities.winningDate && (
+                                    <div>
+                                      <span className="text-emerald-500 font-semibold">تاریخ تایید (ابلاغ):</span>
+                                      <strong className="text-emerald-700 block mt-0.5 font-mono">{selectedProjectForActivities.winningDate}</strong>
+                                    </div>
+                                  )}
+                                  {selectedProjectForActivities.agreedDeliveryDate && (
+                                    <div>
+                                      <span className="text-sky-500 font-semibold">تاریخ توافقی تحویل:</span>
+                                      <strong className="text-sky-700 block mt-0.5 font-mono">{selectedProjectForActivities.agreedDeliveryDate}</strong>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      ) : getActualDeliveryDate(selectedProjectForActivities.id) ? (
-                        <div className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm font-mono text-amber-600 font-bold">
-                          <span>تحویل کلی پروژه:</span>
-                          <span>{getActualDeliveryDate(selectedProjectForActivities.id)}</span>
-                        </div>
-                      ) : (
-                        <div className="text-slate-400 italic text-[10px] pr-2">تحویل کالاها هنوز نهایی یا ثبت نشده است.</div>
-                      )}
-                    </div>
+
+                        {/* Engineering Description Row */}
+                        {selectedProjectForActivities.description && (
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/60">
+                            <span className="text-slate-500 font-bold block mb-1">📋 مشخصات مهندسی مورد نیاز، بازه دما و فشار یا شرح عمومی پروژه:</span>
+                            <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedProjectForActivities.description}</p>
+                          </div>
+                        )}
+
+                        {/* Custom Fields Block */}
+                        {(() => {
+                          const projectCustomFields = (settings?.customFields || []).filter((f: any) => f.module === 'projects');
+                          const activeCustomFields = projectCustomFields.filter((f: any) => selectedProjectForActivities.customValues?.[f.id] !== undefined && selectedProjectForActivities.customValues?.[f.id] !== '');
+                          if (activeCustomFields.length === 0) return null;
+                          return (
+                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/60 space-y-1.5">
+                              <span className="text-slate-500 font-bold block">فیلدهای سفارشی پروژه:</span>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-white p-2.5 rounded-lg border border-slate-150">
+                                {activeCustomFields.map((field: any) => (
+                                  <div key={field.id} className="text-[11px]">
+                                    <span className="text-slate-400 font-semibold">{field.name}: </span>
+                                    <strong className="text-slate-700">{selectedProjectForActivities.customValues?.[field.id]}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Items Needed Row */}
+                        {selectedProjectForActivities.itemsNeeded && selectedProjectForActivities.itemsNeeded.length > 0 && (
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/60 space-y-2">
+                            <span className="text-slate-500 font-bold block">🛍️ لیست اقلام و محصولات درخواستی پروژه:</span>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-right border-collapse text-[11px] bg-white rounded-lg overflow-hidden border border-slate-150">
+                                <thead>
+                                  <tr className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold">
+                                    <th className="p-2 w-12 text-center">ردیف</th>
+                                    <th className="p-2">نام کالا / گروه کالا</th>
+                                    <th className="p-2 text-center w-20">تعداد</th>
+                                    <th className="p-2 text-center w-28">روش تامین</th>
+                                    <th className="p-2 text-center w-40">مشخصات فنی</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 text-slate-700">
+                                  {selectedProjectForActivities.itemsNeeded.map((item: any, idx: number) => {
+                                    const supplyMethodText = item.supplyMethod === 'INVENTORY' ? 'برداشت از موجودی' : item.supplyMethod === 'ORDER' ? 'تامین سفارشی' : 'بدون نیاز به تامین';
+                                    const supplyColor = item.supplyMethod === 'INVENTORY' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : item.supplyMethod === 'ORDER' ? 'text-sky-700 bg-sky-50 border-sky-100' : 'text-slate-500 bg-slate-50 border-slate-100';
+                                    
+                                    return (
+                                      <tr key={idx} className="hover:bg-slate-50/50">
+                                        <td className="p-2 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
+                                        <td className="p-2 font-semibold text-slate-800">{item.name}</td>
+                                        <td className="p-2 text-center font-mono font-bold">{item.quantity}</td>
+                                        <td className="p-2 text-center">
+                                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${supplyColor}`}>
+                                            {supplyMethodText}
+                                          </span>
+                                        </td>
+                                        <td className="p-2 text-center space-y-1">
+                                          {item.category && (
+                                            <span className="inline-block px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 text-[9px] ml-1 font-semibold">
+                                              دسته: {item.category}
+                                            </span>
+                                          )}
+                                          {item.equipmentType && (
+                                            <span className="inline-block px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-600 text-[9px] ml-1 font-semibold">
+                                              {item.equipmentType}
+                                            </span>
+                                          )}
+                                          {item.size && (
+                                            <span className="inline-block px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 text-[9px] font-mono ml-1">
+                                              سایز: {item.size}
+                                            </span>
+                                          )}
+                                          {item.tagNumber && (
+                                            <span className="inline-block px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 text-[9px] font-mono font-bold">
+                                              تگ: {item.tagNumber}
+                                            </span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Delivery commitments */}
+                        {(() => {
+                          const details = getProjectDeliveryDetails(selectedProjectForActivities.id);
+                          const hasAgreed = details.agreedItems.length > 0;
+                          const hasActual = details.actualItems.length > 0 || getActualDeliveryDate(selectedProjectForActivities.id);
+                          if (!hasAgreed && !hasActual) return null;
+                          return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/50 p-3 rounded-lg border border-slate-150">
+                              {/* Agreed */}
+                              <div className="space-y-2">
+                                <span className="text-sky-800 font-bold block border-b border-sky-100 pb-1 flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                                  تعهدات زمان تحویل توافقی
+                                </span>
+                                {details.agreedItems.length > 0 ? (
+                                  <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                                    {details.agreedItems.map((item: any, i: number) => (
+                                      <div key={i} className="flex justify-between items-center gap-2 bg-white p-1.5 rounded border border-slate-100 shadow-sm text-[11px]">
+                                        <span className="text-slate-600 font-medium truncate max-w-[200px]" title={item.productName}>{item.productName}</span>
+                                        <div className="flex items-center gap-2 font-mono">
+                                          <span className="text-[10px] text-slate-400">({item.deliveryText})</span>
+                                          <span className="text-sky-600 font-bold">{item.calculatedDate}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-slate-400 italic text-[10px] pr-2">تاریخ توافق‌شده ثبت نشده است.</div>
+                                )}
+                              </div>
+
+                              {/* Actual */}
+                              <div className="space-y-2">
+                                <span className="text-amber-800 font-bold block border-b border-amber-100 pb-1 flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  تاریخ تحویل قطعی (لجستیک)
+                                </span>
+                                {details.actualItems.length > 0 ? (
+                                  <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                                    {details.actualItems.map((item: any, i: number) => (
+                                      <div key={i} className="flex justify-between items-center gap-2 bg-white p-1.5 rounded border border-slate-100 shadow-sm text-[11px]">
+                                        <span className="text-slate-600 font-medium truncate max-w-[200px]" title={item.productName}>{item.productName}</span>
+                                        <div className="flex items-center gap-2 font-mono">
+                                          {item.boxNumber && <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">{item.boxNumber}</span>}
+                                          <span className="text-amber-600 font-bold">{item.actualDate}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : getActualDeliveryDate(selectedProjectForActivities.id) ? (
+                                  <div className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm font-mono text-amber-600 font-bold text-[11px]">
+                                    <span>تحویل کلی پروژه:</span>
+                                    <span>{getActualDeliveryDate(selectedProjectForActivities.id)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-slate-400 italic text-[10px] pr-2">تحویل کالاها هنوز نهایی یا ثبت نشده است.</div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Attachments Row */}
+                        {selectedProjectForActivities.attachments && selectedProjectForActivities.attachments.length > 0 && (
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/60 space-y-2">
+                            <span className="text-slate-500 font-bold block flex items-center gap-1"><Paperclip size={14} /> فایل‌های پیوست پروژه:</span>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedProjectForActivities.attachments.map((file: any, idx: number) => (
+                                <a
+                                  key={idx}
+                                  href={file.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-sky-600 transition"
+                                >
+                                  <span>{file.name}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono">
+                                    ({file.size && !isNaN(Number(file.size)) ? `${(Number(file.size) / 1024).toFixed(1)} KB` : 'پیوست'})
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+                    )}
                   </div>
                 );
               })()}

@@ -994,13 +994,24 @@ export function useERPStore() {
         const currencyForeign = item.currencyForeign;
         const priceRIYAL = item.priceRIYAL;
 
+        const extractNameAndCode = (str: string) => {
+          const match = str.trim().match(/^([^[({]+?)(?:\s*[[({\s]\s*([^\])}]+?)\s*[\])}]+)?$/);
+          if (match) {
+            const name = match[1].trim();
+            const code = match[2] ? match[2].trim() : undefined;
+            return { name, code };
+          }
+          return { name: str.trim(), code: undefined };
+        };
+
         const parseFeatures = (raw?: string) => {
           if (!raw || typeof raw !== "string") return [];
           const parsedFeatures: ProductFeature[] = [];
           const parts = raw.split("|");
           parts.forEach((part, fIdx) => {
-            const [fName, fOptsRaw] = part.split(":");
-            if (fName && fOptsRaw) {
+            const [fRaw, fOptsRaw] = part.split(":");
+            if (fRaw && fOptsRaw) {
+              const { name: fName, code: fCode } = extractNameAndCode(fRaw);
               const options = fOptsRaw
                 .split(/[,،]/)
                 .map((o) => o.trim())
@@ -1008,11 +1019,14 @@ export function useERPStore() {
               if (options.length > 0) {
                 parsedFeatures.push({
                   id: `feat-${Date.now()}-${fIdx}-${Math.random().toString(36).substr(2, 5)}`,
-                  name: fName.trim(),
-                  options: options.map((o, oIdx) => ({
-                    id: `opt-${Date.now()}-${oIdx}-${Math.random().toString(36).substr(2, 5)}`,
-                    value: o,
-                  })),
+                  name: fName,
+                  code: fCode,
+                  options: options.map((o, oIdx) => {
+                    return {
+                      id: `opt-${Date.now()}-${oIdx}-${Math.random().toString(36).substr(2, 5)}`,
+                      value: o,
+                    };
+                  }),
                 });
               }
             }
@@ -1062,6 +1076,65 @@ export function useERPStore() {
           if (supplyType && supplyType !== product.supplyType) {
             updatedProduct.supplyType = supplyType;
             isUpdated = true;
+          }
+
+          // Update features & variants if features are provided in the Excel row
+          if (features && features.length > 0) {
+            const featuresChanged = JSON.stringify(features) !== JSON.stringify(product.features);
+            if (featuresChanged) {
+              updatedProduct.features = features;
+              updatedProduct.hasVariants = true;
+              
+              const getCombinations = (featuresArr: any[]): any[] => {
+                if (featuresArr.length === 0) return [{}];
+                const current = featuresArr[0];
+                const rest = getCombinations(featuresArr.slice(1));
+                const combos: any[] = [];
+                if (current.options.length === 0) return rest;
+                for (const opt of current.options) {
+                  for (const r of rest) {
+                    combos.push({ ...r, [current.name]: opt.value });
+                  }
+                }
+                return combos;
+              };
+              const combinations = getCombinations(features);
+              const pCode = updatedProduct.code;
+              
+              const newVariants = combinations.map((combo, i) => {
+                const skuParts = [pCode];
+                Object.entries(combo).forEach(([fName, fVal]) => {
+                  const feat = features.find(f => f.name === fName);
+                  if (feat) {
+                    const optIndex = feat.options.findIndex(o => o.value === fVal);
+                    if (optIndex !== -1) {
+                      const prefix = feat.code ? feat.code : '';
+                      skuParts.push(`${prefix}${optIndex + 1}`);
+                    }
+                  }
+                });
+                
+                const existingMatch = product.variants?.find((ev: any) => {
+                  return Object.entries(combo).every(([k, v]) => ev.attributes?.[k] === v);
+                });
+
+                return {
+                  id: existingMatch?.id || `var-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+                  sku: skuParts.join('-'),
+                  attributes: combo,
+                  stockLevel: existingMatch?.stockLevel || 0,
+                  minStockLevel: existingMatch?.minStockLevel || 0,
+                  priceForeign: existingMatch?.priceForeign !== undefined ? existingMatch.priceForeign : (priceForeign !== undefined ? Number(priceForeign) : undefined),
+                  currencyForeign: existingMatch?.currencyForeign || currencyForeign || undefined,
+                  priceRIYAL: existingMatch?.priceRIYAL !== undefined ? existingMatch.priceRIYAL : (priceRIYAL !== undefined ? Number(priceRIYAL) : undefined)
+                };
+              });
+
+              updatedVariants = newVariants;
+              updatedProduct.variants = newVariants;
+              updatedProduct.stockLevel = newVariants.reduce((sum: number, v: any) => sum + (v.stockLevel || 0), 0);
+              isUpdated = true;
+            }
           }
 
           // 2. Update Pricing Fields
