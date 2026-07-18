@@ -2213,6 +2213,15 @@ export function useERPStore() {
 
   const processWorkflowRules = (triggerType: string, payload: any) => {
     const activeRules = settings.workflows?.filter(r => r.active && r.triggerType === triggerType) || [];
+    
+    const replaceTemplateVars = (template: string, data: any) => {
+      if (!template) return '';
+      return template.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+        const k = key.trim();
+        return data[k] !== undefined ? String(data[k]) : match;
+      });
+    };
+
     for (const rule of activeRules) {
       let match = true;
       for (const cond of rule.conditions) {
@@ -2224,21 +2233,47 @@ export function useERPStore() {
       }
       if (match) {
         for (const action of rule.actions) {
-          if (action.actionType === 'create_task') {
+          if (action.type === 'create_task') {
+            const config = action.taskConfig;
+            if (!config) continue;
+
+            let finalAssignedTo = config.assignedTo || 'admin';
+            if (finalAssignedTo.startsWith('MODULE_RESPONSIBLE_')) {
+              const mod = finalAssignedTo.replace('MODULE_RESPONSIBLE_', '');
+              finalAssignedTo = (settings.moduleResponsibles as any)?.[mod] || 'admin';
+            } else if (finalAssignedTo === 'SALES_EXPERT') {
+              let proj = undefined;
+              if (payload.projectId) {
+                proj = projects.find(p => p.id === payload.projectId);
+              }
+              finalAssignedTo = proj?.salesExpert || payload.salesExpert || 'admin';
+            }
+
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + (config.dueDaysOffset || 0));
+
             addTask({
-              title: `وظیفه خودکار: ${rule.name}`,
-              description: action.taskDescription || '',
-              dueDate: new Date().toISOString(),
-              priority: 'بالا',
+              title: replaceTemplateVars(config.titleTemplate, payload) || `وظیفه خودکار: ${rule.name}`,
+              description: replaceTemplateVars(config.descTemplate, payload) || '',
+              dueDate: dueDate.toISOString(),
+              priority: config.priority || 'متوسط',
               status: 'در انتظار',
-              assignedTo: action.taskAssigneeRole || 'admin'
+              assignedTo: finalAssignedTo
             });
-          } else if (action.actionType === 'send_notification') {
+          } else if (action.type === 'send_notification') {
+            const config = action.notificationConfig;
+            if (!config) continue;
+            
+            let responsible = 'سیستم';
+            if ((settings.moduleResponsibles as any)?.[config.module]) {
+               responsible = (settings.moduleResponsibles as any)[config.module];
+            }
+
             addModuleNotification({
-              module: 'سیستم',
-              title: rule.name,
-              description: action.notificationMessage || '',
-              responsibleName: 'سیستم'
+              module: config.module || 'سیستم',
+              title: replaceTemplateVars(config.titleTemplate, payload) || rule.name,
+              description: replaceTemplateVars(config.descTemplate, payload) || '',
+              responsibleName: responsible
             });
           }
         }
