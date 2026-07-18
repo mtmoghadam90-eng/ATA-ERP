@@ -200,6 +200,163 @@ const saveToServer = (key: string, data: any) => {
   );
 };
 
+const faToEnDigits = (str: string): string => {
+  const faDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  const arDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  let result = str;
+  for (let i = 0; i < 10; i++) {
+    result = result.replace(new RegExp(faDigits[i], 'g'), i.toString());
+    result = result.replace(new RegExp(arDigits[i], 'g'), i.toString());
+  }
+  return result;
+};
+
+// Helper to parse delivery terms into days offset
+const parseDeliveryPeriodToDays = (deliveryText: string): number => {
+  if (!deliveryText) return 30; // default 30 days
+
+  const text = deliveryText.trim().toLowerCase();
+
+  // immediate (فوری)
+  if (text.includes('فوری') || text.includes('fouri') || text.includes('فور')) {
+    return 0;
+  }
+
+  const normalizedText = faToEnDigits(text);
+  const match = normalizedText.match(/\d+/);
+
+  if (!match) {
+    if (normalizedText.includes('هفته')) return 7;
+    if (normalizedText.includes('ماه')) return 30;
+    if (normalizedText.includes('روز')) return 1;
+    return 30; // default
+  }
+
+  const numberVal = parseInt(match[0], 10);
+
+  if (normalizedText.includes('هفته')) {
+    return numberVal * 7;
+  }
+  if (normalizedText.includes('ماه')) {
+    return numberVal * 30;
+  }
+  if (normalizedText.includes('روز')) {
+    return numberVal;
+  }
+
+  return numberVal; // If just a number
+};
+
+const syncProjectStatus = (projId: string, currentProformas: Proforma[], currentProjects: Project[]) => {
+  if (!projId) return currentProjects;
+  const projectProformas = currentProformas.filter(p => p.projectId === projId);
+  if (projectProformas.length === 0) return currentProjects;
+
+  // Find a won/approved/partially won proforma first
+  let targetProforma = projectProformas.find(pf => {
+    const outcome = getProformaOutcomeStatus(pf);
+    return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+  });
+
+  // If no won proforma, fall back to the latest proforma (sorted by timestamp in id, latest first)
+  if (!targetProforma) {
+    const sortedProformas = [...projectProformas].sort((a, b) => {
+      const getTs = (id: string) => {
+        const match = id.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+      };
+      return getTs(b.id) - getTs(a.id);
+    });
+    targetProforma = sortedProformas[0];
+  }
+
+  let totalItems = 0;
+  let wonItems = 0;
+  let lostItems = 0;
+  let pendingItems = 0;
+
+  if (targetProforma && targetProforma.items) {
+    targetProforma.items.forEach(item => {
+      totalItems++;
+      const itemStatus = item.status || 'جاری';
+      if (itemStatus === 'برنده') {
+        wonItems++;
+      } else if (itemStatus === 'بازنده') {
+        lostItems++;
+      } else {
+        pendingItems++;
+      }
+    });
+  }
+
+  // Determine project status
+  const allCancelled = projectProformas.length > 0 && projectProformas.every(pf => getProformaOutcomeStatus(pf) === 'لغو شده');
+  const allLost = projectProformas.length > 0 && projectProformas.every(pf => getProformaOutcomeStatus(pf) === 'باخته');
+
+  let newStatus: Project['status'] = 'ارائه پیش‌فاکتور';
+  if (allCancelled) {
+    newStatus = 'لغو شده';
+  } else if (allLost) {
+    newStatus = 'باخته';
+  } else if (totalItems > 0) {
+    if (wonItems === totalItems) {
+      newStatus = 'برنده (موفق)';
+    } else if (lostItems === totalItems) {
+      newStatus = 'باخته';
+    } else if (wonItems > 0) {
+      newStatus = 'نیمه برنده';
+    } else {
+      newStatus = 'ارائه پیش‌فاکتور';
+    }
+  }
+
+  return currentProjects.map(p => {
+    if (p.id === projId) {
+      const today = getTodayShamsi();
+      const updatedProject = { ...p, status: newStatus };
+
+      if (newStatus === 'برنده (موفق)' || newStatus === 'نیمه برنده') {
+        const wasWonBefore = p.status === 'برنده (موفق)' || p.status === 'نیمه برنده';
+
+        if (!updatedProject.winningDate) {
+          updatedProject.winningDate = today;
+        }
+        if (!updatedProject.closingDate) {
+          updatedProject.closingDate = today;
+        }
+
+        // Try to find a won proforma for this project to calculate expected delivery date
+        const wonPf = projectProformas.find(pf => {
+          const outcome = getProformaOutcomeStatus(pf);
+          return outcome === 'تأیید شده (برنده)' || outcome === 'نیمه برنده';
+        });
+        if (wonPf && wonPf.deliveryDate) {
+          // Only set/overwrite if not set before, or if it was empty, or if we are newly transitioning to won
+          if (!updatedProject.agreedDeliveryDate || !wasWonBefore) {
+             const offsetDays = parseDeliveryPeriodToDays(wonPf.deliveryDate);
+             const isWorkingDays = wonPf.deliveryDate.includes('کاری') || wonPf.deliveryDate.includes('کار') || wonPf.deliveryDate.toLowerCase().includes('work');
+             const targetDate = isWorkingDays
+               ? addWorkingDaysToShamsi(updatedProject.winningDate || today, offsetDays)
+               : addDaysToShamsi(updatedProject.winningDate || today, offsetDays);
+             updatedProject.agreedDeliveryDate = targetDate;
+          }
+        } else {
+          // Default fallback if no won proforma with deliveryDate
+          if (!updatedProject.agreedDeliveryDate) {
+            updatedProject.agreedDeliveryDate = today;
+          }
+        }
+      } else if (newStatus === 'باخته' || newStatus === 'لغو شده') {
+        if (!updatedProject.closingDate) {
+          updatedProject.closingDate = today;
+        }
+      }
+      return updatedProject;
+    }
+    return p;
+  });
+};
+
 export function useERPStore() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -1389,21 +1546,29 @@ export function useERPStore() {
 
 
 
-  const addProject = (project: any): any => {
-    let finalCode = project.code;
-    const isAutoGenerated = !finalCode || finalCode.startsWith("ATA-");
-    if (isAutoGenerated) {
-      finalCode = formatERPNumber(
-        settings.documentFormats.projectFormat || "ATA-{YYYY}-{SEQ:3}",
-        { seq: projects.length + 1 }
-      );
+  const addProject = (project: Omit<Project, 'id' | 'code' | 'creationDate'>) => {
+  const seqNum = projects.length + 1;
+  const computedCode = formatERPNumber(
+    settings.documentFormats?.projectFormat || 'ATA-{YYYY}-{SEQ:3}',
+    {
+      seq: seqNum,
+      customerName: (project as any).customerName || (project as any).title || ''
     }
-    const newProject = { ...project, id: `proj-${Date.now()}`, code: finalCode, createdAt: new Date().toISOString() };
-    const updated = [newProject, ...projects];
-    saveToStorage("erp_projects", updated, setProjects);
-    logAction("CREATE", "پروژه", newProject.id, `ایجاد پروژه: ${project.title}`);
-    return newProject;
-  };
+  );
+  const newProject: Project = {
+    ...project,
+    id: `proj-${Date.now()}`,
+    code: computedCode,
+    creationDate: getTodayShamsi()
+  } as Project;
+  const updated = [newProject, ...projects];
+  saveToStorage('erp_projects', updated, setProjects);
+
+  notifyModuleResponsible('projects', 'ثبت پروژه جدید', `پروژه جدید ${newProject.name || newProject.title} (${newProject.code}) توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`, newProject.id);
+  logAction('CREATE', 'پروژه‌ها', newProject.id, `ثبت پروژه جدید: ${newProject.name || newProject.title} (کد: ${newProject.code})`, undefined, newProject);
+
+  return newProject;
+};
   const updateProject = (updatedProject: any) => {
     const oldProject = projects.find(p => p.id === updatedProject.id);
     if (oldProject && oldProject.status !== updatedProject.status) {
@@ -1458,68 +1623,218 @@ export function useERPStore() {
     logAction("DELETE", "پروژه", id, `حذف پروژه`);
   };
 
-  const addProforma = (proforma: any) => {
-    let finalProformaNumber = proforma.proformaNumber;
-    const isAutoGenerated = !finalProformaNumber || finalProformaNumber.startsWith("QT-");
-    
-    if (isAutoGenerated) {
-      const relatedProject = projects.find((p) => p.id === proforma.projectId);
-      const projectCode = relatedProject?.code || "";
-      
-      let formatStr = settings.documentFormats?.proformaFormat || "QT-{PROJECT}-{SEQ:2}";
-      if (proforma.proformaType === "TECHNICAL") {
-        formatStr = settings.documentFormats?.proformaTechnicalFormat || formatStr;
-      } else if (proforma.proformaType === "AFTER_SALES") {
-        formatStr = settings.documentFormats?.proformaAfterSalesFormat || formatStr;
-      }
+  const addProforma = (proforma: Omit<Proforma, 'id' | 'proformaNumber'>) => {
+  const seqNum = proformas.length + 1;
+  const projectCode = proforma.projectId
+    ? (projects.find(p => p.id === proforma.projectId)?.code || 'ATA')
+    : 'ATA';
 
-      finalProformaNumber = formatERPNumber(formatStr, {
-        seq: proformas.length + 1,
-        projectCode: projectCode,
-      });
+  let formatStr = settings.documentFormats?.proformaFormat || "QT-{PROJECT}-{SEQ:2}";
+  if (proforma.proformaType === "TECHNICAL") {
+    formatStr = settings.documentFormats?.proformaTechnicalFormat || formatStr;
+  } else if (proforma.proformaType === "AFTER_SALES") {
+    formatStr = settings.documentFormats?.proformaAfterSalesFormat || formatStr;
+  }
+
+  const computedNumber = formatERPNumber(
+    formatStr,
+    {
+      seq: seqNum,
+      projectCode,
+      customerName: proforma.customerName || ''
     }
+  );
 
-    const newProforma = { 
-      ...proforma, 
-      proformaNumber: finalProformaNumber,
-      id: `pf-${Date.now()}`, 
-      createdAt: new Date().toISOString() 
-    };
-    // Fix: add new proforma to the beginning of the array to match project behavior
-    const updated = [newProforma, ...proformas];
-    saveToStorage("erp_proformas", updated, setProformas);
-    logAction("CREATE", "پیش‌فاکتور", newProforma.id, `ایجاد پیش‌فاکتور: ${finalProformaNumber}`);
-    
-    autoLogFactActivity(newProforma.projectId, 'پیش‌فاکتور', `صدور پیش‌فاکتور جدید با شماره ${newProforma.proformaNumber} به مبلغ ${newProforma.totalPrice?.toLocaleString() || 0} و وضعیت ${newProforma.status}`);
-  };
-  const updateProforma = (updatedProforma: any) => {
-    const before = proformas.find(p => p.id === updatedProforma.id);
-    const updated = proformas.map(p => p.id === updatedProforma.id ? updatedProforma : p);
-    saveToStorage("erp_proformas", updated, setProformas);
-    logAction("UPDATE", "پیش‌فاکتور", updatedProforma.id, `بروزرسانی پیش‌فاکتور`);
-    
-    autoLogFactActivity(updatedProforma.projectId, 'پیش‌فاکتور', `بروزرسانی پیش‌فاکتور ${updatedProforma.proformaNumber} - مبلغ: ${updatedProforma.totalPrice?.toLocaleString() || 0} - وضعیت: ${updatedProforma.status}`);
+  const newProforma: Proforma = {
+    ...proforma,
+    id: `pf-${Date.now()}`,
+    proformaNumber: computedNumber,
+    creatorId: currentUser?.id
+  } as Proforma;
 
-    const oldOutcome = before?.status === 'تأیید شده (برنده)' ? 'تأیید شده (برنده)' : before?.status === 'لغو شده' ? 'لغو شده' : before?.status === 'باخته' ? 'باخته' : (before?.status === 'نیمه برنده' ? 'نیمه برنده' : 'نامشخص');
-    const newOutcome = updatedProforma.status === 'تأیید شده (برنده)' ? 'تأیید شده (برنده)' : updatedProforma.status === 'لغو شده' ? 'لغو شده' : updatedProforma.status === 'باخته' ? 'باخته' : (updatedProforma.status === 'نیمه برنده' ? 'نیمه برنده' : 'نامشخص');
-    
-    if (oldOutcome !== newOutcome && (newOutcome === 'تأیید شده (برنده)' || newOutcome === 'نیمه برنده')) {
+  const updated = [newProforma, ...proformas];
+  saveToStorage('erp_proformas', updated, setProformas);
+
+  if (newProforma.projectId) {
+    const syncedProjects = syncProjectStatus(newProforma.projectId, updated, projects);
+    saveToStorage('erp_projects', syncedProjects, setProjects);
+
+    const statusLabel = newProforma.status;
+    autoLogFactActivity(
+      newProforma.projectId,
+      'پیش‌فاکتور',
+      `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalPrice || newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`
+    );
+  }
+
+  // If instantly created as "won" or contains won items, reduce inventory stock
+  const initialWonItems = getWonItemsOfProforma(newProforma);
+  initialWonItems.forEach(item => {
+    adjustProductStock(item.productId, -(item.quantity || 1), newProforma.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProforma.proformaNumber}`);
+  });
+
+  notifyModuleResponsible('proformas', 'ثبت پیش‌فاکتور جدید', `پیش‌فاکتور شماره ${newProforma.proformaNumber} صادر شد.`, newProforma.projectId);
+  logAction('CREATE', 'پیش‌فاکتورها', newProforma.id, `ایجاد پیش‌فاکتور جدید شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalPrice || newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'}`, undefined, newProforma);
+
+  const newOutcome = getProformaOutcomeStatus(newProforma);
+  const relatedProj = newProforma.projectId ? projects.find(p => p.id === newProforma.projectId) : undefined;
+  processWorkflowRules('proforma_outcome_change', {
+    projectId: newProforma.projectId,
+    projectName: relatedProj?.name || relatedProj?.title || newProforma.customerName,
+    proformaNumber: newProforma.proformaNumber,
+    oldOutcome: '',
+    newOutcome,
+    salesExpert: relatedProj?.salesExpert
+  });
+
+  return newProforma;
+};
+  const updateProforma = (updatedPf: Proforma) => {
+  const oldPf = proformas.find(p => p.id === updatedPf.id);
+  if (!oldPf) return;
+
+  const finalUpdatedPf = { ...updatedPf };
+
+  const updated = proformas.map(p => p.id === updatedPf.id ? finalUpdatedPf : p);
+  saveToStorage('erp_proformas', updated, setProformas);
+
+  const oldOutcome = getProformaOutcomeStatus(oldPf);
+  const newOutcome = getProformaOutcomeStatus(finalUpdatedPf);
+  const outcomeChanged = oldOutcome !== newOutcome;
+
+  let logText = `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`;
+  if (outcomeChanged) {
+    logText += ` وضعیت نهایی به «${newOutcome}» تغییر یافت.`;
+  }
+
+  logAction('UPDATE', 'پیش‌فاکتورها', updatedPf.id, logText, oldPf, finalUpdatedPf);
+
+  if (finalUpdatedPf.projectId) {
+    const syncedProjects = syncProjectStatus(finalUpdatedPf.projectId, updated, projects);
+    saveToStorage('erp_projects', syncedProjects, setProjects);
+
+    autoLogFactActivity(finalUpdatedPf.projectId, 'پیش‌فاکتور', logText);
+
+    if (outcomeChanged && (newOutcome === 'تأیید شده (برنده)' || newOutcome === 'نیمه برنده')) {
       setCompletionPrompt({
-        projectId: updatedProforma.projectId,
+        projectId: finalUpdatedPf.projectId,
         categoryName: 'پیش‌فاکتور',
-        message: `پیش‌فاکتور ${updatedProforma.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
+        message: `پیش‌فاکتور ${finalUpdatedPf.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
       });
     }
-  };
+  }
+
+  if (outcomeChanged) {
+    const relatedProj = finalUpdatedPf.projectId ? projects.find(p => p.id === finalUpdatedPf.projectId) : undefined;
+    processWorkflowRules('proforma_outcome_change', {
+      projectId: finalUpdatedPf.projectId,
+      projectName: relatedProj?.name || relatedProj?.title || finalUpdatedPf.customerName,
+      proformaNumber: finalUpdatedPf.proformaNumber,
+      oldOutcome,
+      newOutcome,
+      salesExpert: relatedProj?.salesExpert
+    });
+  }
+
+  // Dynamic self-healing inventory adjustment
+  const oldWon = getWonItemsOfProforma(oldPf);
+  oldWon.forEach(item => {
+    adjustProductStock(item.productId, (item.quantity || 1), oldPf.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldPf.proformaNumber}`);
+  });
+
+  const newWon = getWonItemsOfProforma(finalUpdatedPf);
+  newWon.forEach(item => {
+    adjustProductStock(item.productId, -(item.quantity || 1), finalUpdatedPf.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${finalUpdatedPf.proformaNumber}`);
+  });
+
+  notifyModuleResponsible('proformas', 'ویرایش پیش‌فاکتور', `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`, finalUpdatedPf.projectId);
+};
   const deleteProforma = (id: string) => {
     const updated = proformas.filter(p => p.id !== id);
     saveToStorage("erp_proformas", updated, setProformas);
     logAction("DELETE", "پیش‌فاکتور", id, `حذف پیش‌فاکتور`);
   };
-  const updateProformaStatus = (id: string, status: any) => {
-    const updated = proformas.map(p => p.id === id ? { ...p, status } : p);
-    saveToStorage("erp_proformas", updated, setProformas);
-  };
+  const updateProformaStatus = (id: string, newStatus: Proforma['status'], lossReason?: string) => {
+  const oldProforma = proformas.find(p => p.id === id);
+  if (!oldProforma) return;
+
+  const updated = proformas.map(p => {
+    if (p.id === id) {
+      let updatedItems = p.items || [];
+      if (newStatus === 'تأیید شده (برنده)') {
+        updatedItems = updatedItems.map(item => ({ ...item, status: 'برنده' as const }));
+      } else if (newStatus === 'باخته') {
+        updatedItems = updatedItems.map(item => ({ ...item, status: 'بازنده' as const, lossReason: lossReason || item.lossReason }));
+      } else if (newStatus === 'پیش‌نویس' || newStatus === 'ارسال شده') {
+        updatedItems = updatedItems.map(item => ({ ...item, status: 'جاری' as const }));
+      }
+
+      return {
+        ...p,
+        status: newStatus,
+        isCancelled: false,
+        lossReason: newStatus === 'باخته' ? lossReason : p.lossReason,
+        items: updatedItems
+      };
+    }
+    return p;
+  });
+
+  saveToStorage('erp_proformas', updated as Proforma[], setProformas);
+
+  const newProformaObj = updated.find(p => p.id === id);
+  logAction('UPDATE', 'پیش‌فاکتورها', id, `تغییر وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} به «${newStatus}»`, oldProforma, newProformaObj);
+
+  if (oldProforma.projectId) {
+    const syncedProjects = syncProjectStatus(oldProforma.projectId, updated as Proforma[], projects);
+    saveToStorage('erp_projects', syncedProjects, setProjects);
+
+    const reasonStr = newStatus === 'باخته' && lossReason ? ` (علت باخت: ${lossReason})` : '';
+    autoLogFactActivity(
+      oldProforma.projectId,
+      'پیش‌فاکتور',
+      `وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'} به «${newStatus}» تغییر یافت.${reasonStr}`
+    );
+  }
+
+  // Dynamic self-healing inventory adjustment
+  if (newProformaObj) {
+    // 1. Revert old won items (add back)
+    const oldWon = getWonItemsOfProforma(oldProforma);
+    oldWon.forEach(item => {
+      adjustProductStock(item.productId, (item.quantity || 1), oldProforma.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldProforma.proformaNumber}`);
+    });
+
+    // 2. Deduct new won items (subtract)
+    const newWon = getWonItemsOfProforma(newProformaObj as Proforma);
+    newWon.forEach(item => {
+      adjustProductStock(item.productId, -(item.quantity || 1), newProformaObj.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProformaObj.proformaNumber}`);
+    });
+
+    // 3. Trigger workflows + completion prompt
+    const oldOutcome = getProformaOutcomeStatus(oldProforma);
+    const newOutcome = getProformaOutcomeStatus(newProformaObj as Proforma);
+    if (oldOutcome !== newOutcome) {
+      const relatedProj = oldProforma.projectId ? projects.find(p => p.id === oldProforma.projectId) : undefined;
+      processWorkflowRules('proforma_outcome_change', {
+        projectId: oldProforma.projectId,
+        projectName: relatedProj?.name || relatedProj?.title || oldProforma.customerName,
+        proformaNumber: oldProforma.proformaNumber,
+        oldOutcome,
+        newOutcome,
+        salesExpert: relatedProj?.salesExpert
+      });
+
+      if (oldProforma.projectId && (newOutcome === 'تأیید شده (برنده)' || newOutcome === 'نیمه برنده')) {
+        setCompletionPrompt({
+          projectId: oldProforma.projectId,
+          categoryName: 'پیش‌فاکتور',
+          message: `پیش‌فاکتور ${oldProforma.proformaNumber} تایید شد (${newOutcome === 'تأیید شده (برنده)' ? 'برنده' : 'نیمه برنده'}). آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
+        });
+      }
+    }
+  }
+};
   const batchUpdateProjectProformasStatus = (projectId: string, status: any) => {
     const updated = proformas.map(p => p.projectId === projectId ? { ...p, status } : p);
     saveToStorage("erp_proformas", updated, setProformas);
@@ -1541,6 +1856,47 @@ export function useERPStore() {
     };
     const updated = [newNotif, ...moduleNotifications];
     saveToStorage("erp_module_notifications", updated, setModuleNotifications);
+  };
+
+  const notifyModuleResponsible = (module: string, title: string, description: string, projectId?: string) => {
+    const targets: string[] = [];
+  
+    // 1. The responsible user for the module
+    const responsibleName = (settings.moduleResponsibles as any)?.[module];
+    if (responsibleName && currentUser?.fullName !== responsibleName) {
+      targets.push(responsibleName);
+    }
+  
+    // 2. Admin users (System Admins)
+    users.filter(u => u.role === 'admin' || u.isSystemAdmin).forEach(admin => {
+      if (admin.fullName === currentUser?.fullName) return;
+  
+      const pref = (settings.adminNotificationPreferences as any)?.[admin.id];
+      const receiveAll = pref ? pref.receiveAll : true;
+      const importantProjects = pref ? pref.importantProjectIds : [];
+  
+      let shouldReceive = false;
+      if (receiveAll) {
+        shouldReceive = true;
+      } else if (projectId && importantProjects.includes(projectId)) {
+        shouldReceive = true;
+      }
+  
+      if (shouldReceive && !targets.includes(admin.fullName)) {
+        targets.push(admin.fullName);
+      }
+    });
+  
+    if (targets.length === 0) return;
+  
+    targets.forEach(targetName => {
+      addModuleNotification({
+        module,
+        title,
+        description,
+        responsibleName: targetName
+      });
+    });
   };
 
   const processWorkflowRules = (triggerType: string, payload: any) => {
