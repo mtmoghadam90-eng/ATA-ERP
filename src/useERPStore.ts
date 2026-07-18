@@ -1456,7 +1456,7 @@ export function useERPStore() {
     const updated = [newTr, ...transactions];
     saveToStorage("erp_transactions", updated, setTransactions);
     
-    autoLogFactActivity(newTr.projectId, 'مالی', `ثبت تراکنش ${newTr.type === 'INCOME' ? 'دریافتی' : 'پرداختی'} جدید به مبلغ ${newTr.amount?.toLocaleString() || 0}`);
+    autoLogFactActivity(newTr.projectId, 'مالی', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} جدید به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0}`);
     return newTr;
   };
 
@@ -1464,7 +1464,7 @@ export function useERPStore() {
     const updated = transactions.map((tr) => (tr.id === t.id ? t : tr));
     saveToStorage("erp_transactions", updated, setTransactions);
     
-    autoLogFactActivity(t.projectId, 'مالی', `بروزرسانی تراکنش ${t.type === 'INCOME' ? 'دریافتی' : 'پرداختی'} - مبلغ: ${t.amount?.toLocaleString() || 0} - بابت: ${t.description || ''}`);
+    autoLogFactActivity(t.projectId, 'مالی', `بروزرسانی تراکنش ${t.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} - مبلغ: ${t.amountRIYAL?.toLocaleString() || 0} - بابت: ${t.notes || ''}`);
   };
 
   const deleteTransaction = (id: string) => {
@@ -1564,8 +1564,8 @@ export function useERPStore() {
   const updated = [newProject, ...projects];
   saveToStorage('erp_projects', updated, setProjects);
 
-  notifyModuleResponsible('projects', 'ثبت پروژه جدید', `پروژه جدید ${newProject.name || newProject.title} (${newProject.code}) توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`, newProject.id);
-  logAction('CREATE', 'پروژه‌ها', newProject.id, `ثبت پروژه جدید: ${newProject.name || newProject.title} (کد: ${newProject.code})`, undefined, newProject);
+  notifyModuleResponsible('projects', 'ثبت پروژه جدید', `پروژه جدید ${newProject.name} (${newProject.code}) توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`, newProject.id);
+  logAction('CREATE', 'پروژه‌ها', newProject.id, `ثبت پروژه جدید: ${newProject.name} (کد: ${newProject.code})`, undefined, newProject);
 
   return newProject;
 };
@@ -1663,18 +1663,18 @@ export function useERPStore() {
     autoLogFactActivity(
       newProforma.projectId,
       'پیش‌فاکتور',
-      `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalPrice || newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`
+      `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`
     );
   }
 
   // If instantly created as "won" or contains won items, reduce inventory stock
   const initialWonItems = getWonItemsOfProforma(newProforma);
   initialWonItems.forEach(item => {
-    adjustProductStock(item.productId, -(item.quantity || 1), newProforma.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProforma.proformaNumber}`);
+    adjustProductStock(item.productId, -(item.quantity || 1), undefined, newProforma.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProforma.proformaNumber}`);
   });
 
   notifyModuleResponsible('proformas', 'ثبت پیش‌فاکتور جدید', `پیش‌فاکتور شماره ${newProforma.proformaNumber} صادر شد.`, newProforma.projectId);
-  logAction('CREATE', 'پیش‌فاکتورها', newProforma.id, `ایجاد پیش‌فاکتور جدید شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalPrice || newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'}`, undefined, newProforma);
+  logAction('CREATE', 'پیش‌فاکتورها', newProforma.id, `ایجاد پیش‌فاکتور جدید شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'}`, undefined, newProforma);
 
   const newOutcome = getProformaOutcomeStatus(newProforma);
   const relatedProj = newProforma.projectId ? projects.find(p => p.id === newProforma.projectId) : undefined;
@@ -1739,12 +1739,12 @@ export function useERPStore() {
   // Dynamic self-healing inventory adjustment
   const oldWon = getWonItemsOfProforma(oldPf);
   oldWon.forEach(item => {
-    adjustProductStock(item.productId, (item.quantity || 1), oldPf.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldPf.proformaNumber}`);
+    adjustProductStock(item.productId, (item.quantity || 1), undefined, oldPf.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldPf.proformaNumber}`);
   });
 
   const newWon = getWonItemsOfProforma(finalUpdatedPf);
   newWon.forEach(item => {
-    adjustProductStock(item.productId, -(item.quantity || 1), finalUpdatedPf.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${finalUpdatedPf.proformaNumber}`);
+    adjustProductStock(item.productId, -(item.quantity || 1), undefined, finalUpdatedPf.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${finalUpdatedPf.proformaNumber}`);
   });
 
   notifyModuleResponsible('proformas', 'ویرایش پیش‌فاکتور', `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`, finalUpdatedPf.projectId);
@@ -1802,13 +1802,13 @@ export function useERPStore() {
     // 1. Revert old won items (add back)
     const oldWon = getWonItemsOfProforma(oldProforma);
     oldWon.forEach(item => {
-      adjustProductStock(item.productId, (item.quantity || 1), oldProforma.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldProforma.proformaNumber}`);
+      adjustProductStock(item.productId, (item.quantity || 1), undefined, oldProforma.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldProforma.proformaNumber}`);
     });
 
     // 2. Deduct new won items (subtract)
     const newWon = getWonItemsOfProforma(newProformaObj as Proforma);
     newWon.forEach(item => {
-      adjustProductStock(item.productId, -(item.quantity || 1), newProformaObj.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProformaObj.proformaNumber}`);
+      adjustProductStock(item.productId, -(item.quantity || 1), undefined, newProformaObj.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProformaObj.proformaNumber}`);
     });
 
     // 3. Trigger workflows + completion prompt
