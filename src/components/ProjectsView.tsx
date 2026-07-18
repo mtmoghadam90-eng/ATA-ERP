@@ -187,6 +187,10 @@ export default function ProjectsView({
     const latest = getLatestProformaOfProject(projectId);
     return latest ? latest.finalAmount : 0;
   };
+  const getPipelineCurrency = (projectId) => {
+    const latest = getLatestProformaOfProject(projectId);
+    return latest ? (latest.currency || 'ریال') : '';
+  };
   const getCustomerDisplayName = (idOrName) => {
     const cust = customers.find((c) => c.id === idOrName);
     if (!cust) return idOrName;
@@ -596,7 +600,10 @@ export default function ProjectsView({
         return (p.customerName || "").toLowerCase().includes(fVal);
       }
       if (colId === "estimatedValueRIYAL") {
-        return String(getPipelineValue(p.id) || "").toLowerCase().includes(fVal);
+        const val = getPipelineValue(p.id);
+        const curr = getPipelineCurrency(p.id);
+        const combined = `${val} ${curr}`.toLowerCase();
+        return combined.includes(fVal) || String(val).includes(fVal);
       }
       if (colId === "status") {
         return (p.status || "").toLowerCase().includes(fVal);
@@ -614,7 +621,7 @@ export default function ProjectsView({
       "کارشناس فروش",
       "مشتری پروژه",
       "مصرف‌کننده نهایی",
-      "ارزش پایپ‌لاین (ریال)",
+      "ارزش پایپ‌لاین",
       "وضعیت",
       "علت باخت (در صورت باخت)",
       "کانال بازاریابی",
@@ -638,7 +645,7 @@ export default function ProjectsView({
       p.salesExpert || "",
       p.customerName,
       p.endUser || "",
-      getPipelineValue(p.id),
+      getPipelineValue(p.id) ? `${getPipelineValue(p.id).toLocaleString('fa-IR')} ${getPipelineCurrency(p.id)}` : "۰",
       p.status,
       p.lossReason || "",
       p.marketingChannel || "",
@@ -2894,7 +2901,7 @@ export default function ProjectsView({
                 <th className="p-3 w-28">کد پروژه</th>
                 <th className="p-3">نام و مشخصات پروژه</th>
                 <th className="p-3">کارفرما / مشتری</th>
-                <th className="p-3">ارزش پایپ‌لاین (ریال)</th>
+                <th className="p-3">ارزش پایپ‌لاین</th>
                 <th className="p-3 w-64">تاریخ‌های کلیدی</th>
                 <th className="p-3">وضعیت پروژه</th>
                 <th className="p-3">فیلدهای سفارشی</th>
@@ -3032,8 +3039,15 @@ export default function ProjectsView({
                   </td>
 
                   {/* Pipeline Value */}
-                  <td className="p-3 font-mono font-bold text-slate-800 text-left">
-                    {getPipelineValue(p.id).toLocaleString('fa-IR')}
+                  <td className="p-3 text-slate-800 text-left">
+                    {getPipelineValue(p.id) > 0 ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="font-mono font-bold">{getPipelineValue(p.id).toLocaleString('fa-IR')}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">{getPipelineCurrency(p.id)}</span>
+                      </div>
+                    ) : (
+                      <span className="font-mono text-slate-400">-</span>
+                    )}
                   </td>
 
                   {/* Key Dates */}

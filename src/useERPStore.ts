@@ -107,7 +107,7 @@ export const getWonItemsOfProforma = (pf: Proforma, includeOrder = false) => {
   if (includeOrder) {
     return wonItems;
   }
-  return wonItems.filter((item) => item.supplyMethod !== "ORDER");
+  return wonItems.filter((item) => item.supplyMethod === "INVENTORY");
 };
 
 export const SEED_PROJECT_CATEGORY_GROUPS: ProjectCategoryGroup[] = [];
@@ -1277,6 +1277,87 @@ export function useERPStore() {
     return { successCount, createCount };
   };
 
+  const adjustMultipleProductsStock = (
+    adjustments: Array<{
+      productId: string;
+      amount: number;
+      variantId?: string;
+      referenceId?: string;
+      referenceType?: InventoryTransaction["referenceType"];
+      notes?: string;
+      transactionDate?: string;
+    }>
+  ) => {
+    const validAdjustments = adjustments.filter(adj => adj.amount !== 0);
+    if (validAdjustments.length === 0) return;
+
+    // Create all transactions
+    const newTransactions: InventoryTransaction[] = validAdjustments.map(adj => ({
+      id: `inv-tr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-${Math.floor(Math.random() * 1000)}`,
+      productId: adj.productId,
+      variantId: adj.variantId,
+      date: adj.transactionDate || new Date().toISOString(),
+      type: adj.amount > 0 ? "IN" : "OUT",
+      quantity: Math.abs(adj.amount),
+      referenceId: adj.referenceId,
+      referenceType: adj.referenceType,
+      notes: adj.notes,
+    }));
+
+    setInventoryTransactions((prev) => {
+      const updatedTr = [...newTransactions, ...prev];
+      saveToServer("erp_inventory_transactions", updatedTr);
+      return updatedTr;
+    });
+
+    setProducts((prevProducts) => {
+      const updated = prevProducts.map((p) => {
+        // Find all adjustments for this product
+        const productAdjs = validAdjustments.filter(adj => adj.productId === p.id);
+        if (productAdjs.length === 0) return p;
+
+        let updatedProduct = { ...p };
+        productAdjs.forEach(adj => {
+          if (adj.variantId && updatedProduct.hasVariants && updatedProduct.variants) {
+            const vIdx = updatedProduct.variants.findIndex((v) => v.id === adj.variantId);
+            if (vIdx !== -1) {
+              const newVariants = [...updatedProduct.variants];
+              newVariants[vIdx] = {
+                ...newVariants[vIdx],
+                stockLevel: (newVariants[vIdx].stockLevel || 0) + adj.amount,
+              };
+              const newTotalStock = newVariants.reduce((sum, v) => sum + (v.stockLevel || 0), 0);
+              updatedProduct = { ...updatedProduct, variants: newVariants, stockLevel: newTotalStock };
+            }
+          } else {
+            updatedProduct = { ...updatedProduct, stockLevel: (updatedProduct.stockLevel || 0) + adj.amount };
+          }
+        });
+        return updatedProduct;
+      });
+
+      saveToServer("erp_products", updated);
+
+      // Log actions for changed products
+      validAdjustments.forEach(adj => {
+        const before = prevProducts.find((p) => p.id === adj.productId);
+        const after = updated.find((p) => p.id === adj.productId);
+        if (before && after) {
+          logAction(
+            "UPDATE",
+            "کالاها",
+            adj.productId,
+            `اصلاح موجودی کالا (بچ): ${after.name} (تغییر: ${adj.amount > 0 ? "+" : ""}${adj.amount} - موجودی جدید: ${after.stockLevel})`,
+            before,
+            after
+          );
+        }
+      });
+
+      return updated;
+    });
+  };
+
   const adjustProductStock = (
     id: string,
     amount: number,
@@ -1286,63 +1367,15 @@ export function useERPStore() {
     notes?: string,
     transactionDate?: string,
   ) => {
-    const before = products.find((p) => p.id === id);
-    if (!before) return;
-
-    // Add transaction record
-    if (amount !== 0) {
-      const transaction: InventoryTransaction = {
-        id: `inv-tr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        productId: id,
-        variantId,
-        date: transactionDate || new Date().toISOString(),
-        type: amount > 0 ? "IN" : "OUT",
-        quantity: Math.abs(amount),
-        referenceId,
-        referenceType,
-        notes,
-      };
-      setInventoryTransactions((prev) => {
-        const updatedTr = [transaction, ...prev];
-        saveToServer("erp_inventory_transactions", updatedTr);
-        return updatedTr;
-      });
-    }
-
-    const updated = products.map((p) => {
-      if (p.id === id) {
-        if (variantId && p.hasVariants && p.variants) {
-          const vIdx = p.variants.findIndex((v) => v.id === variantId);
-          if (vIdx !== -1) {
-            const newVariants = [...p.variants];
-            newVariants[vIdx] = {
-              ...newVariants[vIdx],
-              stockLevel: (newVariants[vIdx].stockLevel || 0) + amount,
-            };
-            
-            // Also update total stockLevel
-            const newTotalStock = newVariants.reduce((sum, v) => sum + (v.stockLevel || 0), 0);
-            
-            return { ...p, variants: newVariants, stockLevel: newTotalStock };
-          }
-        }
-        return { ...p, stockLevel: (p.stockLevel || 0) + amount };
-      }
-      return p;
-    });
-
-    const after = updated.find((p) => p.id === id);
-    saveToStorage("erp_products", updated, setProducts);
-    if (before && after) {
-      logAction(
-        "UPDATE",
-        "کالاها",
-        id,
-        `تعدیل موجودی کالا: ${before.name} (کد: ${before.code})`,
-        before,
-        after,
-      );
-    }
+    adjustMultipleProductsStock([{
+      productId: id,
+      amount,
+      variantId,
+      referenceId,
+      referenceType,
+      notes,
+      transactionDate
+    }]);
   };
 
   // --- Suppliers CRUD ---
@@ -1650,11 +1683,19 @@ export function useERPStore() {
     );
   }
 
-  // If instantly created as "won" or contains won items, reduce inventory stock
+  // If instantly created as "won" or contains won items, reduce inventory stock in batch
   const initialWonItems = getWonItemsOfProforma(newProforma);
-  initialWonItems.forEach(item => {
-    adjustProductStock(item.productId, -(item.quantity || 1), undefined, newProforma.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProforma.proformaNumber}`);
-  });
+  if (initialWonItems.length > 0) {
+    const adjustments = initialWonItems.map(item => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      amount: -(item.quantity || 1),
+      referenceId: newProforma.id,
+      referenceType: 'PROFORMA' as const,
+      notes: `خروج به دلیل پیش‌فاکتور ${newProforma.proformaNumber}`
+    }));
+    adjustMultipleProductsStock(adjustments);
+  }
 
   notifyModuleResponsible('proformas', 'ثبت پیش‌فاکتور جدید', `پیش‌فاکتور شماره ${newProforma.proformaNumber} صادر شد.`, newProforma.projectId);
   logAction('CREATE', 'پیش‌فاکتورها', newProforma.id, `ایجاد پیش‌فاکتور جدید شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'}`, undefined, newProforma);
@@ -1719,16 +1760,43 @@ export function useERPStore() {
     });
   }
 
-  // Dynamic self-healing inventory adjustment
+  // Dynamic self-healing inventory adjustment in batch
+  const adjustments: Array<{
+    productId: string;
+    variantId?: string;
+    amount: number;
+    referenceId: string;
+    referenceType: 'PROFORMA';
+    notes: string;
+  }> = [];
+
   const oldWon = getWonItemsOfProforma(oldPf);
   oldWon.forEach(item => {
-    adjustProductStock(item.productId, (item.quantity || 1), undefined, oldPf.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldPf.proformaNumber}`);
+    adjustments.push({
+      productId: item.productId,
+      variantId: item.variantId,
+      amount: (item.quantity || 1),
+      referenceId: oldPf.id,
+      referenceType: 'PROFORMA',
+      notes: `بازگشت موجودی پیش‌فاکتور ${oldPf.proformaNumber}`
+    });
   });
 
   const newWon = getWonItemsOfProforma(finalUpdatedPf);
   newWon.forEach(item => {
-    adjustProductStock(item.productId, -(item.quantity || 1), undefined, finalUpdatedPf.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${finalUpdatedPf.proformaNumber}`);
+    adjustments.push({
+      productId: item.productId,
+      variantId: item.variantId,
+      amount: -(item.quantity || 1),
+      referenceId: finalUpdatedPf.id,
+      referenceType: 'PROFORMA',
+      notes: `خروج به دلیل پیش‌فاکتور ${finalUpdatedPf.proformaNumber}`
+    });
   });
+
+  if (adjustments.length > 0) {
+    adjustMultipleProductsStock(adjustments);
+  }
 
   notifyModuleResponsible('proformas', 'ویرایش پیش‌فاکتور', `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`, finalUpdatedPf.projectId);
 };
@@ -1780,19 +1848,46 @@ export function useERPStore() {
     );
   }
 
-  // Dynamic self-healing inventory adjustment
+  // Dynamic self-healing inventory adjustment in batch
   if (newProformaObj) {
+    const adjustments: Array<{
+      productId: string;
+      variantId?: string;
+      amount: number;
+      referenceId: string;
+      referenceType: 'PROFORMA';
+      notes: string;
+    }> = [];
+
     // 1. Revert old won items (add back)
     const oldWon = getWonItemsOfProforma(oldProforma);
     oldWon.forEach(item => {
-      adjustProductStock(item.productId, (item.quantity || 1), undefined, oldProforma.id, 'PROFORMA', `بازگشت موجودی پیش‌فاکتور ${oldProforma.proformaNumber}`);
+      adjustments.push({
+        productId: item.productId,
+        variantId: item.variantId,
+        amount: (item.quantity || 1),
+        referenceId: oldProforma.id,
+        referenceType: 'PROFORMA',
+        notes: `بازگشت موجودی پیش‌فاکتور ${oldProforma.proformaNumber}`
+      });
     });
 
     // 2. Deduct new won items (subtract)
     const newWon = getWonItemsOfProforma(newProformaObj as Proforma);
     newWon.forEach(item => {
-      adjustProductStock(item.productId, -(item.quantity || 1), undefined, newProformaObj.id, 'PROFORMA', `خروج به دلیل پیش‌فاکتور ${newProformaObj.proformaNumber}`);
+      adjustments.push({
+        productId: item.productId,
+        variantId: item.variantId,
+        amount: -(item.quantity || 1),
+        referenceId: newProformaObj.id,
+        referenceType: 'PROFORMA',
+        notes: `خروج به دلیل پیش‌فاکتور ${newProformaObj.proformaNumber}`
+      });
     });
+
+    if (adjustments.length > 0) {
+      adjustMultipleProductsStock(adjustments);
+    }
 
     // 3. Trigger workflows + completion prompt
     const oldOutcome = getProformaOutcomeStatus(oldProforma);
@@ -1818,9 +1913,89 @@ export function useERPStore() {
     }
   }
 };
-  const batchUpdateProjectProformasStatus = (projectId: string, status: any) => {
-    const updated = proformas.map(p => p.projectId === projectId ? { ...p, status } : p);
+  const batchUpdateProjectProformasStatus = (projectId: string, status: any, lossReason?: string) => {
+    // Collect any previously won items to release them back to inventory (if status is cancel/lost)
+    const projectProformas = proformas.filter(p => p.projectId === projectId);
+    const adjustments: Array<{
+      productId: string;
+      variantId?: string;
+      amount: number;
+      referenceId: string;
+      referenceType: 'PROFORMA';
+      notes: string;
+    }> = [];
+
+    if (status === 'لغو شده' || status === 'باخته') {
+      projectProformas.forEach(oldPf => {
+        const oldOutcome = getProformaOutcomeStatus(oldPf);
+        if (oldOutcome === 'تأیید شده (برنده)' || oldOutcome === 'نیمه برنده') {
+          const oldWon = getWonItemsOfProforma(oldPf);
+          oldWon.forEach(item => {
+            adjustments.push({
+              productId: item.productId,
+              variantId: item.variantId,
+              amount: (item.quantity || 1),
+              referenceId: oldPf.id,
+              referenceType: 'PROFORMA',
+              notes: `بازگشت موجودی به علت لغو/باخت تمام پیش‌فاکتورهای پروژه (${oldPf.proformaNumber})`
+            });
+          });
+        }
+      });
+    }
+
+    const updated = proformas.map(p => {
+      if (p.projectId === projectId) {
+        let updatedItems = p.items || [];
+        if (status === 'تأیید شده (برنده)') {
+          updatedItems = updatedItems.map(item => ({ ...item, status: 'برنده' as const }));
+        } else if (status === 'باخته' || status === 'لغو شده') {
+          updatedItems = updatedItems.map(item => ({ ...item, status: 'بازنده' as const, lossReason: lossReason || item.lossReason }));
+        } else if (status === 'پیش‌نویس' || status === 'ارسال شده') {
+          updatedItems = updatedItems.map(item => ({ ...item, status: 'جاری' as const }));
+        }
+
+        return {
+          ...p,
+          status,
+          isCancelled: status === 'لغو شده' ? true : p.isCancelled,
+          lossReason: status === 'باخته' ? lossReason : p.lossReason,
+          items: updatedItems
+        };
+      }
+      return p;
+    });
+
     saveToStorage("erp_proformas", updated, setProformas);
+
+    if (adjustments.length > 0) {
+      adjustMultipleProductsStock(adjustments);
+    }
+
+    if (projectId) {
+      // Sync project status based on updated proformas
+      const syncedProjects = syncProjectStatus(projectId, updated as Proforma[], projects);
+      saveToStorage('erp_projects', syncedProjects, setProjects);
+
+      // Create log text & log activity in category group
+      const statusText = status === 'لغو شده' ? 'لغو شده' : status === 'باخته' ? 'باخته' : status;
+      const reasonStr = status === 'باخته' && lossReason ? ` (علت باخت: ${lossReason})` : '';
+      const logText = `وضعیت تمامی نسخه‌های پیش‌فاکتور مربوط به این پروژه توسط ${currentUser?.fullName || 'کاربر سیستم'} به «${statusText}» تغییر یافت.${reasonStr}`;
+      
+      autoLogFactActivity(
+        projectId,
+        'پیش‌فاکتورها و مهندسی فروش',
+        logText
+      );
+
+      // Ask to complete/close the category group (Completion Prompt)
+      const actionMessage = status === 'لغو شده' ? 'لغو شدند' : status === 'باخته' ? 'باخت شدند' : 'بروزرسانی شدند';
+      setCompletionPrompt({
+        projectId,
+        categoryName: 'پیش‌فاکتورها و مهندسی فروش',
+        message: `تمامی نسخه‌های پیش‌فاکتور پروژه با موفقیت ${actionMessage}. آیا می‌خواهید وضعیت فعالیت‌های پیش‌فاکتور این پروژه را به «اتمام کار» تغییر دهید؟`
+      });
+    }
   };
 
   const addTask = (task: any) => {
