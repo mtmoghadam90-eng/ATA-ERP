@@ -1536,6 +1536,7 @@ export function useERPStore() {
     saveToStorage("erp_transactions", updated, setTransactions);
     
     autoLogFactActivity(newTr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} جدید به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال`);
+    notifyModuleResponsible('transactions', 'ثبت تراکنش مالی جدید', `تراکنش ${newTr.type} به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال ثبت شد.`, newTr.projectId);
     return newTr;
   };
 
@@ -1581,6 +1582,7 @@ export function useERPStore() {
     const supplierObj = suppliers.find(s => s.id === newPO.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newPO.supplierName || newPO.supplierId || '');
     autoLogFactActivity(newPO.projectId, 'سفارشات خرید تامین‌کنندگان', `ثبت سفارش خرید با شماره ${newPO.poNumber} برای تامین‌کننده «${suppName}»`);
+    notifyModuleResponsible('purchaseOrders', 'ثبت سفارش خرید جدید', `سفارش خرید شماره ${newPO.poNumber} ثبت شد.`, newPO.projectId);
     return newPO;
   };
 
@@ -1602,6 +1604,7 @@ export function useERPStore() {
     const supplierObj = suppliers.find(s => s.id === updatedPO.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedPO.supplierName || updatedPO.supplierId || '');
     autoLogFactActivity(updatedPO.projectId, 'سفارشات خرید تامین‌کنندگان', `بروزرسانی سفارش خرید ${updatedPO.poNumber} برای تامین‌کننده «${suppName}» - وضعیت: ${updatedPO.status}`);
+    notifyModuleResponsible('purchaseOrders', 'ویرایش سفارش خرید', `سفارش خرید شماره ${updatedPO.poNumber} ویرایش شد.`, updatedPO.projectId);
 
     // Self-healing inventory stock adjustments
     if (before) {
@@ -2260,6 +2263,7 @@ export function useERPStore() {
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     processWorkflowRules('packaging_delivery_created', newPd);
     autoLogFactActivity(newPd.projectId, 'بسته‌بندی و تحویل کالا', `ثبت مرحله جدید: ${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${newPd.status}`);
+    notifyModuleResponsible('packagingDelivery', 'ثبت مرحله بسته‌بندی/تحویل جدید', `مرحله جدید ${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} با وضعیت ${newPd.status} ثبت شد.`, newPd.projectId);
 
     if (newPd.actualDeliveryDate) {
       setCompletionPrompt({
@@ -2274,6 +2278,7 @@ export function useERPStore() {
     const updated = packagingDeliveries.map(p => p.id === updatedPd.id ? updatedPd : p);
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `بروزرسانی مرحله: ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${updatedPd.status}`);
+    notifyModuleResponsible('packagingDelivery', 'بروزرسانی مرحله بسته‌بندی/تحویل', `مرحله ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} به وضعیت ${updatedPd.status} تغییر یافت.`, updatedPd.projectId);
 
     if (!before?.actualDeliveryDate && updatedPd.actualDeliveryDate) {
       setCompletionPrompt({
@@ -2341,12 +2346,14 @@ export function useERPStore() {
     const updated = [...afterSalesServices, newAss];
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
     autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات جدید بابت: ${newAss.issueDescription || ''} - وضعیت: ${newAss.status}`);
+    notifyModuleResponsible('afterSalesServices', 'ثبت درخواست خدمات پس از فروش جدید', `درخواست خدمات جدید برای کالا ${newAss.itemName || ''} با وضعیت ${newAss.status} ثبت شد.`, newAss.projectId);
   };
   const updateAfterSalesService = (updatedAss: any) => {
     const before = afterSalesServices.find(a => a.id === updatedAss.id);
     const updated = afterSalesServices.map(a => a.id === updatedAss.id ? updatedAss : a);
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
     autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `بروزرسانی درخواست خدمات بابت: ${updatedAss.issueDescription || ''} - وضعیت: ${updatedAss.status}`);
+    notifyModuleResponsible('afterSalesServices', 'بروزرسانی درخواست خدمات پس از فروش', `درخواست خدمات برای کالا ${updatedAss.itemName || ''} به وضعیت ${updatedAss.status} تغییر یافت.`, updatedAss.projectId);
 
     if (before?.status !== updatedAss.status && updatedAss.status === 'تحویل داده شده') {
       setCompletionPrompt({
@@ -2417,6 +2424,7 @@ export function useERPStore() {
     const supplierObj = suppliers.find(s => s.id === newSi.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newSi.supplierName || newSi.supplierId || '');
     autoLogFactActivity(newSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `ثبت استعلام قیمت جدید برای تأمین‌کننده «${suppName}» به مبلغ ${newSi.price?.toLocaleString('fa-IR') || 0} ریال در وضعیت «${newSi.status}»`);
+    notifyModuleResponsible('supplierInquiries', 'ثبت استعلام قیمت جدید', `استعلام قیمت جدید برای تأمین‌کننده «${suppName}» ثبت شد.`, newSi.projectId);
     return newSi;
   };
   const updateSupplierInquiry = (updatedSi: any) => {
@@ -2493,11 +2501,11 @@ export function useERPStore() {
   };
 
   const markModuleNotificationAsRead = (id: string) => {
-    const updated = moduleNotifications.map(n => n.id === id ? { ...n, isRead: true } : n);
+    const updated = moduleNotifications.map(n => n.id === id ? { ...n, read: true } : n);
     saveToStorage("erp_module_notifications", updated, setModuleNotifications);
   };
   const markAllModuleNotificationsAsRead = () => {
-    const updated = moduleNotifications.map(n => ({ ...n, isRead: true }));
+    const updated = moduleNotifications.map(n => ({ ...n, read: true }));
     saveToStorage("erp_module_notifications", updated, setModuleNotifications);
   };
 
@@ -2718,6 +2726,16 @@ export function useERPStore() {
           } : null,
           createdBy: createdBy || currentUser?.fullName || "کاربر سیستم"
         };
+
+        if (referral && referral.assignedTo) {
+          addModuleNotification({
+            module: 'projects',
+            title: 'ارجاع جدید',
+            description: `یک کار جدید برای شما ارجاع شده است: ${referral.actionRequired}`,
+            responsibleName: referral.assignedTo
+          });
+        }
+
         return { ...g, activities: [...(g.activities || []), newActivity] };
       }
       return g;

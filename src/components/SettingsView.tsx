@@ -40,7 +40,8 @@ import {
   Bell,
   Boxes,
   Wrench,
-  History
+  History,
+  GripVertical
 } from 'lucide-react';
 import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog, WorkflowRule, ExchangeRate } from '../types';
 import RatesView from './RatesView';
@@ -118,6 +119,9 @@ export default function SettingsView({
   
   // Activity categories state
   const [newCategoryName, setNewCategoryName] = useState('');
+
+  // Drag and drop state for sidebar ordering
+  const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
 
   // Dropdown items state
   const [selectedDropdownKey, setSelectedDropdownKey] = useState<keyof ERPSettings['dropdownItems'] | 'lossReasons'>('industries');
@@ -1746,12 +1750,57 @@ export default function SettingsView({
                     });
                   };
 
+                  const handleDragStart = (e: React.DragEvent) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', index.toString());
+                    setDraggedModuleId(id);
+                  };
+
+                  const handleDragOver = (e: React.DragEvent) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  };
+
+                  const handleDrop = (e: React.DragEvent) => {
+                    e.preventDefault();
+                    const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                    if (sourceIndex === index || isNaN(sourceIndex)) return;
+
+                    const newOrder = [...currentOrder];
+                    const [removed] = newOrder.splice(sourceIndex, 1);
+                    newOrder.splice(index, 0, removed);
+
+                    updateSettings({
+                      ...settings,
+                      sidebarModuleOrder: newOrder
+                    });
+                    setDraggedModuleId(null);
+                  };
+
+                  const handleDragEnd = () => {
+                    setDraggedModuleId(null);
+                  };
+
+                  const isDragging = draggedModuleId === id;
+
                   return (
                     <div 
                       key={id} 
-                      className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200/80 hover:border-sky-200 rounded-xl hover:bg-sky-50/10 transition duration-150 group"
+                      draggable
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      onDragEnd={handleDragEnd}
+                      className={`flex items-center justify-between p-4 bg-slate-50 border rounded-xl transition duration-150 group cursor-move ${
+                        isDragging ? 'opacity-40 border-sky-400 bg-sky-50' : 'border-slate-200/80 hover:border-sky-200 hover:bg-sky-50/10'
+                      }`}
                     >
                       <div className="flex items-start gap-3 min-w-0">
+                        {/* Drag Handle */}
+                        <div className="flex items-center justify-center mt-1 text-slate-300 group-hover:text-sky-500 transition">
+                          <GripVertical size={16} />
+                        </div>
+                        
                         {/* Order Badge */}
                         <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-200/60 group-hover:bg-sky-100 text-[11px] font-extrabold text-slate-500 group-hover:text-sky-700 transition">
                           {index + 1}
@@ -1771,8 +1820,8 @@ export default function SettingsView({
                         </div>
                       </div>
 
-                      {/* Control Buttons */}
-                      <div className="flex flex-col gap-1 shrink-0 ml-1">
+                      {/* Control Buttons (Fallback for accessibility) */}
+                      <div className="flex flex-col gap-1 shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition">
                         <button
                           type="button"
                           disabled={isFirst}
@@ -1825,6 +1874,7 @@ export default function SettingsView({
                 { id: 'products', name: 'کالاها و تجهیزات' },
                 { id: 'proformas', name: 'پیش‌فاکتورها' },
                 { id: 'suppliers', name: 'تأمین‌کنندگان' },
+                { id: 'supplierInquiries', name: 'استعلام قیمت تأمین‌کنندگان' },
                 { id: 'purchaseOrders', name: 'سفارشات خرید خارجی' },
                 { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا' },
                 { id: 'afterSalesServices', name: 'خدمات پس از فروش' },
