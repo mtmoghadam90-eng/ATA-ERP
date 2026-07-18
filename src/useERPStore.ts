@@ -1548,8 +1548,12 @@ export function useERPStore() {
   };
 
   const deleteTransaction = (id: string) => {
-    const updated = transactions.filter((tr) => tr.id !== id);
+    const tr = transactions.find((t) => t.id === id);
+    const updated = transactions.filter((t) => t.id !== id);
     saveToStorage("erp_transactions", updated, setTransactions);
+    if (tr?.projectId) {
+      autoLogFactActivity(tr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `حذف تراکنش ${tr.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} به مبلغ ${tr.amountRIYAL?.toLocaleString() || 0} ریال`);
+    }
   };
 
   // --- Purchase Orders ---
@@ -1677,7 +1681,7 @@ export function useERPStore() {
     if (before.projectId) {
       autoLogFactActivity(
         before.projectId,
-        'سفارش خرید',
+        'سفارشات خرید تامین‌کنندگان',
         `سفارش خرید شماره ${before.poNumber} از سیستم حذف شد.`
       );
     }
@@ -1952,7 +1956,7 @@ export function useERPStore() {
 
       autoLogFactActivity(
         record.projectId,
-        'پیش‌فاکتور',
+        'پیش‌فاکتورها و مهندسی فروش',
         `پیش‌فاکتور شماره ${record.proformaNumber} از سیستم حذف شد.`
       );
     }
