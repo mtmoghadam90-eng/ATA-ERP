@@ -3557,10 +3557,20 @@ export default function ProformasView({
                                       { value: "", label: "-- انتخاب کالا --" },
                                       ...products.map((p) => {
                                         let stockText = "";
-                                        if (p.hasVariants && p.variants && p.variants.length > 0) {
-                                            const totalStock = p.variants.reduce((acc, v) => acc + (v.stockLevel || 0), 0);
-                                            const hasOrderVariant = p.variants.some(v => !v.stockLevel || v.stockLevel === 0);
-                                            const hasInventoryVariant = p.variants.some(v => v.stockLevel && v.stockLevel > 0);
+                                        const hasVariants = p.hasVariants || (p.variants && p.variants.length > 0);
+                                        if (hasVariants && p.variants && p.variants.length > 0) {
+                                            const totalStock = p.variants.reduce((acc, v) => {
+                                                const s = Number(v.stockLevel);
+                                                return acc + (isNaN(s) ? 0 : s);
+                                            }, 0);
+                                            const hasOrderVariant = p.variants.some(v => {
+                                                const s = Number(v.stockLevel);
+                                                return isNaN(s) || s === 0;
+                                            });
+                                            const hasInventoryVariant = p.variants.some(v => {
+                                                const s = Number(v.stockLevel);
+                                                return !isNaN(s) && s > 0;
+                                            });
                                             
                                             if (hasInventoryVariant && hasOrderVariant) {
                                                 stockText = ` | موجودی: ${totalStock} + تامین سفارشی`;
@@ -3570,8 +3580,9 @@ export default function ProformasView({
                                                 stockText = ` | تامین سفارشی`;
                                             }
                                         } else {
-                                            const effectiveST = p.stockLevel === 0 ? "ORDER" : (p.supplyType || "INVENTORY");
-                                            stockText = effectiveST === "INVENTORY" ? ` | موجودی: ${p.stockLevel || 0}` : " | تامین سفارشی";
+                                            const sLevel = Number(p.stockLevel) || 0;
+                                            const effectiveST = sLevel === 0 ? "ORDER" : (p.supplyType || "INVENTORY");
+                                            stockText = effectiveST === "INVENTORY" ? ` | موجودی: ${sLevel}` : " | تامین سفارشی";
                                         }
                                         return {
                                           value: p.id,

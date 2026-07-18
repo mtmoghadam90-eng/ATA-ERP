@@ -1387,10 +1387,11 @@ export default function PurchaseOrdersView({
                                 { value: '', label: '-- انتخاب کالا --' },
                                 ...products.map(p => {
                                   let stockText = "";
-                                  if (p.hasVariants && p.variants && p.variants.length > 0) {
-                                      const totalStock = p.variants.reduce((acc, v) => acc + (v.stockLevel || 0), 0);
-                                      const hasOrderVariant = p.variants.some(v => !v.stockLevel || v.stockLevel === 0);
-                                      const hasInventoryVariant = p.variants.some(v => v.stockLevel && v.stockLevel > 0);
+                                  const hasVariants = p.hasVariants || (p.variants && p.variants.length > 0);
+                                  if (hasVariants && p.variants && p.variants.length > 0) {
+                                      const totalStock = p.variants.reduce((acc, v) => acc + (Number(v.stockLevel) || 0), 0);
+                                      const hasOrderVariant = p.variants.some(v => !v.stockLevel || Number(v.stockLevel) === 0);
+                                      const hasInventoryVariant = p.variants.some(v => v.stockLevel && Number(v.stockLevel) > 0);
                                       
                                       if (hasInventoryVariant && hasOrderVariant) {
                                           stockText = ` [موجودی: ${totalStock} + تامین سفارشی]`;
@@ -1400,8 +1401,8 @@ export default function PurchaseOrdersView({
                                           stockText = ` [تامین سفارشی]`;
                                       }
                                   } else {
-                                      const effectiveST = p.stockLevel === 0 ? "ORDER" : (p.supplyType || "INVENTORY");
-                                      stockText = effectiveST === "INVENTORY" ? (p.stockLevel !== undefined ? ` [موجودی: ${p.stockLevel}]` : '') : ' [تامین سفارشی]';
+                                      const effectiveST = (Number(p.stockLevel) || 0) === 0 ? "ORDER" : (p.supplyType || "INVENTORY");
+                                      stockText = effectiveST === "INVENTORY" ? ` [موجودی: ${Number(p.stockLevel) || 0}]` : ' [تامین سفارشی]';
                                   }
                                   return {
                                     value: p.id,

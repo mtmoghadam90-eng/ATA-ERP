@@ -1007,9 +1007,143 @@ export function useERPStore() {
         };
         const features = parseFeatures(item.featuresRaw);
 
-        if (!code && name && category) {
+        // Try to find existing product if code is provided
+        let prodIndex = -1;
+        let variantId;
+        if (code) {
+          prodIndex = currentProducts.findIndex((p) => p.code === code);
+          if (prodIndex === -1) {
+            // Check if code matches a variant SKU
+            prodIndex = currentProducts.findIndex(p => p.hasVariants && p.variants && p.variants.some(v => v.sku === code));
+            if (prodIndex >= 0) {
+              const v = currentProducts[prodIndex].variants.find(v => v.sku === code);
+              if (v) variantId = v.id;
+            }
+          }
+        }
+
+        if (code && prodIndex >= 0) {
+          // UPDATE EXISTING PRODUCT
+          const product = currentProducts[prodIndex];
+          let isUpdated = false;
+          let beforeStock = product.stockLevel || 0;
+          let afterStock = product.stockLevel || 0;
+          let updatedVariants = product.variants ? [...product.variants] : [];
+          let updatedProduct = { ...product };
+
+          // 1. Update general fields on product if present in row
+          if (name && name !== product.name) {
+            updatedProduct.name = name;
+            updatedProduct.displayName = name;
+            isUpdated = true;
+          }
+          if (category && category !== product.category) {
+            updatedProduct.category = category;
+            isUpdated = true;
+          }
+          if (brand && brand !== product.brand) {
+            updatedProduct.brand = brand;
+            isUpdated = true;
+          }
+          if (supplyType && supplyType !== product.supplyType) {
+            updatedProduct.supplyType = supplyType;
+            isUpdated = true;
+          }
+
+          // 2. Update Pricing Fields
+          if (variantId && product.hasVariants && updatedVariants.length > 0) {
+            const vIdx = updatedVariants.findIndex(v => v.id === variantId);
+            if (vIdx !== -1) {
+              const origV = updatedVariants[vIdx];
+              const newPriceForeign = priceForeign !== undefined ? Number(priceForeign) : origV.priceForeign;
+              const newCurrencyForeign = currencyForeign !== undefined ? String(currencyForeign) : origV.currencyForeign;
+              const newPriceRIYAL = priceRIYAL !== undefined ? Number(priceRIYAL) : origV.priceRIYAL;
+
+              if (
+                newPriceForeign !== origV.priceForeign ||
+                newCurrencyForeign !== origV.currencyForeign ||
+                newPriceRIYAL !== origV.priceRIYAL
+              ) {
+                updatedVariants[vIdx] = {
+                  ...origV,
+                  priceForeign: newPriceForeign,
+                  currencyForeign: newCurrencyForeign,
+                  priceRIYAL: newPriceRIYAL
+                };
+                isUpdated = true;
+              }
+            }
+          } else {
+            // Non-variant or updating main product pricing
+            if (priceRIYAL !== undefined && Number(priceRIYAL) !== product.basePriceRIYAL) {
+              updatedProduct.basePriceRIYAL = Number(priceRIYAL);
+              isUpdated = true;
+            }
+          }
+
+          // 3. Handle stock adjustments
+          const hasStockChange =
+            supplyType === "INVENTORY" &&
+            !isNaN(amt) &&
+            amt > 0 &&
+            (type === "IN" || type === "OUT");
+
+          if (hasStockChange) {
+            if (product.hasVariants && !variantId) {
+              // skip stock update for parent product
+            } else {
+              const adjustedAmt = type === "IN" ? amt : -amt;
+              if (variantId && product.hasVariants && updatedVariants.length > 0) {
+                const vIdx = updatedVariants.findIndex(v => v.id === variantId);
+                if (vIdx !== -1) {
+                  const beforeVStock = updatedVariants[vIdx].stockLevel || 0;
+                  const afterVStock = Math.max(0, beforeVStock + adjustedAmt);
+                  updatedVariants[vIdx] = { ...updatedVariants[vIdx], stockLevel: afterVStock };
+                  const newTotalStock = updatedVariants.reduce((sum, v) => sum + (v.stockLevel || 0), 0);
+                  updatedProduct.variants = updatedVariants;
+                  updatedProduct.stockLevel = newTotalStock;
+                  isUpdated = true;
+                }
+              } else {
+                beforeStock = product.stockLevel || 0;
+                afterStock = Math.max(0, beforeStock + adjustedAmt);
+                updatedProduct.stockLevel = afterStock;
+                isUpdated = true;
+              }
+
+              newTransactions.push({
+                id: `inv-tr-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+                productId: product.id,
+                variantId: variantId,
+                date: dateVal || nowStr,
+                type: adjustedAmt > 0 ? "IN" : "OUT",
+                quantity: amt,
+                referenceType: "MANUAL",
+                notes,
+              });
+            }
+          }
+
+          if (isUpdated || hasStockChange) {
+            if (updatedVariants.length > 0) {
+              updatedProduct.variants = updatedVariants;
+            }
+            currentProducts[prodIndex] = updatedProduct;
+            successCount++;
+
+            logAction(
+              "UPDATE",
+              "کالاها",
+              product.id,
+              `بروزرسانی کالا (واردات گروهی): ${product.name} (کد: ${variantId ? code : product.code})`,
+              product,
+              updatedProduct,
+            );
+          }
+        } else if (name && category) {
+          // CREATE NEW PRODUCT (either code is empty, or code was supplied but prodIndex === -1)
           const seqNum = currentProducts.length + 1;
-          const finalCode = formatERPNumber(
+          const finalCode = code || formatERPNumber(
             settings.documentFormats.productFormat || "EQ-{RAND:5}",
             {
               seq: seqNum,
@@ -1020,13 +1154,13 @@ export function useERPStore() {
             supplyType === "INVENTORY" && !isNaN(amt) && amt > 0 ? amt : 0;
             
           let hasVariants = features.length > 0;
-          let variants = [];
+          let variants: any[] = [];
           if (hasVariants) {
-            const getCombinations = (featuresArr) => {
+            const getCombinations = (featuresArr: any[]): any[] => {
               if (featuresArr.length === 0) return [{}];
               const current = featuresArr[0];
               const rest = getCombinations(featuresArr.slice(1));
-              const combos = [];
+              const combos: any[] = [];
               if (current.options.length === 0) return rest;
               for (const opt of current.options) {
                 for (const r of rest) {
@@ -1062,7 +1196,7 @@ export function useERPStore() {
             });
           }
           
-          const newProduct = {
+          const newProduct: any = {
             id: `prod-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
             code: finalCode,
             name: name,
@@ -1081,181 +1215,6 @@ export function useERPStore() {
             features: features,
             hasVariants: hasVariants,
             variants: variants
-          };
-          currentProducts = [newProduct, ...currentProducts];
-          createCount++;
-
-          if (initialStock > 0) {
-            newTransactions.push({
-              id: `inv-tr-${Date.now()}-${index}-init`,
-              productId: newProduct.id,
-              date: dateVal || nowStr,
-              type: "IN",
-              quantity: initialStock,
-              referenceType: "MANUAL",
-              notes: "موجودی اولیه (واردات گروهی)",
-            });
-          }
-
-          logAction(
-            "CREATE",
-            "کالاها",
-            newProduct.id,
-            `ایجاد کالای جدید (واردات گروهی): ${newProduct.name} (کد: ${newProduct.code})`,
-            undefined,
-            newProduct,
-          );
-        } else if (code) {
-          let prodIndex = currentProducts.findIndex((p) => p.code === code);
-          let variantId;
-          
-          if (prodIndex === -1) {
-            // Check if code matches a variant SKU
-            prodIndex = currentProducts.findIndex(p => p.hasVariants && p.variants && p.variants.some(v => v.sku === code));
-            if (prodIndex >= 0) {
-              const v = currentProducts[prodIndex].variants.find(v => v.sku === code);
-              if (v) variantId = v.id;
-            }
-          }
-
-          if (prodIndex >= 0) {
-            const product = currentProducts[prodIndex];
-            let isUpdated = false;
-            let beforeStock = product.stockLevel || 0;
-            let afterStock = product.stockLevel || 0;
-            let updatedVariants = product.variants ? [...product.variants] : [];
-            let updatedProduct = { ...product };
-
-            // 1. Update general fields on product if present in row
-            if (name && name !== product.name) {
-              updatedProduct.name = name;
-              updatedProduct.displayName = name;
-              isUpdated = true;
-            }
-            if (category && category !== product.category) {
-              updatedProduct.category = category;
-              isUpdated = true;
-            }
-            if (brand && brand !== product.brand) {
-              updatedProduct.brand = brand;
-              isUpdated = true;
-            }
-            if (supplyType && supplyType !== product.supplyType) {
-              updatedProduct.supplyType = supplyType;
-              isUpdated = true;
-            }
-
-            // 2. Update Pricing Fields
-            if (variantId && product.hasVariants && updatedVariants.length > 0) {
-              const vIdx = updatedVariants.findIndex(v => v.id === variantId);
-              if (vIdx !== -1) {
-                const origV = updatedVariants[vIdx];
-                const newPriceForeign = priceForeign !== undefined ? Number(priceForeign) : origV.priceForeign;
-                const newCurrencyForeign = currencyForeign !== undefined ? String(currencyForeign) : origV.currencyForeign;
-                const newPriceRIYAL = priceRIYAL !== undefined ? Number(priceRIYAL) : origV.priceRIYAL;
-
-                if (
-                  newPriceForeign !== origV.priceForeign ||
-                  newCurrencyForeign !== origV.currencyForeign ||
-                  newPriceRIYAL !== origV.priceRIYAL
-                ) {
-                  updatedVariants[vIdx] = {
-                    ...origV,
-                    priceForeign: newPriceForeign,
-                    currencyForeign: newCurrencyForeign,
-                    priceRIYAL: newPriceRIYAL
-                  };
-                  isUpdated = true;
-                }
-              }
-            } else {
-              // Non-variant or updating main product pricing
-              if (priceRIYAL !== undefined && Number(priceRIYAL) !== product.basePriceRIYAL) {
-                updatedProduct.basePriceRIYAL = Number(priceRIYAL);
-                isUpdated = true;
-              }
-            }
-
-            // 3. Handle stock adjustments
-            const hasStockChange =
-              supplyType === "INVENTORY" &&
-              !isNaN(amt) &&
-              amt > 0 &&
-              (type === "IN" || type === "OUT");
-
-            if (hasStockChange) {
-              if (product.hasVariants && !variantId) {
-                // skip stock update for parent product
-              } else {
-                const adjustedAmt = type === "IN" ? amt : -amt;
-                if (variantId && product.hasVariants && updatedVariants.length > 0) {
-                  const vIdx = updatedVariants.findIndex(v => v.id === variantId);
-                  if (vIdx !== -1) {
-                    const beforeVStock = updatedVariants[vIdx].stockLevel || 0;
-                    const afterVStock = Math.max(0, beforeVStock + adjustedAmt);
-                    updatedVariants[vIdx] = { ...updatedVariants[vIdx], stockLevel: afterVStock };
-                    const newTotalStock = updatedVariants.reduce((sum, v) => sum + (v.stockLevel || 0), 0);
-                    updatedProduct.variants = updatedVariants;
-                    updatedProduct.stockLevel = newTotalStock;
-                    isUpdated = true;
-                  }
-                } else {
-                  beforeStock = product.stockLevel || 0;
-                  afterStock = Math.max(0, beforeStock + adjustedAmt);
-                  updatedProduct.stockLevel = afterStock;
-                  isUpdated = true;
-                }
-
-                newTransactions.push({
-                  id: `inv-tr-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
-                  productId: product.id,
-                  variantId: variantId,
-                  date: dateVal || nowStr,
-                  type: adjustedAmt > 0 ? "IN" : "OUT",
-                  quantity: amt,
-                  referenceType: "MANUAL",
-                  notes,
-                });
-              }
-            }
-
-            if (isUpdated || hasStockChange) {
-              if (updatedVariants.length > 0) {
-                updatedProduct.variants = updatedVariants;
-              }
-              currentProducts[prodIndex] = updatedProduct;
-              successCount++;
-
-              logAction(
-                "UPDATE",
-                "کالاها",
-                product.id,
-                `بروزرسانی کالا (واردات گروهی): ${product.name} (کد: ${variantId ? code : product.code})`,
-                product,
-                updatedProduct,
-              );
-            }
-          }
-        } else if (name && category) {
-          const initialStock =
-            supplyType === "INVENTORY" && !isNaN(amt) && amt > 0 ? amt : 0;
-          const newProduct: Product = {
-            id: `prod-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
-            code: code,
-            name: name,
-            displayName: name,
-            category: category,
-            supplyType: supplyType,
-            description: notes,
-                                      images: [],
-            brand: brand,
-            modelNumber: "N/A",
-            unit: "عدد",
-            basePriceRIYAL: priceRIYAL !== undefined ? Number(priceRIYAL) : 0,
-            minStockLevel: 0,
-            stockLevel: initialStock,
-            customValues: {},
-            features: features,
           };
           currentProducts = [newProduct, ...currentProducts];
           createCount++;
