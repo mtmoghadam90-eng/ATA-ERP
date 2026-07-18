@@ -1603,6 +1603,36 @@ export function useERPStore() {
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedPO.supplierName || updatedPO.supplierId || '');
     autoLogFactActivity(updatedPO.projectId, 'سفارشات خرید تامین‌کنندگان', `بروزرسانی سفارش خرید ${updatedPO.poNumber} برای تامین‌کننده «${suppName}» - وضعیت: ${updatedPO.status}`);
 
+    // Self-healing inventory stock adjustments
+    if (before) {
+      if (before.status === 'تحویل شده (رسید انبار)') {
+        // Revert old items (subtract)
+        before.items?.forEach(item => {
+          adjustProductStock(
+            item.productId,
+            -(item.quantity || 1),
+            item.variantId,
+            before.id,
+            'PURCHASE_ORDER' as const,
+            `اصلاح موجودی به دلیل ویرایش سفارش خرید تحویل شده ${updatedPO.poNumber}`
+          );
+        });
+      }
+      if (updatedPO.status === 'تحویل شده (رسید انبار)') {
+        // Apply new items (add)
+        updatedPO.items?.forEach(item => {
+          adjustProductStock(
+            item.productId,
+            (item.quantity || 1),
+            item.variantId,
+            updatedPO.id,
+            'PURCHASE_ORDER' as const,
+            `افزایش موجودی به دلیل تحویل سفارش خرید ${updatedPO.poNumber}`
+          );
+        });
+      }
+    }
+
     if (before?.status !== updatedPO.status && updatedPO.status === 'تحویل شده (رسید انبار)') {
       setCompletionPrompt({
         projectId: updatedPO.projectId,
@@ -1614,6 +1644,22 @@ export function useERPStore() {
 
   const deletePurchaseOrder = (id: string) => {
     const before = purchaseOrders.find((p) => p.id === id);
+    if (!before) return;
+
+    if (before.status === 'تحویل شده (رسید انبار)') {
+      // Revert the receipt of warehouse by decreasing stock
+      before.items?.forEach(item => {
+        adjustProductStock(
+          item.productId,
+          -(item.quantity || 1),
+          item.variantId,
+          before.id,
+          'PURCHASE_ORDER' as const,
+          `کاهش موجودی به دلیل حذف سفارش خرید تحویل شده ${before.poNumber}`
+        );
+      });
+    }
+
     const updated = purchaseOrders.filter((p) => p.id !== id);
     saveToStorage("erp_purchase_orders", updated, setPurchaseOrders);
     logAction(
@@ -1624,6 +1670,14 @@ export function useERPStore() {
       before,
       undefined,
     );
+
+    if (before.projectId) {
+      autoLogFactActivity(
+        before.projectId,
+        'سفارش خرید',
+        `سفارش خرید شماره ${before.poNumber} از سیستم حذف شد.`
+      );
+    }
   };
 
 
@@ -1869,9 +1923,36 @@ export function useERPStore() {
   notifyModuleResponsible('proformas', 'ویرایش پیش‌فاکتور', `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`, finalUpdatedPf.projectId);
 };
   const deleteProforma = (id: string) => {
+    const record = proformas.find(p => p.id === id);
+    if (!record) return;
+
+    // 1. Revert won items stock (add back with positive amount)
+    const wonItems = getWonItemsOfProforma(record);
+    wonItems.forEach(item => {
+      adjustProductStock(
+        item.productId,
+        (item.quantity || 1),
+        item.variantId,
+        record.id,
+        'PROFORMA' as const,
+        `بازگشت موجودی به دلیل حذف پیش‌فاکتور ${record.proformaNumber}`
+      );
+    });
+
     const updated = proformas.filter(p => p.id !== id);
     saveToStorage("erp_proformas", updated, setProformas);
-    logAction("DELETE", "پیش‌فاکتور", id, `حذف پیش‌فاکتور`);
+    logAction("DELETE", "پیش‌فاکتور", id, `حذف پیش‌فاکتور شماره ${record.proformaNumber}`);
+
+    if (record.projectId) {
+      const syncedProjects = syncProjectStatus(record.projectId, updated, projects);
+      saveToStorage('erp_projects', syncedProjects, setProjects);
+
+      autoLogFactActivity(
+        record.projectId,
+        'پیش‌فاکتور',
+        `پیش‌فاکتور شماره ${record.proformaNumber} از سیستم حذف شد.`
+      );
+    }
   };
   const updateProformaStatus = (id: string, newStatus: Proforma['status'], lossReason?: string) => {
   const oldProforma = proformas.find(p => p.id === id);
@@ -2202,9 +2283,51 @@ export function useERPStore() {
       });
     }
   };
-  const deletePackagingDelivery = (id: string) => {
+  const deletePackagingDelivery = (id: string, deleteLogs: boolean = false) => {
+    const record = packagingDeliveries.find(p => p.id === id);
+    if (!record) return;
+
     const updated = packagingDeliveries.filter(p => p.id !== id);
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
+
+    logAction(
+      "DELETE",
+      "بسته‌بندی و تحویل کالا",
+      id,
+      `حذف رکورد بسته‌بندی و ارسال (شماره پکینگ لیست: ${record.packingListNumber})`,
+      record,
+      undefined
+    );
+
+    if (deleteLogs) {
+      const normalizeCategory = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
+      const packingListNum = record.packingListNumber;
+      const itemNames = record.items?.map((it: any) => it.itemOrDocName).filter(Boolean) || [];
+
+      const shouldRemoveActivity = (text: string) => {
+        if (!text) return false;
+        if (packingListNum && text.includes(packingListNum)) return true;
+        if (itemNames.some((name: string) => text.includes(name))) return true;
+        return false;
+      };
+
+      const updatedGroups = projectCategoryGroups.map(g => {
+        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('بسته‌بندی و تحویل کالا')) {
+          return {
+            ...g,
+            activities: (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text))
+          };
+        }
+        return g;
+      });
+      saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
+    } else {
+      autoLogFactActivity(
+        record.projectId,
+        'بسته‌بندی و تحویل کالا',
+        `رکورد بسته‌بندی و ارسال شماره ${record.packingListNumber} حذف گردید.`
+      );
+    }
   };
 
   const addAfterSalesService = (ass: any) => {
@@ -2227,9 +2350,51 @@ export function useERPStore() {
       });
     }
   };
-  const deleteAfterSalesService = (id: string) => {
+  const deleteAfterSalesService = (id: string, deleteLogs: boolean = false) => {
+    const record = afterSalesServices.find(a => a.id === id);
+    if (!record) return;
+
     const updated = afterSalesServices.filter(a => a.id !== id);
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
+
+    logAction(
+      "DELETE",
+      "خدمات پس از فروش",
+      id,
+      `حذف رکورد خدمات پس از فروش (کالا: ${record.itemName})`,
+      record,
+      undefined
+    );
+
+    if (deleteLogs) {
+      const normalizeCategory = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
+      const itemName = record.itemName;
+      const subItemNames = record.items?.map((it: any) => it.productName).filter(Boolean) || [];
+      const allItemNames = [itemName, ...subItemNames].filter(Boolean);
+
+      const shouldRemoveActivity = (text: string) => {
+        if (!text) return false;
+        if (allItemNames.some((name: string) => text.includes(name))) return true;
+        return false;
+      };
+
+      const updatedGroups = projectCategoryGroups.map(g => {
+        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('خدمات پس از فروش')) {
+          return {
+            ...g,
+            activities: (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text))
+          };
+        }
+        return g;
+      });
+      saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
+    } else {
+      autoLogFactActivity(
+        record.projectId,
+        'خدمات پس از فروش',
+        `درخواست خدمات پس از فروش مربوط به کالای ${record.itemName} حذف گردید.`
+      );
+    }
   };
 
   const addSupplierInquiry = (si: any): any => {
@@ -2250,21 +2415,62 @@ export function useERPStore() {
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedSi.supplierName || updatedSi.supplierId || '');
     autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `بروزرسانی استعلام قیمت برای تأمین‌کننده «${suppName}» به مبلغ ${updatedSi.price?.toLocaleString('fa-IR') || 0} ریال - وضعیت جدید: «${updatedSi.status}»`);
   };
-  const deleteSupplierInquiry = (id: string) => {
+  const deleteSupplierInquiry = (id: string, deleteLogs: boolean = false) => {
+    const record = supplierInquiries.find(s => s.id === id);
+    if (!record) return;
+
     const updated = supplierInquiries.filter(s => s.id !== id);
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
+
+    logAction(
+      "DELETE",
+      "استعلام قیمت تأمین‌کنندگان",
+      id,
+      `حذف استعلام قیمت (تأمین‌کننده: ${record.supplierName || record.supplierId})`,
+      record,
+      undefined
+    );
+
+    if (deleteLogs) {
+      const normalizeCategory = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
+      const supplierName = record.supplierName;
+      const itemNames = record.items?.map((it: any) => it.name).filter(Boolean) || [];
+      const keywords = [supplierName, ...itemNames].filter(Boolean);
+
+      const shouldRemoveActivity = (text: string) => {
+        if (!text) return false;
+        if (keywords.some((name: string) => text.includes(name))) return true;
+        return false;
+      };
+
+      const updatedGroups = projectCategoryGroups.map(g => {
+        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('استعلام قیمت تأمین‌کنندگان')) {
+          return {
+            ...g,
+            activities: (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text))
+          };
+        }
+        return g;
+      });
+      saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
+    } else {
+      autoLogFactActivity(
+        record.projectId,
+        'استعلام قیمت تأمین‌کنندگان',
+        `استعلام قیمت مربوط به تأمین‌کننده ${record.supplierName} حذف گردید.`
+      );
+    }
   };
 
   const updatePurchaseOrderStatus = (id: string, status: any) => {
-    const updated = purchaseOrders.map(p => p.id === id ? { ...p, status } : p);
-    saveToStorage("erp_purchase_orders", updated, setPurchaseOrders);
+    const po = purchaseOrders.find(p => p.id === id);
+    if (po) {
+      updatePurchaseOrder({ ...po, status });
+    }
   };
 
-  const updateExchangeRate = (rate: any) => {
-    const updated = exchangeRates.map(r => r.currency === rate.currency ? rate : r);
-    if (!updated.some(r => r.currency === rate.currency)) {
-      updated.push(rate);
-    }
+  const updateExchangeRate = (id: string, newRateValue: number) => {
+    const updated = exchangeRates.map(r => r.id === id ? { ...r, rateToRIYAL: newRateValue, lastUpdated: new Date().toISOString() } : r);
     saveToStorage("erp_exchange_rates", updated, setExchangeRates);
   };
 

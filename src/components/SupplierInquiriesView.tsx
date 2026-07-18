@@ -49,7 +49,7 @@ interface SupplierInquiriesViewProps {
   supplierInquiries: SupplierInquiry[];
   addSupplierInquiry: (inquiry: Omit<SupplierInquiry, 'id' | 'creationDate'>) => SupplierInquiry;
   updateSupplierInquiry: (updatedInquiry: SupplierInquiry) => void;
-  deleteSupplierInquiry: (id: string) => void;
+  deleteSupplierInquiry: (id: string, deleteLogs?: boolean) => void;
   settings: ERPSettings;
 }
 
@@ -97,6 +97,7 @@ export default function SupplierInquiriesView({
   
   // Confirm Delete state
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'inquiry' | 'step'; inquiryId: string; stepId?: string } | null>(null);
+  const [deleteActivitiesWithInquiry, setDeleteActivitiesWithInquiry] = useState(false);
 
   // Selected Project Details
   const selectedProject = useMemo(() => {
@@ -179,7 +180,7 @@ export default function SupplierInquiriesView({
     if (!deleteTarget) return;
 
     if (deleteTarget.type === 'inquiry') {
-      deleteSupplierInquiry(deleteTarget.inquiryId);
+      deleteSupplierInquiry(deleteTarget.inquiryId, deleteActivitiesWithInquiry);
     } else if (deleteTarget.type === 'step' && deleteTarget.stepId) {
       const inq = supplierInquiries.find(i => i.id === deleteTarget.inquiryId);
       if (inq) {
@@ -190,6 +191,7 @@ export default function SupplierInquiriesView({
       }
     }
     setDeleteTarget(null);
+    setDeleteActivitiesWithInquiry(false);
   };
 
   return (
@@ -808,7 +810,10 @@ export default function SupplierInquiriesView({
       {/* ---------------------------------------------------- */}
       <ConfirmModal
         isOpen={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteActivitiesWithInquiry(false);
+        }}
         onConfirm={handleConfirmDelete}
         title="تایید حذف اطلاعات"
         message={
@@ -818,7 +823,22 @@ export default function SupplierInquiriesView({
         }
         confirmText="بله، حذف شود"
         cancelText="انصراف"
-      />
+      >
+        {deleteTarget?.type === 'inquiry' && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="deleteActivitiesInquiry"
+              checked={deleteActivitiesWithInquiry}
+              onChange={(e) => setDeleteActivitiesWithInquiry(e.target.checked)}
+              className="mt-1"
+            />
+            <label htmlFor="deleteActivitiesInquiry" className="text-xs text-slate-600">
+              حذف لاگ‌های فعالیت پروژه مرتبط با این استعلام (در دسته‌بندی استعلام قیمت تأمین‌کنندگان)
+            </label>
+          </div>
+        )}
+      </ConfirmModal>
     </div>
   );
 }
