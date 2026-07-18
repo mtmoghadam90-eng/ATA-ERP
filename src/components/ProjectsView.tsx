@@ -3113,10 +3113,10 @@ export default function ProjectsView({
                       <button
                         onClick={() => setSelectedProjectForActivities(p)}
                         className="p-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded transition flex items-center gap-1 text-[10px] font-bold border border-sky-100 shadow-sm"
-                        title="ثبت فعالیت و ارجاع"
+                        title="جزئیات پروژه"
                       >
                         <Clock size={13} className="text-sky-500" />
-                        <span>فعالیت‌ها</span>
+                        <span>جزئیات پروژه</span>
                         {(projectCategoryGroups || []).filter(g => g.projectId === p.id && g.status === 'جاری').length > 0 && (
                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                         )}

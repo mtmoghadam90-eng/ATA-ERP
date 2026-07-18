@@ -609,7 +609,7 @@ export default function SuppliersView({
                   type="submit"
                   className="px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-sky-500/15"
                 >
-                  {editingSupplier ? 'ثبت تغییرات تأمین‌کننده' : 'ذخیره پرونده ارزی'}
+                  {editingSupplier ? 'ثبت تغییرات تأمین‌کننده' : 'ذخیره'}
                 </button>
               </div>
 
