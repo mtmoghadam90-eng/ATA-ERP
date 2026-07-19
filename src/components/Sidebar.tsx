@@ -144,7 +144,7 @@ export default function Sidebar({
                 <div className="flex flex-col overflow-hidden">
                   <span className="text-xs font-semibold text-slate-200 truncate">{currentUser.fullName}</span>
                   <span className="text-[10px] text-slate-400 truncate">
-                    {currentUser.role === 'admin' ? 'سمت: مدیر سیستم / فنی' : 'سمت: کارشناس'}
+                    سمت: {currentUser.position || (currentUser.role === 'admin' ? 'مدیر سیستم / فنی' : 'کارشناس')}
                   </span>
                 </div>
               )}
