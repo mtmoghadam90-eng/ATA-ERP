@@ -1535,7 +1535,7 @@ export function useERPStore() {
     const updated = [newTr, ...transactions];
     saveToStorage("erp_transactions", updated, setTransactions);
     
-    autoLogFactActivity(newTr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} جدید به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال`);
+    autoLogFactActivity(newTr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافت وجه از مشتری' : 'پرداخت وجه به تامین‌کننده'} بابت پروژه به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال (روش: ${newTr.method || '-'}، تاریخ: ${newTr.date || '-'})`);
     notifyModuleResponsible('transactions', 'ثبت تراکنش مالی جدید', `تراکنش ${newTr.type} به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال ثبت شد.`, newTr.projectId);
     return newTr;
   };
@@ -1544,7 +1544,7 @@ export function useERPStore() {
     const updated = transactions.map((tr) => (tr.id === t.id ? t : tr));
     saveToStorage("erp_transactions", updated, setTransactions);
     
-    autoLogFactActivity(t.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `بروزرسانی تراکنش ${t.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} - مبلغ: ${t.amountRIYAL?.toLocaleString() || 0} ریال - بابت: ${t.notes || ''}`);
+    autoLogFactActivity(t.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `ویرایش تراکنش ${t.type === 'دریافت' ? 'دریافت وجه' : 'پرداخت وجه'} بابت پروژه (مبلغ جدید: ${t.amountRIYAL?.toLocaleString() || 0} ریال، تاریخ: ${t.date || '-'})`);
   };
 
   const deleteTransaction = (id: string) => {
@@ -1552,7 +1552,7 @@ export function useERPStore() {
     const updated = transactions.filter((t) => t.id !== id);
     saveToStorage("erp_transactions", updated, setTransactions);
     if (tr?.projectId) {
-      autoLogFactActivity(tr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `حذف تراکنش ${tr.type === 'دریافت' ? 'دریافتی' : 'پرداختی'} به مبلغ ${tr.amountRIYAL?.toLocaleString() || 0} ریال`);
+      autoLogFactActivity(tr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `حذف تراکنش ${tr.type === 'دریافت' ? 'دریافت وجه' : 'پرداخت وجه'} مربوط به پروژه (مبلغ: ${tr.amountRIYAL?.toLocaleString() || 0} ریال)`);
     }
   };
 
@@ -1585,7 +1585,7 @@ export function useERPStore() {
     
     const supplierObj = suppliers.find(s => s.id === newPO.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newPO.supplierName || newPO.supplierId || '');
-    autoLogFactActivity(newPO.projectId, 'سفارشات خرید تامین‌کنندگان', `ثبت سفارش خرید با شماره ${newPO.poNumber} برای تامین‌کننده «${suppName}»`);
+    autoLogFactActivity(newPO.projectId, 'سفارشات خرید تامین‌کنندگان', `صدور سفارش خرید (شماره: ${newPO.poNumber}) برای تأمین‌کننده «${suppName}» جهت تأمین اقلام پروژه.`);
     notifyModuleResponsible('purchaseOrders', 'ثبت سفارش خرید جدید', `سفارش خرید شماره ${newPO.poNumber} ثبت شد.`, newPO.projectId);
     return newPO;
   };
@@ -1607,7 +1607,7 @@ export function useERPStore() {
     
     const supplierObj = suppliers.find(s => s.id === updatedPO.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedPO.supplierName || updatedPO.supplierId || '');
-    autoLogFactActivity(updatedPO.projectId, 'سفارشات خرید تامین‌کنندگان', `بروزرسانی سفارش خرید ${updatedPO.poNumber} برای تامین‌کننده «${suppName}» - وضعیت: ${updatedPO.status}`);
+    autoLogFactActivity(updatedPO.projectId, 'سفارشات خرید تامین‌کنندگان', `تغییر وضعیت سفارش خرید (شماره: ${updatedPO.poNumber}) مرتبط با تأمین‌کننده «${suppName}» به «${updatedPO.status}».`);
     notifyModuleResponsible('purchaseOrders', 'ویرایش سفارش خرید', `سفارش خرید شماره ${updatedPO.poNumber} ویرایش شد.`, updatedPO.projectId);
 
     // Self-healing inventory stock adjustments
@@ -1807,7 +1807,7 @@ export function useERPStore() {
     autoLogFactActivity(
       newProforma.projectId,
       'پیش‌فاکتورها و مهندسی فروش',
-      `پیش‌فاکتور شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} در وضعیت «${statusLabel}» توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`
+      `صدور پیش‌فاکتور جدید (شماره: ${newProforma.proformaNumber}) با مبلغ کل ${(newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'} (کاربر ثبت‌کننده: ${currentUser?.fullName || 'سیستم'}، وضعیت: ${statusLabel}).`
     );
   }
 
@@ -1855,9 +1855,9 @@ export function useERPStore() {
   const oldOutcome = getProformaOutcomeStatus(oldPf);
   const outcomeChanged = oldOutcome !== newOutcome;
 
-  let logText = `پیش‌فاکتور شماره ${finalUpdatedPf.proformaNumber} ویرایش شد.`;
+  let logText = `ویرایش پیش‌فاکتور (شماره: ${finalUpdatedPf.proformaNumber}).`;
   if (outcomeChanged) {
-    logText += ` وضعیت نهایی به «${newOutcome}» تغییر یافت.`;
+    logText += ` وضعیت نهایی اقلام پیش‌فاکتور به «${newOutcome}» تغییر یافت.`;
   }
 
   logAction('UPDATE', 'پیش‌فاکتورها', updatedPf.id, logText, oldPf, finalUpdatedPf);
@@ -2000,7 +2000,7 @@ export function useERPStore() {
     autoLogFactActivity(
       oldProforma.projectId,
       'پیش‌فاکتورها و مهندسی فروش',
-      `وضعیت ارسال پیش‌فاکتور شماره ${oldProforma.proformaNumber} توسط ${currentUser?.fullName || 'کاربر سیستم'} به «${newStatus}» تغییر یافت.${reasonStr}`
+      `تغییر وضعیت پیش‌فاکتور (شماره: ${oldProforma.proformaNumber}) به «${newStatus}» توسط کاربر ${currentUser?.fullName || 'سیستم'}.${reasonStr}`
     );
   }
 
@@ -2138,7 +2138,7 @@ export function useERPStore() {
       // Create log text & log activity in category group
       const statusText = status === 'لغو شده' ? 'لغو شده' : status === 'باخته' ? 'باخته' : status;
       const reasonStr = status === 'باخته' && lossReason ? ` (علت باخت: ${lossReason})` : '';
-      const logText = `وضعیت تمامی نسخه‌های پیش‌فاکتور مربوط به این پروژه توسط ${currentUser?.fullName || 'کاربر سیستم'} به «${statusText}» تغییر یافت.${reasonStr}`;
+      const logText = `تغییر وضعیت گروهی نسخه‌های پیش‌فاکتور پروژه به «${statusText}» توسط کاربر ${currentUser?.fullName || 'سیستم'}.${reasonStr}`;
       
       autoLogFactActivity(
         projectId,
@@ -2300,7 +2300,7 @@ export function useERPStore() {
     const updated = [...packagingDeliveries, newPd];
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     processWorkflowRules('packaging_delivery_created', newPd);
-    autoLogFactActivity(newPd.projectId, 'بسته‌بندی و تحویل کالا', `ثبت مرحله جدید: ${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${newPd.status}`);
+    autoLogFactActivity(newPd.projectId, 'بسته‌بندی و تحویل کالا', `شروع عملیات «${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال و تحویل'}» کالا برای خروج از انبار (شماره پکینگ‌لیست: ${newPd.packingListNumber}، وضعیت فعلی: ${newPd.status}).`);
     notifyModuleResponsible('packagingDelivery', 'ثبت مرحله بسته‌بندی/تحویل جدید', `مرحله جدید ${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} با وضعیت ${newPd.status} ثبت شد.`, newPd.projectId);
 
     if (newPd.actualDeliveryDate) {
@@ -2315,7 +2315,7 @@ export function useERPStore() {
     const before = packagingDeliveries.find(p => p.id === updatedPd.id);
     const updated = packagingDeliveries.map(p => p.id === updatedPd.id ? updatedPd : p);
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
-    autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `بروزرسانی مرحله: ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} - وضعیت: ${updatedPd.status}`);
+    autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `تغییر وضعیت عملیات «${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال و تحویل'}» کالا (شماره پکینگ‌لیست: ${updatedPd.packingListNumber}) به «${updatedPd.status}».`);
     notifyModuleResponsible('packagingDelivery', 'بروزرسانی مرحله بسته‌بندی/تحویل', `مرحله ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} به وضعیت ${updatedPd.status} تغییر یافت.`, updatedPd.projectId);
 
     if (!before?.actualDeliveryDate && updatedPd.actualDeliveryDate) {
@@ -2383,14 +2383,14 @@ export function useERPStore() {
     const newAss = { ...ass, id: `ass-${Date.now()}`, createdAt: new Date().toISOString() };
     const updated = [...afterSalesServices, newAss];
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
-    autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات جدید بابت: ${newAss.issueDescription || ''} - وضعیت: ${newAss.status}`);
+    autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات پس از فروش برای کالای «${newAss.itemName || 'نامشخص'}» (شرح خرابی: ${newAss.issueDescription || '-'}، وضعیت: ${newAss.status}).`);
     notifyModuleResponsible('afterSalesServices', 'ثبت درخواست خدمات پس از فروش جدید', `درخواست خدمات جدید برای کالا ${newAss.itemName || ''} با وضعیت ${newAss.status} ثبت شد.`, newAss.projectId);
   };
   const updateAfterSalesService = (updatedAss: any) => {
     const before = afterSalesServices.find(a => a.id === updatedAss.id);
     const updated = afterSalesServices.map(a => a.id === updatedAss.id ? updatedAss : a);
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
-    autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `بروزرسانی درخواست خدمات بابت: ${updatedAss.issueDescription || ''} - وضعیت: ${updatedAss.status}`);
+    autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `تغییر وضعیت درخواست خدمات پس از فروش کالای «${updatedAss.itemName || 'نامشخص'}» به «${updatedAss.status}» (اقدامات انجام‌شده: ${updatedAss.actionsTaken || '-'}).`);
     notifyModuleResponsible('afterSalesServices', 'بروزرسانی درخواست خدمات پس از فروش', `درخواست خدمات برای کالا ${updatedAss.itemName || ''} به وضعیت ${updatedAss.status} تغییر یافت.`, updatedAss.projectId);
 
     if (before?.status !== updatedAss.status && updatedAss.status === 'تحویل داده شده') {
@@ -2461,7 +2461,7 @@ export function useERPStore() {
     
     const supplierObj = suppliers.find(s => s.id === newSi.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newSi.supplierName || newSi.supplierId || '');
-    autoLogFactActivity(newSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `ثبت استعلام قیمت جدید برای تأمین‌کننده «${suppName}» به مبلغ ${newSi.price?.toLocaleString('fa-IR') || 0} ریال در وضعیت «${newSi.status}»`);
+    autoLogFactActivity(newSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `ثبت درخواست استعلام قیمت از تأمین‌کننده «${suppName}» (مبلغ اعلامی: ${newSi.price?.toLocaleString('fa-IR') || 0} ${newSi.currency || 'ریال'}، وضعیت: ${newSi.status}).`);
     notifyModuleResponsible('supplierInquiries', 'ثبت استعلام قیمت جدید', `استعلام قیمت جدید برای تأمین‌کننده «${suppName}» ثبت شد.`, newSi.projectId);
     return newSi;
   };
@@ -2471,7 +2471,7 @@ export function useERPStore() {
     
     const supplierObj = suppliers.find(s => s.id === updatedSi.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedSi.supplierName || updatedSi.supplierId || '');
-    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `بروزرسانی استعلام قیمت برای تأمین‌کننده «${suppName}» به مبلغ ${updatedSi.price?.toLocaleString('fa-IR') || 0} ریال - وضعیت جدید: «${updatedSi.status}»`);
+    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `بروزرسانی وضعیت استعلام قیمت از تأمین‌کننده «${suppName}» به «${updatedSi.status}» (مبلغ اعلامی: ${updatedSi.price?.toLocaleString('fa-IR') || 0} ${updatedSi.currency || 'ریال'}).`);
   };
   const deleteSupplierInquiry = (id: string, deleteLogs: boolean = false) => {
     const record = supplierInquiries.find(s => s.id === id);
