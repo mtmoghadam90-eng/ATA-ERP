@@ -405,14 +405,19 @@ export interface CustomField {
 export interface DocumentFormat {
   projectPrefix: string;
   projectFormat: string; // ATA-{YYYY}-{SEQ:3}
+  projectStartSeq?: number; // e.g. 1000
   proformaPrefix: string;
   proformaFormat: string; // QT-{PROJECT}-{SEQ:2}
   proformaTechnicalFormat?: string; // e.g. QT-TECH-{PROJECT}-{SEQ:2}
   proformaAfterSalesFormat?: string; // e.g. QT-SERV-{PROJECT}-{SEQ:2}
+  proformaStartSeq?: number; // e.g. 1000
   poPrefix: string;
   poFormat: string; // PO-{PROJECT}-{SEQ:3}
+  poStartSeq?: number; // e.g. 1000
   transactionFormat?: string; // TR-{TYPE}-{YYYY}{MM}-{SEQ:3}
+  transactionStartSeq?: number; // e.g. 1000
   productFormat?: string; // EQ-{RAND:5}
+  productStartSeq?: number; // e.g. 1000
 }
 
 export interface ProformaTemplate {

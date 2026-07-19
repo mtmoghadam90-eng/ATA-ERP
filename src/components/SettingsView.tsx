@@ -44,6 +44,7 @@ import {
   GripVertical
 } from 'lucide-react';
 import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog, WorkflowRule, ExchangeRate } from '../types';
+import { formatERPNumber } from '../numUtils';
 import RatesView from './RatesView';
 import { decompressLZW } from '../utils/compress';
 import ConfirmModal from './ConfirmModal';
@@ -368,12 +369,17 @@ export default function SettingsView({
   const [proformaPrefix, setProformaPrefix] = useState(settings.documentFormats.proformaPrefix);
   const [purchaseOrderPrefix, setPurchaseOrderPrefix] = useState(settings.documentFormats.poPrefix);
   const [projectFormat, setProjectFormat] = useState(settings.documentFormats.projectFormat || 'ATA-{YYYY}-{SEQ:3}');
+  const [projectStartSeq, setProjectStartSeq] = useState(settings.documentFormats.projectStartSeq || 1);
   const [proformaFormat, setProformaFormat] = useState(settings.documentFormats.proformaFormat || 'QT-{PROJECT}-{SEQ:2}');
+  const [proformaStartSeq, setProformaStartSeq] = useState(settings.documentFormats.proformaStartSeq || 1);
   const [proformaTechnicalFormat, setProformaTechnicalFormat] = useState(settings.documentFormats.proformaTechnicalFormat || 'QT-TECH-{PROJECT}-{SEQ:2}');
   const [proformaAfterSalesFormat, setProformaAfterSalesFormat] = useState(settings.documentFormats.proformaAfterSalesFormat || 'QT-SERV-{PROJECT}-{SEQ:2}');
   const [poFormat, setPoFormat] = useState(settings.documentFormats.poFormat || 'PO-{PROJECT}-{SEQ:3}');
+  const [poStartSeq, setPoStartSeq] = useState(settings.documentFormats.poStartSeq || 1);
   const [transactionFormat, setTransactionFormat] = useState(settings.documentFormats.transactionFormat || 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}');
+  const [transactionStartSeq, setTransactionStartSeq] = useState(settings.documentFormats.transactionStartSeq || 1);
   const [productFormat, setProductFormat] = useState(settings.documentFormats.productFormat || 'EQ-{RAND:5}');
+  const [productStartSeq, setProductStartSeq] = useState(settings.documentFormats.productStartSeq || 1);
   const [vatPercent, setVatPercent] = useState(10);
   const [showProductBrandInDocuments, setShowProductBrandInDocuments] = useState(!!settings.showProductBrandInDocuments);
 
@@ -431,12 +437,17 @@ export default function SettingsView({
         proformaPrefix,
         poPrefix: purchaseOrderPrefix,
         projectFormat,
+        projectStartSeq,
         proformaFormat,
+        proformaStartSeq,
         proformaTechnicalFormat,
         proformaAfterSalesFormat,
         poFormat,
+        poStartSeq,
         transactionFormat,
-        productFormat
+        transactionStartSeq,
+        productFormat,
+        productStartSeq
       }
     });
 
@@ -568,6 +579,60 @@ export default function SettingsView({
     setDeleteType(null);
     setDeleteTargetId('');
     setDeleteTargetName('');
+  };
+
+  const renderFormatField = (
+    label: string, 
+    formatValue: string, 
+    setFormatValue: (v: string) => void, 
+    startSeqValue: number, 
+    setStartSeqValue: (v: number) => void, 
+    defaultFormat: string, 
+    dummyContext: any
+  ) => {
+    return (
+      <div className="space-y-2 bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 transition-colors">
+        <label className="text-xs font-semibold text-slate-700 block">{label}</label>
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex-1 space-y-1">
+            <span className="text-[10px] text-slate-500 block">فرمت الگو</span>
+            <input
+              type="text"
+              required
+              value={formatValue}
+              onChange={(e) => setFormatValue(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition focus:ring-2 focus:ring-sky-100 outline-none"
+              placeholder={defaultFormat}
+              dir="ltr"
+            />
+          </div>
+          <div className="w-full md:w-32 space-y-1">
+            <span className="text-[10px] text-slate-500 block">شروع سریال از</span>
+            <input
+              type="number"
+              required
+              min="1"
+              value={startSeqValue}
+              onChange={(e) => setStartSeqValue(parseInt(e.target.value, 10) || 1)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-center bg-slate-50 focus:bg-white transition focus:ring-2 focus:ring-sky-100 outline-none"
+              dir="ltr"
+            />
+          </div>
+        </div>
+        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-2 flex flex-col gap-1.5">
+          <div className="flex justify-between items-center text-[10px]">
+            <span className="text-slate-400">پیش‌فرض سیستم:</span>
+            <code className="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">{defaultFormat}</code>
+          </div>
+          <div className="flex justify-between items-center text-[10px] border-t border-slate-100 pt-1.5 mt-0.5">
+            <span className="text-slate-500 font-medium">پیش‌نمایش خروجی:</span>
+            <code className="font-mono text-emerald-600 font-bold bg-emerald-50/50 px-2 py-1 rounded-md text-xs border border-emerald-100 shadow-sm">
+              {formatERPNumber(formatValue || defaultFormat, { seq: startSeqValue, ...dummyContext })}
+            </code>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -975,125 +1040,14 @@ export default function SettingsView({
                     </span>
                   </p>
                 </div>
+                {renderFormatField('ساختار کدگذاری پروژه‌ها', projectFormat, setProjectFormat, projectStartSeq, setProjectStartSeq, 'ATA-{YYYY}-{SEQ:3}', { projectCode: 'ATA-1405' })}
+                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای مالی', proformaFormat, setProformaFormat, proformaStartSeq, setProformaStartSeq, 'QT-{PROJECT}-{SEQ:2}', { projectCode: 'ATA-1405-001' })}
+                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای فنی', proformaTechnicalFormat, setProformaTechnicalFormat, proformaStartSeq, setProformaStartSeq, 'QT-TECH-{PROJECT}-{SEQ:2}', { projectCode: 'ATA-1405-001' })}
+                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای خدمات پس از فروش', proformaAfterSalesFormat, setProformaAfterSalesFormat, proformaStartSeq, setProformaStartSeq, 'QT-SERV-{PROJECT}-{SEQ:2}', { projectCode: 'ATA-1405-001' })}
+                {renderFormatField('ساختار کدگذاری سفارشات خرید ارزی', poFormat, setPoFormat, poStartSeq, setPoStartSeq, 'PO-{PROJECT}-{SEQ:3}', { projectCode: 'ATA-1405-001' })}
+                {renderFormatField('ساختار شماره اسناد دریافت/پرداخت صندوق', transactionFormat, setTransactionFormat, transactionStartSeq, setTransactionStartSeq, 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}', { transactionType: 'دریافت' })}
+                {renderFormatField('ساختار پیش‌فرض کدهای کالا و تجهیزات', productFormat, setProductFormat, productStartSeq, setProductStartSeq, 'EQ-{RAND:5}', { category: 'CAT' })}
 
-                {/* Project Number Format */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پروژه‌ها</label>
-                  <input
-                    type="text"
-                    required
-                    value={projectFormat}
-                    onChange={(e) => setProjectFormat(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
-                    placeholder="ATA-{YYYY}-{SEQ:3}"
-                  />
-                  <div className="text-[10px] text-slate-400 flex justify-between">
-                    <span>پیش‌فرض: <code className="font-mono">ATA-{"{YYYY}"}-{"{SEQ:3}"}</code></span>
-                    <span>مثال: <code className="font-mono text-emerald-600">ATA-1405-001</code></span>
-                  </div>
-                </div>
-
-                {/* Proforma Number Format */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورهای مالی</label>
-                  <input
-                    type="text"
-                    required
-                    value={proformaFormat}
-                    onChange={(e) => setProformaFormat(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
-                    placeholder="QT-{PROJECT}-{SEQ:2}"
-                  />
-                  <div className="text-[10px] text-slate-400 flex justify-between">
-                    <span>پیش‌فرض: <code className="font-mono">QT-{"{PROJECT}"}-{"{SEQ:2}"}</code></span>
-                    <span>مثال: <code className="font-mono text-emerald-600">QT-ATA-1405-001-01</code></span>
-                  </div>
-                </div>
-
-                {/* Technical Proforma Number Format */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورهای فنی</label>
-                  <input
-                    type="text"
-                    required
-                    value={proformaTechnicalFormat}
-                    onChange={(e) => setProformaTechnicalFormat(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
-                    placeholder="QT-TECH-{PROJECT}-{SEQ:2}"
-                  />
-                  <div className="text-[10px] text-slate-400 flex justify-between">
-                    <span>پیش‌فرض: <code className="font-mono">QT-TECH-{"{PROJECT}"}-{"{SEQ:2}"}</code></span>
-                    <span>مثال: <code className="font-mono text-emerald-600">QT-TECH-ATA-1405-001-01</code></span>
-                  </div>
-                </div>
-
-                {/* After-Sales Proforma Number Format */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری پیش‌فاکتورهای خدمات پس از فروش</label>
-                  <input
-                    type="text"
-                    required
-                    value={proformaAfterSalesFormat}
-                    onChange={(e) => setProformaAfterSalesFormat(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
-                    placeholder="QT-SERV-{PROJECT}-{SEQ:2}"
-                  />
-                  <div className="text-[10px] text-slate-400 flex justify-between">
-                    <span>پیش‌فرض: <code className="font-mono">QT-SERV-{"{PROJECT}"}-{"{SEQ:2}"}</code></span>
-                    <span>مثال: <code className="font-mono text-emerald-600">QT-SERV-ATA-1405-001-01</code></span>
-                  </div>
-                </div>
-
-                {/* PO Number Format */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار کدگذاری سفارشات خرید ارزی</label>
-                  <input
-                    type="text"
-                    required
-                    value={poFormat}
-                    onChange={(e) => setPoFormat(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
-                    placeholder="PO-{PROJECT}-{SEQ:3}"
-                  />
-                  <div className="text-[10px] text-slate-400 flex justify-between">
-                    <span>پیش‌فرض: <code className="font-mono">PO-{"{PROJECT}"}-{"{SEQ:3}"}</code></span>
-                    <span>مثال: <code className="font-mono text-emerald-600">PO-ATA-1405-001-001</code></span>
-                  </div>
-                </div>
-
-                {/* Transaction Number Format */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار شماره اسناد دریافت/پرداخت صندوق</label>
-                  <input
-                    type="text"
-                    required
-                    value={transactionFormat}
-                    onChange={(e) => setTransactionFormat(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
-                    placeholder="TR-{TYPE}-{YYYY}{MM}-{SEQ:3}"
-                  />
-                  <div className="text-[10px] text-slate-400 flex justify-between">
-                    <span>پیش‌فرض: <code className="font-mono">TR-{"{TYPE}"}-{"{YYYY}"}{"{MM}"}-{"{SEQ:3}"}</code></span>
-                    <span>مثال: <code className="font-mono text-emerald-600">TR-RC-140504-001</code></span>
-                  </div>
-                </div>
-
-                {/* Product Code Format */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 block">ساختار پیش‌فرض کدهای کالا و تجهیزات</label>
-                  <input
-                    type="text"
-                    required
-                    value={productFormat}
-                    onChange={(e) => setProductFormat(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-left bg-slate-50 focus:bg-white transition"
-                    placeholder="EQ-{RAND:5}"
-                  />
-                  <div className="text-[10px] text-slate-400 flex justify-between">
-                    <span>پیش‌فرض: <code className="font-mono">EQ-{"{RAND:5}"}</code></span>
-                    <span>مثال: <code className="font-mono text-emerald-600">EQ-48912</code></span>
-                  </div>
-                </div>
 
               </div>
             </div>

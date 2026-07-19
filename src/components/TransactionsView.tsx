@@ -220,7 +220,7 @@ export default function TransactionsView({
     currManualName = partyNameManual,
     currProjId = projectId
   ) => {
-    const seqNum = transactions.length + 1;
+    const seqNum = (settings?.documentFormats?.transactionStartSeq || 1) + transactions.length;
     let name = '';
     if (currentPartyType === 'customer') {
       name = customers.find(c => c.id === currCustomerId)?.companyName || '';
