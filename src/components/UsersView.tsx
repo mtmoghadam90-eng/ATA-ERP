@@ -15,7 +15,9 @@ import {
   Lock, 
   Eye, 
   EyeOff,
-  UserCheck
+  UserCheck,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 interface UsersViewProps {
@@ -30,7 +32,9 @@ interface UsersViewProps {
 export default function UsersView({ users, settings, currentUser, addUser, updateUser, deleteUser }: UsersViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isAddModalFullscreen, setIsAddModalFullscreen] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isEditModalFullscreen, setIsEditModalFullscreen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // Form states
@@ -158,6 +162,7 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
     });
 
     setShowAddModal(false);
+    setIsAddModalFullscreen(false);
   };
 
   const openEditModal = (user: User) => {
@@ -202,6 +207,7 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
     });
 
     setShowEditModal(false);
+    setIsEditModalFullscreen(false);
   };
 
   const handleDeleteUser = (user: User) => {
@@ -377,19 +383,37 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
 
       {/* --- ADD NEW USER MODAL --- */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto text-right">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <button onClick={() => setShowAddModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition">
-                <X size={20} />
-              </button>
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto ${isAddModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white border border-slate-100 shadow-2xl flex flex-col transition-all duration-300 ${
+            isAddModalFullscreen 
+              ? 'w-screen h-screen rounded-none max-w-full max-h-screen my-0' 
+              : 'rounded-2xl max-w-2xl w-full max-h-[90vh] my-4'
+          }`}>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsAddModalFullscreen(!isAddModalFullscreen)}
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition flex items-center justify-center"
+                  title={isAddModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isAddModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowAddModal(false); setIsAddModalFullscreen(false); }} 
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <UserPlus size={20} className="text-sky-600" />
                 تعریف پرسنل جدید ابزار تامین ارشیا
               </h2>
             </div>
 
-            <form onSubmit={handleCreateUser} className="p-6 space-y-6">
+            <form onSubmit={handleCreateUser} className="p-6 space-y-6 overflow-y-auto flex-1">
               {/* Personal details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -553,10 +577,10 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => { setShowAddModal(false); setIsAddModalFullscreen(false); }}
                   className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-lg transition"
                 >
                   انصراف
@@ -575,19 +599,37 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
 
       {/* --- EDIT USER MODAL --- */}
       {showEditModal && selectedUser && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto text-right">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <button onClick={() => setShowEditModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition">
-                <X size={20} />
-              </button>
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto ${isEditModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white border border-slate-100 shadow-2xl flex flex-col transition-all duration-300 ${
+            isEditModalFullscreen 
+              ? 'w-screen h-screen rounded-none max-w-full max-h-screen my-0' 
+              : 'rounded-2xl max-w-2xl w-full max-h-[90vh] my-4'
+          }`}>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsEditModalFullscreen(!isEditModalFullscreen)}
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition flex items-center justify-center"
+                  title={isEditModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isEditModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowEditModal(false); setIsEditModalFullscreen(false); }} 
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <Lock size={20} className="text-sky-600" />
                 ویرایش اطلاعات و سطح دسترسی "{selectedUser.fullName}"
               </h2>
             </div>
 
-            <form onSubmit={handleUpdateUser} className="p-6 space-y-6">
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-6 overflow-y-auto flex-1">
               {/* Personal details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -750,10 +792,10 @@ export default function UsersView({ users, settings, currentUser, addUser, updat
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowEditModal(false)}
+                  onClick={() => { setShowEditModal(false); setIsEditModalFullscreen(false); }}
                   className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-lg transition"
                 >
                   انصراف

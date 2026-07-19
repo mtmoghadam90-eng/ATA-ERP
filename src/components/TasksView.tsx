@@ -12,7 +12,9 @@ import {
   Calendar,
   X,
   CheckCircle2,
-  ListTodo
+  ListTodo,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { Task, Customer, Project, ERPSettings, User as ERPUser } from '../types';
 import { getTodayShamsi } from '../dateUtils';
@@ -52,6 +54,7 @@ export default function TasksView({
   const [search, setSearch] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
+  const [isTaskModalFullscreen, setIsTaskModalFullscreen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [quickAddType, setQuickAddType] = useState<'customer' | 'project' | 'supplier' | 'product' | null>(null);
 
@@ -153,6 +156,7 @@ export default function TasksView({
     }
 
     setShowModal(false);
+    setIsTaskModalFullscreen(false);
   };
 
   const handleToggleComplete = (task: Task) => {
@@ -339,13 +343,32 @@ export default function TasksView({
 
       {/* Add Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-xl overflow-hidden animate-scale-in flex flex-col my-4 max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isTaskModalFullscreen ? 'p-0' : 'p-2 sm:p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in flex flex-col transition-all duration-300 ${
+            isTaskModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-xl my-4 max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]'
+          }`}>
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <h3 className="font-bold text-slate-800 text-sm sm:text-base">تعریف وظیفه و یادداشت پیگیری</h3>
-              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition" title="بستن فرم">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsTaskModalFullscreen(!isTaskModalFullscreen)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isTaskModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isTaskModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowModal(false); setIsTaskModalFullscreen(false); }}
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition"
+                  title="بستن فرم"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleSave} className="p-4 sm:p-6 space-y-4 text-right overflow-y-auto flex-1">
@@ -566,10 +589,10 @@ export default function TasksView({
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setIsTaskModalFullscreen(false); }}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-medium transition"
                 >
                   انصراف

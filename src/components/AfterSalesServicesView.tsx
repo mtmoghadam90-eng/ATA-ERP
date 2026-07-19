@@ -14,7 +14,9 @@ import {
   AlertCircle,
   Briefcase,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { SearchableSelect } from './SearchableSelect';
@@ -51,6 +53,7 @@ export default function AfterSalesServicesView({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalFullscreen, setIsModalFullscreen] = useState(false);
   const [editingService, setEditingService] = useState<AfterSalesService | null>(null);
   
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -324,6 +327,7 @@ export default function AfterSalesServicesView({
     }
 
     setIsModalOpen(false);
+    setIsModalFullscreen(false);
     resetForm();
   };
 
@@ -515,19 +519,37 @@ export default function AfterSalesServicesView({
 
       {/* Modal Form */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
-            <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50/50">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm transition-all ${isModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl overflow-hidden flex flex-col transition-all duration-300 ${
+            isModalFullscreen 
+              ? 'w-screen h-screen rounded-none max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-5xl max-h-[92vh]'
+          }`}>
+            <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
               <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                 <Wrench className="text-indigo-500" size={20} />
                 {editingService ? 'ویرایش خدمات پس از فروش' : 'ثبت خدمات پس از فروش جدید'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-2 rounded-xl transition-colors">
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsModalFullscreen(!isModalFullscreen)}
+                  className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-2 rounded-xl transition flex items-center justify-center"
+                  title={isModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setIsModalOpen(false); setIsModalFullscreen(false); }} 
+                  className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-2 rounded-xl transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
             
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 text-right">
               {/* بخش ۱: اطلاعات پروژه و پیش‌فاکتور */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <div className="space-y-2">
@@ -848,7 +870,7 @@ export default function AfterSalesServicesView({
               <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => { setIsModalOpen(false); setIsModalFullscreen(false); }}
                   className="px-5 py-2.5 text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors font-bold text-sm"
                 >
                   انصراف

@@ -41,7 +41,8 @@ import {
   Boxes,
   Wrench,
   History,
-  GripVertical
+  GripVertical,
+  Copy
 } from 'lucide-react';
 import { ERPSettings, CustomField, ProjectCategoryGroup, User, Project, AuditLog, WorkflowRule, ExchangeRate } from '../types';
 import { formatERPNumber } from '../numUtils';
@@ -326,6 +327,22 @@ export default function SettingsView({
     setDeleteConfirmOpen(true);
   };
 
+  const handleCopyWorkflowRule = (ruleId: string) => {
+    const rules = settings.workflows || [];
+    const rule = rules.find(r => r.id === ruleId);
+    if (!rule) return;
+    const newRule: WorkflowRule = {
+      ...rule,
+      id: `wf-${Date.now()}`,
+      name: `${rule.name} - کپی`,
+      active: false
+    };
+    updateSettings({
+      ...settings,
+      workflows: [...rules, newRule]
+    });
+  };
+
   const handleSaveWorkflowRule = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRule) return;
@@ -580,6 +597,8 @@ export default function SettingsView({
     setDeleteTargetId('');
     setDeleteTargetName('');
   };
+
+  const dummyProjectCode = formatERPNumber(projectFormat || 'ATA-{YYYY}-{SEQ:3}', { seq: projectStartSeq, customerName: 'مشتری نمونه' });
 
   const renderFormatField = (
     label: string, 
@@ -1040,11 +1059,11 @@ export default function SettingsView({
                     </span>
                   </p>
                 </div>
-                {renderFormatField('ساختار کدگذاری پروژه‌ها', projectFormat, setProjectFormat, projectStartSeq, setProjectStartSeq, 'ATA-{YYYY}-{SEQ:3}', { projectCode: 'ATA-1405' })}
-                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای مالی', proformaFormat, setProformaFormat, proformaStartSeq, setProformaStartSeq, 'QT-{PROJECT}-{SEQ:2}', { projectCode: 'ATA-1405-001' })}
-                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای فنی', proformaTechnicalFormat, setProformaTechnicalFormat, proformaStartSeq, setProformaStartSeq, 'QT-TECH-{PROJECT}-{SEQ:2}', { projectCode: 'ATA-1405-001' })}
-                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای خدمات پس از فروش', proformaAfterSalesFormat, setProformaAfterSalesFormat, proformaStartSeq, setProformaStartSeq, 'QT-SERV-{PROJECT}-{SEQ:2}', { projectCode: 'ATA-1405-001' })}
-                {renderFormatField('ساختار کدگذاری سفارشات خرید ارزی', poFormat, setPoFormat, poStartSeq, setPoStartSeq, 'PO-{PROJECT}-{SEQ:3}', { projectCode: 'ATA-1405-001' })}
+                {renderFormatField('ساختار کدگذاری پروژه‌ها', projectFormat, setProjectFormat, projectStartSeq, setProjectStartSeq, 'ATA-{YYYY}-{SEQ:3}', { projectCode: 'ATA' })}
+                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای مالی', proformaFormat, setProformaFormat, proformaStartSeq, setProformaStartSeq, 'QT-{PROJECT}-{SEQ:2}', { projectCode: dummyProjectCode })}
+                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای فنی', proformaTechnicalFormat, setProformaTechnicalFormat, proformaStartSeq, setProformaStartSeq, 'QT-TECH-{PROJECT}-{SEQ:2}', { projectCode: dummyProjectCode })}
+                {renderFormatField('ساختار کدگذاری پیش‌فاکتورهای خدمات پس از فروش', proformaAfterSalesFormat, setProformaAfterSalesFormat, proformaStartSeq, setProformaStartSeq, 'QT-SERV-{PROJECT}-{SEQ:2}', { projectCode: dummyProjectCode })}
+                {renderFormatField('ساختار کدگذاری سفارشات خرید ارزی', poFormat, setPoFormat, poStartSeq, setPoStartSeq, 'PO-{PROJECT}-{SEQ:3}', { projectCode: dummyProjectCode })}
                 {renderFormatField('ساختار شماره اسناد دریافت/پرداخت صندوق', transactionFormat, setTransactionFormat, transactionStartSeq, setTransactionStartSeq, 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}', { transactionType: 'دریافت' })}
                 {renderFormatField('ساختار پیش‌فرض کدهای کالا و تجهیزات', productFormat, setProductFormat, productStartSeq, setProductStartSeq, 'EQ-{RAND:5}', { category: 'CAT' })}
 
@@ -2419,14 +2438,18 @@ export default function SettingsView({
                       value={editingRule.triggerType}
                       onChange={(e) => {
                         const val = e.target.value as any;
-                        let defaultField = 'newOutcome';
-                        let defaultValue = 'تأیید شده (برنده)';
-                        if (val === 'project_status_change') {
+                        let defaultField = 'status';
+                        let defaultValue = '';
+                        if (val.endsWith('_status_change')) {
                           defaultField = 'newStatus';
-                          defaultValue = 'برنده شده';
-                        } else if (val === 'purchase_order_status_change') {
-                          defaultField = 'newStatus';
-                          defaultValue = 'تحویل شده (رسید انبار)';
+                        } else if (val.endsWith('_outcome_change')) {
+                          defaultField = 'newOutcome';
+                        } else if (val === 'product_low_stock' || val === 'product_created') {
+                          defaultField = 'stockLevel';
+                        } else if (val === 'customer_created') {
+                          defaultField = 'type';
+                        } else if (val === 'transaction_created') {
+                          defaultField = 'type';
                         }
                         setEditingRule({
                           ...editingRule,
@@ -2438,12 +2461,40 @@ export default function SettingsView({
                       }}
                       className="w-full text-xs md:text-sm border border-slate-200 rounded-xl p-3 focus:outline-none focus:border-sky-500 bg-white"
                     >
-                      <option value="proforma_outcome_change">تغییر وضعیت نهایی پیش‌فاکتور</option>
-                      <option value="project_status_change">تغییر وضعیت پروژه</option>
-                      <option value="purchase_order_status_change">تغییر وضعیت سفارش خرید</option>
-                      <option value="packaging_delivery_created">ثبت بسته‌بندی و تحویل</option>
-                      <option value="supplier_inquiry_status_change">تغییر وضعیت استعلام تامین‌کننده</option>
-                      <option value="after_sales_service_status_change">تغییر وضعیت خدمات پس از فروش</option>
+                      <optgroup label="پیش‌فاکتورها و پروژه‌ها">
+                        <option value="proforma_created">ایجاد پیش‌فاکتور جدید</option>
+                        <option value="proforma_outcome_change">تغییر وضعیت نهایی پیش‌فاکتور</option>
+                        <option value="project_created">ایجاد پروژه جدید</option>
+                        <option value="project_status_change">تغییر وضعیت پروژه</option>
+                      </optgroup>
+                      <optgroup label="خرید و تأمین‌کنندگان">
+                        <option value="customer_created">ثبت مشتری جدید</option>
+                        <option value="customer_updated">ویرایش اطلاعات مشتری</option>
+                        <option value="supplier_created">ثبت تامین‌کننده جدید</option>
+                        <option value="supplier_inquiry_created">ثبت استعلام قیمت جدید</option>
+                        <option value="supplier_inquiry_status_change">تغییر وضعیت استعلام تامین‌کننده</option>
+                        <option value="purchase_order_created">ثبت سفارش خرید جدید</option>
+                        <option value="purchase_order_status_change">تغییر وضعیت سفارش خرید</option>
+                      </optgroup>
+                      <optgroup label="کالاها و انبار">
+                        <option value="product_created">ثبت کالای جدید</option>
+                        <option value="product_low_stock">کاهش موجودی کالا به کمتر از حد مجاز</option>
+                        <option value="packaging_delivery_created">ثبت بسته‌بندی و تحویل</option>
+                        <option value="packaging_delivery_status_change">تغییر وضعیت بسته‌بندی و تحویل</option>
+                      </optgroup>
+                      <optgroup label="خدمات پس از فروش">
+                        <option value="after_sales_service_created">ثبت درخواست خدمات پس از فروش جدید</option>
+                        <option value="after_sales_service_status_change">تغییر وضعیت خدمات پس از فروش</option>
+                      </optgroup>
+                      <optgroup label="مالی و پرداخت‌ها">
+                        <option value="transaction_created">ثبت تراکنش مالی جدید</option>
+                      </optgroup>
+                      <optgroup label="وظایف و ارجاعات">
+                        <option value="task_created">ایجاد وظیفه جدید</option>
+                        <option value="task_status_change">تغییر وضعیت وظیفه</option>
+                        <option value="referral_created">ارجاع کار جدید به پرسنل</option>
+                        <option value="referral_status_change">تغییر وضعیت ارجاع کار</option>
+                      </optgroup>
                     </select>
                   </div>
                 </div>
@@ -2473,19 +2524,35 @@ export default function SettingsView({
                       type="button"
                       onClick={() => {
                         const fieldMap: Record<string, string> = {
+                          proforma_created: 'status',
                           proforma_outcome_change: 'newOutcome',
+                          project_created: 'status',
                           project_status_change: 'newStatus',
-                          purchase_order_status_change: 'newStatus',
-                          packaging_delivery_created: 'action',
+                          customer_created: 'type',
+                          customer_updated: 'newStatus',
+                          supplier_created: 'city',
+                          supplier_inquiry_created: 'status',
                           supplier_inquiry_status_change: 'newStatus',
-                          after_sales_service_status_change: 'newStatus'
+                          purchase_order_created: 'status',
+                          purchase_order_status_change: 'newStatus',
+                          product_created: 'stockLevel',
+                          product_low_stock: 'stockLevel',
+                          packaging_delivery_created: 'action',
+                          packaging_delivery_status_change: 'status',
+                          after_sales_service_created: 'status',
+                          after_sales_service_status_change: 'newStatus',
+                          transaction_created: 'type',
+                          task_created: 'status',
+                          task_status_change: 'newStatus',
+                          referral_created: 'status',
+                          referral_status_change: 'newStatus',
                         };
                         const conds = editingRule.conditions || [];
                         setEditingRule({
                           ...editingRule,
                           conditions: [
                             ...conds,
-                            { field: fieldMap[editingRule.triggerType] || 'newOutcome', operator: 'equals', value: '' }
+                            { field: fieldMap[editingRule.triggerType] || 'status', operator: 'equals', value: '' }
                           ]
                         });
                       }}
@@ -2512,16 +2579,33 @@ export default function SettingsView({
                             { value: 'action', label: 'عملیات' }
                           ];
                           valueOptions = ['ایجاد'];
+                        } else if (editingRule.triggerType === 'packaging_delivery_status_change') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت جدید' },
+                            { value: 'oldStatus', label: 'وضعیت قبلی' }
+                          ];
+                          valueOptions = ['پیش‌نویس', 'آماده بسته‌بندی', 'بسته‌بندی شده', 'آماده ارسال', 'ارسال شده', 'تحویل شده', 'لغو شده'];
                         } else if (editingRule.triggerType === 'supplier_inquiry_status_change') {
                           fieldOptions = [
                             { value: 'newStatus', label: 'وضعیت جدید' },
                             { value: 'oldStatus', label: 'وضعیت قبلی' }
                           ];
                           valueOptions = ['پیش‌نویس', 'ارسال شده', 'در انتظار پاسخ', 'پاسخ داده شده', 'لغو شده', 'برنده', 'بازنده'];
+                        } else if (editingRule.triggerType === 'supplier_inquiry_created') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت' },
+                            { value: 'price', label: 'قیمت استعلام' }
+                          ];
+                          valueOptions = ['پیش‌نویس', 'ارسال شده', 'در انتظار پاسخ', 'پاسخ داده شده', 'لغو شده', 'برنده', 'بازنده'];
                         } else if (editingRule.triggerType === 'after_sales_service_status_change') {
                           fieldOptions = [
                             { value: 'newStatus', label: 'وضعیت جدید' },
                             { value: 'oldStatus', label: 'وضعیت قبلی' }
+                          ];
+                          valueOptions = ['در حال بررسی', 'در حال تعمیر/خدمات', 'تکمیل شده', 'تحویل داده شده'];
+                        } else if (editingRule.triggerType === 'after_sales_service_created') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت خدمات' }
                           ];
                           valueOptions = ['در حال بررسی', 'در حال تعمیر/خدمات', 'تکمیل شده', 'تحویل داده شده'];
                         } else if (editingRule.triggerType === 'proforma_outcome_change') {
@@ -2531,10 +2615,21 @@ export default function SettingsView({
                             { value: 'proformaAmount', label: 'مبلغ پیش‌فاکتور' }
                           ];
                           valueOptions = ['تأیید شده (برنده)', 'نیمه برنده', 'باخته', 'لغو شده', 'در حال بررسی', 'پیش‌نویس'];
+                        } else if (editingRule.triggerType === 'proforma_created') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت پیش‌فاکتور' },
+                            { value: 'totalAmount', label: 'مبلغ کل' }
+                          ];
+                          valueOptions = ['تأیید شده (برنده)', 'نیمه برنده', 'باخته', 'لغو شده', 'در حال بررسی', 'پیش‌نویس'];
                         } else if (editingRule.triggerType === 'project_status_change') {
                           fieldOptions = [
                             { value: 'newStatus', label: 'وضعیت جدید پروژه' },
                             { value: 'oldStatus', label: 'وضعیت قبلی پروژه' }
+                          ];
+                          valueOptions = ['پیشنهاد فنی مالی', 'در دست بررسی', 'برنده شده', 'باخته شده'];
+                        } else if (editingRule.triggerType === 'project_created') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت پروژه' }
                           ];
                           valueOptions = ['پیشنهاد فنی مالی', 'در دست بررسی', 'برنده شده', 'باخته شده'];
                         } else if (editingRule.triggerType === 'purchase_order_status_change') {
@@ -2543,6 +2638,68 @@ export default function SettingsView({
                             { value: 'oldStatus', label: 'وضعیت قبلی سفارش خرید' }
                           ];
                           valueOptions = ['پیش‌نویس', 'در انتظار تأیید', 'تأیید شده', 'ارسال شده', 'تحویل شده (رسید انبار)', 'لغو شده'];
+                        } else if (editingRule.triggerType === 'purchase_order_created') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت سفارش خرید' },
+                            { value: 'totalAmount', label: 'مبلغ کل' }
+                          ];
+                          valueOptions = ['پیش‌نویس', 'در انتظار تأیید', 'تأیید شده', 'ارسال شده', 'تحویل شده (رسید انبار)', 'لغو شده'];
+                        } else if (editingRule.triggerType === 'customer_created') {
+                          fieldOptions = [
+                            { value: 'type', label: 'نوع مشتری' },
+                            { value: 'city', label: 'شهر' },
+                            { value: 'country', label: 'کشور' }
+                          ];
+                          valueOptions = ['حقوقی', 'حقیقی'];
+                        } else if (editingRule.triggerType === 'customer_updated') {
+                          fieldOptions = [
+                            { value: 'newStatus', label: 'نوع جدید مشتری' },
+                            { value: 'oldType', label: 'نوع قبلی مشتری' },
+                            { value: 'city', label: 'شهر' }
+                          ];
+                          valueOptions = ['حقوقی', 'حقیقی'];
+                        } else if (editingRule.triggerType === 'supplier_created') {
+                          fieldOptions = [
+                            { value: 'city', label: 'شهر' },
+                            { value: 'country', label: 'کشور' }
+                          ];
+                          valueOptions = [];
+                        } else if (editingRule.triggerType === 'product_created' || editingRule.triggerType === 'product_low_stock') {
+                          fieldOptions = [
+                            { value: 'stockLevel', label: 'موجودی' },
+                            { value: 'minStockLevel', label: 'حداقل موجودی' }
+                          ];
+                          valueOptions = [];
+                        } else if (editingRule.triggerType === 'transaction_created') {
+                          fieldOptions = [
+                            { value: 'type', label: 'نوع تراکنش' },
+                            { value: 'paymentType', label: 'روش پرداخت' },
+                            { value: 'amountRIYAL', label: 'مبلغ ریالی' }
+                          ];
+                          valueOptions = ['دریافت', 'پرداخت', 'چک', 'حواله', 'نقدی', 'کارت به کارت', 'سایر'];
+                        } else if (editingRule.triggerType === 'task_created') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت' },
+                            { value: 'priority', label: 'اولویت' }
+                          ];
+                          valueOptions = ['در انتظار', 'در حال انجام', 'تکمیل شده', 'کم', 'متوسط', 'زیاد', 'بحرانی'];
+                        } else if (editingRule.triggerType === 'task_status_change') {
+                          fieldOptions = [
+                            { value: 'newStatus', label: 'وضعیت جدید' },
+                            { value: 'oldStatus', label: 'وضعیت قبلی' }
+                          ];
+                          valueOptions = ['در انتظار', 'در حال انجام', 'تکمیل شده'];
+                        } else if (editingRule.triggerType === 'referral_created') {
+                          fieldOptions = [
+                            { value: 'status', label: 'وضعیت ارجاع' }
+                          ];
+                          valueOptions = ['در انتظار اقدام', 'در حال انجام', 'انجام شده', 'لغو شده'];
+                        } else if (editingRule.triggerType === 'referral_status_change') {
+                          fieldOptions = [
+                            { value: 'newStatus', label: 'وضعیت جدید' },
+                            { value: 'oldStatus', label: 'وضعیت قبلی' }
+                          ];
+                          valueOptions = ['در انتظار اقدام', 'در حال انجام', 'انجام شده', 'لغو شده'];
                         }
 
                         return (
@@ -2578,16 +2735,16 @@ export default function SettingsView({
                             </select>
 
                             
-                            {cond.field === 'proformaAmount' || valueOptions.length === 0 ? (
+                            {cond.field === 'proformaAmount' || cond.field === 'totalAmount' || cond.field === 'price' || cond.field === 'amountRIYAL' || cond.field === 'stockLevel' || cond.field === 'minStockLevel' || valueOptions.length === 0 ? (
                               <input
-                                type="number"
+                                type={['stockLevel', 'minStockLevel', 'proformaAmount', 'totalAmount', 'price', 'amountRIYAL'].includes(cond.field) ? "number" : "text"}
                                 value={cond.value}
                                 onChange={(e) => {
                                   const updatedConds = [...editingRule.conditions];
                                   updatedConds[condIdx].value = e.target.value;
                                   setEditingRule({ ...editingRule, conditions: updatedConds });
                                 }}
-                                placeholder="مبلغ (ریال/ارز)"
+                                placeholder={['stockLevel', 'minStockLevel'].includes(cond.field) ? "تعداد" : "مقدار مورد نظر"}
                                 className="border border-slate-200 rounded-lg p-2 bg-white focus:outline-none focus:border-sky-500 font-mono text-left"
                               />
                             ) : (
@@ -2762,10 +2919,17 @@ export default function SettingsView({
                                   >
                                     <optgroup label="سمت‌های پویا">
                                       <option value="SALES_EXPERT">کارشناس فروش پروژه</option>
-                                      <option value="MODULE_RESPONSIBLE_purchaseOrders">مسئول ماژول سفارش خرید</option>
+                                      <option value="MODULE_RESPONSIBLE_customers">مسئول ماژول مشتریان</option>
+                                      <option value="MODULE_RESPONSIBLE_projects">مسئول ماژول پروژه‌ها (فرصت‌ها)</option>
+                                      <option value="MODULE_RESPONSIBLE_products">مسئول ماژول کالاها و تجهیزات</option>
                                       <option value="MODULE_RESPONSIBLE_proformas">مسئول ماژول پیش‌فاکتورها</option>
-                                      <option value="MODULE_RESPONSIBLE_projects">مسئول ماژول پروژه‌ها</option>
-                                      <option value="MODULE_RESPONSIBLE_afterSales">مسئول خدمات پس از فروش</option>
+                                      <option value="MODULE_RESPONSIBLE_suppliers">مسئول ماژول تأمین‌کنندگان</option>
+                                      <option value="MODULE_RESPONSIBLE_supplierInquiries">مسئول ماژول استعلام قیمت تأمین‌کنندگان</option>
+                                      <option value="MODULE_RESPONSIBLE_purchaseOrders">مسئول سفارشات خرید خارجی</option>
+                                      <option value="MODULE_RESPONSIBLE_packagingDelivery">مسئول ماژول بسته‌بندی و تحویل کالا</option>
+                                      <option value="MODULE_RESPONSIBLE_afterSalesServices">مسئول خدمات پس از فروش</option>
+                                      <option value="MODULE_RESPONSIBLE_transactions">مسئول ماژول تراکنش‌های مالی</option>
+                                      <option value="MODULE_RESPONSIBLE_tasks">مسئول ماژول وظایف و پیگیری</option>
                                     </optgroup>
                                     <optgroup label="کاربران سیستم">
                                       {users.map(u => (
@@ -2998,6 +3162,14 @@ export default function SettingsView({
                               title="ویرایش"
                             >
                               <Sliders size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyWorkflowRule(rule.id)}
+                              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900"
+                              title="کپی کردن قانون"
+                            >
+                              <Copy size={15} />
                             </button>
                             <button
                               type="button"

@@ -647,7 +647,29 @@ export interface WorkflowRule {
   id: string;
   name: string;
   active: boolean;
-  triggerType: 'proforma_outcome_change' | 'project_status_change' | 'purchase_order_status_change' | 'packaging_delivery_created' | 'after_sales_service_status_change';
+  triggerType: 
+    | 'customer_created'
+    | 'customer_updated'
+    | 'project_created'
+    | 'project_status_change'
+    | 'proforma_created'
+    | 'proforma_outcome_change'
+    | 'product_created'
+    | 'product_low_stock'
+    | 'supplier_created'
+    | 'supplier_inquiry_created'
+    | 'supplier_inquiry_status_change'
+    | 'purchase_order_created'
+    | 'purchase_order_status_change'
+    | 'packaging_delivery_created'
+    | 'packaging_delivery_status_change'
+    | 'after_sales_service_created'
+    | 'after_sales_service_status_change'
+    | 'transaction_created'
+    | 'task_created'
+    | 'task_status_change'
+    | 'referral_created'
+    | 'referral_status_change';
   conditions: {
     field: string; // e.g. 'newOutcome', 'newStatus'
     operator: 'equals' | 'not_equals' | 'greater_than' | 'less_than';

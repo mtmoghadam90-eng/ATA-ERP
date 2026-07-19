@@ -11,7 +11,9 @@ import {
   FileText, 
   X,
   CreditCard,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { Supplier, ERPSettings } from '../types';
 import CustomFieldsForm from './CustomFieldsForm';
@@ -37,6 +39,7 @@ export default function SuppliersView({
   const [search, setSearch] = useState('');
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [showModal, setShowModal] = useState(false);
+  const [isSupplierModalFullscreen, setIsSupplierModalFullscreen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
 
   // Dynamic Custom Fields State
@@ -131,6 +134,7 @@ export default function SuppliersView({
       addSupplier(data);
     }
     setShowModal(false);
+    setIsSupplierModalFullscreen(false);
   };
 
   const filteredSuppliers = suppliers.filter(s => {
@@ -451,18 +455,36 @@ export default function SuppliersView({
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-xl overflow-hidden animate-scale-in">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isSupplierModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in flex flex-col transition-all duration-300 ${
+            isSupplierModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-xl my-4'
+          }`}>
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <h3 className="font-bold text-slate-800">
                 {editingSupplier ? `ویرایش پرونده تأمین‌کننده: ${editingSupplier.name}` : 'افزودن کمپانی تأمین‌کننده جدید'}
               </h3>
-              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsSupplierModalFullscreen(!isSupplierModalFullscreen)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isSupplierModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isSupplierModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowModal(false); setIsSupplierModalFullscreen(false); }}
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-right">
+            <form onSubmit={handleSave} className={`p-6 space-y-4 overflow-y-auto flex-1 text-right ${isSupplierModalFullscreen ? '' : 'max-h-[75vh]'}`}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 {/* Company Name */}
@@ -597,10 +619,10 @@ export default function SuppliersView({
 
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setIsSupplierModalFullscreen(false); }}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-medium transition"
                 >
                   انصراف

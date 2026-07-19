@@ -13,7 +13,11 @@ import {
   Info,
   TrendingUp,
   Image as ImageIcon,
-  Download
+  Download,
+  Maximize2,
+  Minimize2,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { Product, ProductVariant, ERPSettings, InventoryTransaction, ProductFeature, ExchangeRate } from '../types';
 import { toShamsiStr, toGregorianStr } from '../dateUtils';
@@ -64,6 +68,10 @@ export default function ProductsView({
   const [activeTab, setActiveTab] = useState<'PRODUCTS' | 'TRANSACTIONS'>('PRODUCTS');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showModal, setShowModal] = useState(false);
+  const [isProductModalFullscreen, setIsProductModalFullscreen] = useState(false);
+  const [isStockModalFullscreen, setIsStockModalFullscreen] = useState(false);
+  const [isBatchModalFullscreen, setIsBatchModalFullscreen] = useState(false);
+  const [isCalculatorFullscreen, setIsCalculatorFullscreen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Dynamic Custom Fields State
@@ -87,6 +95,28 @@ export default function ProductsView({
   const [features, setFeatures] = useState<ProductFeature[]>([]);
   const [hasVariants, setHasVariants] = useState(false);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
+
+  // SKU Filters & Bulk Pricing States
+  const [variantSearchQuery, setVariantSearchQuery] = useState('');
+  const [variantAttributeFilters, setVariantAttributeFilters] = useState<Record<string, string>>({});
+  const [bulkPriceForeign, setBulkPriceForeign] = useState<string>('');
+  const [bulkCurrencyForeign, setBulkCurrencyForeign] = useState<string>('یورو');
+  const [bulkPriceRIYAL, setBulkPriceRIYAL] = useState<string>('');
+  const [bulkApplyToFilteredOnly, setBulkApplyToFilteredOnly] = useState<boolean>(false);
+  const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string>('');
+  const [bulkErrorMsg, setBulkErrorMsg] = useState<string>('');
+
+  const handleAddFeature = () => {
+    const newId = Date.now().toString();
+    setFeatures(prev => [...prev, { id: newId, name: '', options: [] }]);
+    setTimeout(() => {
+      const el = document.getElementById(`feature-name-${newId}`);
+      if (el) {
+        el.focus();
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
 
   // Simple Product Price States
   const [simplePriceForeign, setSimplePriceForeign] = useState<string>('');
@@ -158,6 +188,7 @@ export default function ProductsView({
       setVariants(newV);
     }
     setShowCalculator(false);
+    setIsCalculatorFullscreen(false);
   };
 
   const convertForeignToRialSimple = (priceForeign: number, currency: string) => {
@@ -411,6 +442,7 @@ export default function ProductsView({
         
         alert(`عملیات موفقیت آمیز بود. ${successCount} کالا بروزرسانی شد و ${createCount} کالای جدید تعریف شد.`);
         setBatchModalOpen(false);
+        setIsBatchModalFullscreen(false);
         setBatchFile(null);
       } catch (err) {
         alert('خطا در پردازش فایل اکسل');
@@ -812,21 +844,36 @@ export default function ProductsView({
 
       {/* Add / Edit Product Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-xl overflow-hidden animate-scale-in">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isProductModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in flex flex-col transition-all duration-300 ${
+            isProductModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-xl my-4 max-h-[calc(100vh-2rem)]'
+          }`}>
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+              <h3 className="font-bold text-slate-800 text-sm sm:text-base">
                 {editingProduct ? `ویرایش اطلاعات فنی: ${editingProduct.displayName}` : 'تعریف تجهیز ابزاردقیق جدید'}
               </h3>
-              <button 
-                onClick={() => setShowModal(false)}
-                className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsProductModalFullscreen(!isProductModalFullscreen)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isProductModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isProductModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowModal(false); setIsProductModalFullscreen(false); }}
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            <form onSubmit={handleSave} className="p-6 space-y-4 overflow-y-auto flex-1">
               <div className="space-y-4">
                 
                 {/* Category */}
@@ -1091,7 +1138,7 @@ export default function ProductsView({
                     </div>
                     <button
                       type="button"
-                      onClick={() => setFeatures([...features, { id: Date.now().toString(), name: '', options: [] }])}
+                      onClick={handleAddFeature}
                       className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 transition flex items-center gap-1"
                     >
                       <Plus size={14} />
@@ -1105,6 +1152,7 @@ export default function ProductsView({
                         <div className="flex-1 flex flex-col sm:flex-row gap-2 w-full">
                           <input
                             type="text"
+                            id={`feature-name-${feature.id}`}
                             value={feature.name}
                             onChange={(e) => {
                               const newF = [...features];
@@ -1126,17 +1174,60 @@ export default function ProductsView({
                             className="w-full sm:w-24 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-sky-500 sm:text-center"
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newF = [...features];
-                            newF.splice(fIndex, 1);
-                            setFeatures(newF);
-                          }}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg shrink-0 mt-0.5"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                          <button
+                            type="button"
+                            disabled={fIndex === 0}
+                            onClick={() => {
+                              if (fIndex === 0) return;
+                              const newF = [...features];
+                              const temp = newF[fIndex];
+                              newF[fIndex] = newF[fIndex - 1];
+                              newF[fIndex - 1] = temp;
+                              setFeatures(newF);
+                            }}
+                            className={`p-1.5 rounded-lg transition ${
+                              fIndex === 0 
+                                ? 'text-slate-300 cursor-not-allowed' 
+                                : 'text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                            }`}
+                            title="انتقال به بالا"
+                          >
+                            <ArrowUp size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={fIndex === features.length - 1}
+                            onClick={() => {
+                              if (fIndex === features.length - 1) return;
+                              const newF = [...features];
+                              const temp = newF[fIndex];
+                              newF[fIndex] = newF[fIndex + 1];
+                              newF[fIndex + 1] = temp;
+                              setFeatures(newF);
+                            }}
+                            className={`p-1.5 rounded-lg transition ${
+                              fIndex === features.length - 1 
+                                ? 'text-slate-300 cursor-not-allowed' 
+                                : 'text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                            }`}
+                            title="انتقال به پایین"
+                          >
+                            <ArrowDown size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newF = [...features];
+                              newF.splice(fIndex, 1);
+                              setFeatures(newF);
+                            }}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                            title="حذف ویژگی"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
@@ -1219,6 +1310,19 @@ export default function ProductsView({
                       </div>
                     </div>
                   ))}
+
+                  {features.length > 0 && (
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={handleAddFeature}
+                        className="px-4 py-2 bg-sky-50 text-sky-600 border border-sky-200 text-xs font-bold rounded-xl hover:bg-sky-100 transition flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Plus size={15} />
+                        افزودن ویژگی جدید
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Variants Configuration */}
@@ -1265,9 +1369,9 @@ export default function ProductsView({
                               const newVariants = combinations.map((combo, i) => {
                                 // Generate SKU
                                 const skuParts = [pCode];
-                                Object.entries(combo).forEach(([fName, fVal]) => {
-                                  const feat = features.find(f => f.name === fName);
-                                  if (feat) {
+                                features.forEach((feat) => {
+                                  const fVal = combo[feat.name];
+                                  if (fVal) {
                                     const optIndex = feat.options.findIndex(o => o.value === fVal);
                                     if (optIndex !== -1) {
                                       const prefix = feat.code ? feat.code : '';
@@ -1306,135 +1410,384 @@ export default function ProductsView({
                         </div>
                         
                         {variants.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-right border-collapse">
-                              <thead>
-                                <tr className="border-b border-slate-200">
-                                  <th className="w-56 min-w-[220px] py-2 px-3 text-xs font-semibold text-slate-600">کد SKU</th>
-                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">ترکیب</th>
-                                  {supplyType === 'INVENTORY' && <th className="py-2 px-3 text-xs font-semibold text-slate-600">موجودی اولیه</th>}
-                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">قیمت ارزی</th>
-                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">قیمت فروش (ریال)</th>
-                                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">عملیات</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {variants.map((variant, vIdx) => (
-                                  <tr key={variant.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-100 transition">
-                                    <td className="py-2 px-3">
-                                      <input
-                                        type="text"
-                                        value={variant.sku}
+                          <div className="space-y-4">
+                            {/* SKU Filters and Search */}
+                            <div className="space-y-4 p-4 bg-slate-50 border border-slate-200 rounded-xl text-right">
+                              <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+                                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                                  ابزارهای جستجو و فیلتر SKUها ({variants.filter(v => {
+                                    if (variantSearchQuery) {
+                                      const q = variantSearchQuery.toLowerCase();
+                                      const skuMatch = v.sku.toLowerCase().includes(q);
+                                      const attrMatch = Object.entries(v.attributes).some(([key, val]) => 
+                                        key.toLowerCase().includes(q) || String(val).toLowerCase().includes(q)
+                                      );
+                                      if (!skuMatch && !attrMatch) return false;
+                                    }
+                                    for (const [featName, featValue] of Object.entries(variantAttributeFilters)) {
+                                      if (featValue && featValue !== 'all') {
+                                        if (v.attributes[featName] !== featValue) return false;
+                                      }
+                                    }
+                                    return true;
+                                  }).length} از {variants.length})
+                                </h4>
+                                
+                                {/* Clear Filters button */}
+                                {(variantSearchQuery || Object.values(variantAttributeFilters).some(v => v !== 'all')) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setVariantSearchQuery('');
+                                      setVariantAttributeFilters({});
+                                    }}
+                                    className="text-xs text-red-500 hover:text-red-600 transition font-medium"
+                                  >
+                                    حذف فیلترها
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Filters Row */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                                {/* Text Search */}
+                                <div className="space-y-1 sm:col-span-2">
+                                  <label className="text-[11px] text-slate-500 font-medium block">جستجو در SKU یا نام ویژگی</label>
+                                  <input
+                                    type="text"
+                                    value={variantSearchQuery}
+                                    onChange={(e) => setVariantSearchQuery(e.target.value)}
+                                    placeholder="مثال: قرمز، XL، یا SKU..."
+                                    className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 bg-white"
+                                  />
+                                </div>
+
+                                {/* Dynamic Dropdowns for Features */}
+                                {features.map((feature) => {
+                                  const selectedVal = variantAttributeFilters[feature.name] || 'all';
+                                  return (
+                                    <div key={feature.id} className="space-y-1">
+                                      <label className="text-[11px] text-slate-500 font-medium block">فیلتر {feature.name}</label>
+                                      <select
+                                        value={selectedVal}
                                         onChange={(e) => {
-                                          const newV = [...variants];
-                                          newV[vIdx].sku = e.target.value;
-                                          setVariants(newV);
+                                          setVariantAttributeFilters(prev => ({
+                                            ...prev,
+                                            [feature.name]: e.target.value
+                                          }));
                                         }}
-                                        placeholder="SKU"
-                                        className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-left tracking-wider"
-                                        dir="ltr"
-                                      />
-                                    </td>
-                                    <td className="py-2 px-3 text-xs text-slate-700 whitespace-nowrap">
-                                      {Object.entries(variant.attributes).map(([k, v]) => `${k}: ${v}`).join(' ، ')}
-                                    </td>
-                                    {supplyType === 'INVENTORY' && (
-                                      <td className="py-2 px-3">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          value={variant.stockLevel}
-                                          onChange={(e) => {
-                                            const newV = [...variants];
-                                            newV[vIdx].stockLevel = Number(e.target.value) || 0;
-                                            setVariants(newV);
-                                          }}
-                                          className="w-20 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500"
-                                        />
-                                      </td>
-                                    )}
-                                    <td className="py-2 px-3">
-                                      <div className="flex items-center gap-1.5">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          step="any"
-                                          value={variant.priceForeign !== undefined ? variant.priceForeign : ""}
-                                          onChange={(e) => {
-                                            const newV = [...variants];
-                                            const val = e.target.value === "" ? undefined : Number(e.target.value);
-                                            newV[vIdx].priceForeign = val;
-                                            if (val !== undefined) {
-                                              newV[vIdx].priceRIYAL = convertForeignToRialSimple(val, newV[vIdx].currencyForeign || "یورو");
-                                            } else {
-                                              newV[vIdx].priceRIYAL = undefined;
-                                            }
-                                            setVariants(newV);
-                                          }}
-                                          placeholder="0"
-                                          className="w-20 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center"
-                                        />
-                                        <select
-                                          value={variant.currencyForeign || "یورو"}
-                                          onChange={(e) => {
-                                            const newV = [...variants];
-                                            const curr = e.target.value;
-                                            newV[vIdx].currencyForeign = curr;
-                                            if (newV[vIdx].priceForeign !== undefined) {
-                                              newV[vIdx].priceRIYAL = convertForeignToRialSimple(newV[vIdx].priceForeign!, curr);
-                                            }
-                                            setVariants(newV);
-                                          }}
-                                          className="border border-slate-200 rounded px-1 py-1 text-[11px] outline-none focus:border-sky-500 bg-white"
-                                        >
-                                          <option value="یورو">یورو</option>
-                                          <option value="دلار">دلار</option>
-                                          <option value="درهم">درهم</option>
-                                          <option value="یوان">یوان</option>
-                                        </select>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenCalculator(variant, vIdx)}
-                                          className="p-1 text-sky-600 hover:bg-sky-50 hover:text-sky-700 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 border border-sky-100 bg-white"
-                                          title="محاسبه‌گر حرفه‌ای قیمت فروش"
-                                        >
-                                          <Calculator size={13} />
-                                        </button>
-                                      </div>
-                                    </td>
-                                    <td className="py-2 px-3">
-                                      <input
-                                        type="text"
-                                        value={variant.priceRIYAL !== undefined ? Number(variant.priceRIYAL).toLocaleString('fa-IR') : ""}
-                                        onChange={(e) => {
-                                          const rawVal = e.target.value
-                                            .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-                                            .replace(/[^\d]/g, '');
-                                          const newV = [...variants];
-                                          newV[vIdx].priceRIYAL = rawVal === "" ? undefined : Number(rawVal);
-                                          setVariants(newV);
-                                        }}
-                                        placeholder="۰"
-                                        className="w-28 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center font-bold text-slate-800"
-                                      />
-                                    </td>
-                                    <td className="py-2 px-3">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const newV = [...variants];
-                                          newV.splice(vIdx, 1);
-                                          setVariants(newV);
-                                        }}
-                                        className="text-red-500 hover:text-red-600 hover:bg-red-50 p-1 rounded transition"
+                                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-sky-500 bg-white"
                                       >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    </td>
+                                        <option value="all">همه {feature.name}ها</option>
+                                        {feature.options.map(opt => (
+                                          <option key={opt.id} value={opt.value}>{opt.value}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Bulk Pricing Section */}
+                              <div className="border-t border-slate-200 pt-4 mt-2">
+                                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 mb-3">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                  قیمت‌گذاری گروهی (همسان‌سازی قیمت‌ها)
+                                </h4>
+                                
+                                <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-3 items-end">
+                                  <div className="space-y-1">
+                                    <label className="text-[11px] text-slate-500 font-medium block">قیمت ارزی یکسان</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      value={bulkPriceForeign}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setBulkPriceForeign(val);
+                                        if (val !== "") {
+                                          const converted = convertForeignToRialSimple(Number(val), bulkCurrencyForeign);
+                                          setBulkPriceRIYAL(String(converted));
+                                        } else {
+                                          setBulkPriceRIYAL("");
+                                        }
+                                      }}
+                                      placeholder="مثلا ۱۰۰"
+                                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 bg-white text-center font-mono"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[11px] text-slate-500 font-medium block">واحد ارز</label>
+                                    <select
+                                      value={bulkCurrencyForeign}
+                                      onChange={(e) => {
+                                        const curr = e.target.value;
+                                        setBulkCurrencyForeign(curr);
+                                        if (bulkPriceForeign !== "") {
+                                          const converted = convertForeignToRialSimple(Number(bulkPriceForeign), curr);
+                                          setBulkPriceRIYAL(String(converted));
+                                        }
+                                      }}
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500 bg-white"
+                                    >
+                                      <option value="یورو">یورو</option>
+                                      <option value="دلار">دلار</option>
+                                      <option value="درهم">درهم</option>
+                                      <option value="یوان">یوان</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[11px] text-slate-500 font-medium block">قیمت فروش یکسان (ریال)</label>
+                                    <input
+                                      type="text"
+                                      value={bulkPriceRIYAL !== "" ? Number(bulkPriceRIYAL).toLocaleString('fa-IR') : ""}
+                                      onChange={(e) => {
+                                        const rawVal = e.target.value
+                                          .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+                                          .replace(/[^\d]/g, '');
+                                        setBulkPriceRIYAL(rawVal);
+                                      }}
+                                      placeholder="مثلا ۷۰,۰۰۰,۰۰۰"
+                                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 bg-white text-center font-mono font-bold"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-2 py-1">
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600 font-medium select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={bulkApplyToFilteredOnly}
+                                        onChange={(e) => setBulkApplyToFilteredOnly(e.target.checked)}
+                                        className="w-3.5 h-3.5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                                      />
+                                      <span>فقط روی ردیف‌های فیلتر شده اعمال شود</span>
+                                    </label>
+                                    
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setBulkErrorMsg('');
+                                        setBulkSuccessMsg('');
+                                        if (bulkPriceForeign === "" && bulkPriceRIYAL === "") {
+                                          setBulkErrorMsg("لطفاً قیمت ارزی یا ریالی را جهت اعمال گروهی وارد نمایید.");
+                                          return;
+                                        }
+                                        const currentFiltered = variants.filter(v => {
+                                          if (variantSearchQuery) {
+                                            const q = variantSearchQuery.toLowerCase();
+                                            const skuMatch = v.sku.toLowerCase().includes(q);
+                                            const attrMatch = Object.entries(v.attributes).some(([key, val]) => 
+                                              key.toLowerCase().includes(q) || String(val).toLowerCase().includes(q)
+                                            );
+                                            if (!skuMatch && !attrMatch) return false;
+                                          }
+                                          for (const [featName, featValue] of Object.entries(variantAttributeFilters)) {
+                                            if (featValue && featValue !== 'all') {
+                                              if (v.attributes[featName] !== featValue) return false;
+                                            }
+                                          }
+                                          return true;
+                                        });
+
+                                        const targetList = bulkApplyToFilteredOnly ? currentFiltered : variants;
+                                        if (targetList.length === 0) {
+                                          setBulkErrorMsg("هیچ ردیفی برای اعمال قیمت پیدا نشد.");
+                                          return;
+                                        }
+
+                                        const targetIds = new Set(targetList.map(v => v.id));
+                                        const updatedVariants = variants.map(v => {
+                                          if (targetIds.has(v.id)) {
+                                            return {
+                                              ...v,
+                                              priceForeign: bulkPriceForeign !== "" ? Number(bulkPriceForeign) : undefined,
+                                              currencyForeign: bulkCurrencyForeign,
+                                              priceRIYAL: bulkPriceRIYAL !== "" ? Number(bulkPriceRIYAL) : undefined
+                                            };
+                                          }
+                                          return v;
+                                        });
+
+                                        setVariants(updatedVariants);
+                                        setBulkSuccessMsg(`قیمت‌گذاری با موفقیت روی ${targetList.length} ردیف اعمال شد.`);
+                                        setTimeout(() => setBulkSuccessMsg(''), 5000);
+                                      }}
+                                      className="w-full px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition shadow-sm flex items-center justify-center gap-1"
+                                    >
+                                      اعمال گروهی قیمت
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {bulkSuccessMsg && (
+                                  <div className="mt-2 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
+                                    {bulkSuccessMsg}
+                                  </div>
+                                )}
+                                {bulkErrorMsg && (
+                                  <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg p-2 text-center">
+                                    {bulkErrorMsg}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* SKU Variants Table */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-right border-collapse">
+                                <thead>
+                                  <tr className="border-b border-slate-200">
+                                    <th className="w-56 min-w-[220px] py-2 px-3 text-xs font-semibold text-slate-600">کد SKU</th>
+                                    <th className="py-2 px-3 text-xs font-semibold text-slate-600">ترکیب</th>
+                                    {supplyType === 'INVENTORY' && <th className="py-2 px-3 text-xs font-semibold text-slate-600">موجودی اولیه</th>}
+                                    <th className="py-2 px-3 text-xs font-semibold text-slate-600">قیمت ارزی</th>
+                                    <th className="py-2 px-3 text-xs font-semibold text-slate-600">قیمت فروش (ریال)</th>
+                                    <th className="py-2 px-3 text-xs font-semibold text-slate-600">عملیات</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {variants.filter(v => {
+                                    // Filter rows dynamically
+                                    if (variantSearchQuery) {
+                                      const q = variantSearchQuery.toLowerCase();
+                                      const skuMatch = v.sku.toLowerCase().includes(q);
+                                      const attrMatch = Object.entries(v.attributes).some(([key, val]) => 
+                                        key.toLowerCase().includes(q) || String(val).toLowerCase().includes(q)
+                                      );
+                                      if (!skuMatch && !attrMatch) return false;
+                                    }
+                                    for (const [featName, featValue] of Object.entries(variantAttributeFilters)) {
+                                      if (featValue && featValue !== 'all') {
+                                        if (v.attributes[featName] !== featValue) return false;
+                                      }
+                                    }
+                                    return true;
+                                  }).map((variant) => {
+                                    const originalIdx = variants.findIndex(v => v.id === variant.id);
+                                    if (originalIdx === -1) return null;
+
+                                    return (
+                                      <tr key={variant.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-100 transition">
+                                        <td className="py-2 px-3">
+                                          <input
+                                            type="text"
+                                            value={variant.sku}
+                                            onChange={(e) => {
+                                              const newV = [...variants];
+                                              newV[originalIdx].sku = e.target.value;
+                                              setVariants(newV);
+                                            }}
+                                            placeholder="SKU"
+                                            className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-left tracking-wider"
+                                            dir="ltr"
+                                          />
+                                        </td>
+                                        <td className="py-2 px-3 text-xs text-slate-700 whitespace-nowrap">
+                                          {Object.entries(variant.attributes).map(([k, v]) => `${k}: ${v}`).join(' ، ')}
+                                        </td>
+                                        {supplyType === 'INVENTORY' && (
+                                          <td className="py-2 px-3">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              value={variant.stockLevel}
+                                              onChange={(e) => {
+                                                const newV = [...variants];
+                                                newV[originalIdx].stockLevel = Number(e.target.value) || 0;
+                                                setVariants(newV);
+                                              }}
+                                              className="w-20 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500"
+                                            />
+                                          </td>
+                                        )}
+                                        <td className="py-2 px-3">
+                                          <div className="flex items-center gap-1.5">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              step="any"
+                                              value={variant.priceForeign !== undefined ? variant.priceForeign : ""}
+                                              onChange={(e) => {
+                                                const newV = [...variants];
+                                                const val = e.target.value === "" ? undefined : Number(e.target.value);
+                                                newV[originalIdx].priceForeign = val;
+                                                if (val !== undefined) {
+                                                  newV[originalIdx].priceRIYAL = convertForeignToRialSimple(val, newV[originalIdx].currencyForeign || "یورو");
+                                                } else {
+                                                  newV[originalIdx].priceRIYAL = undefined;
+                                                }
+                                                setVariants(newV);
+                                              }}
+                                              placeholder="0"
+                                              className="w-20 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center"
+                                            />
+                                            <select
+                                              value={variant.currencyForeign || "یورو"}
+                                              onChange={(e) => {
+                                                const newV = [...variants];
+                                                const curr = e.target.value;
+                                                newV[originalIdx].currencyForeign = curr;
+                                                if (newV[originalIdx].priceForeign !== undefined) {
+                                                  newV[originalIdx].priceRIYAL = convertForeignToRialSimple(newV[originalIdx].priceForeign!, curr);
+                                                }
+                                                setVariants(newV);
+                                              }}
+                                              className="border border-slate-200 rounded px-1 py-1 text-[11px] outline-none focus:border-sky-500 bg-white"
+                                            >
+                                              <option value="یورو">یورو</option>
+                                              <option value="دلار">دلار</option>
+                                              <option value="درهم">درهم</option>
+                                              <option value="یوان">یوان</option>
+                                            </select>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenCalculator(variant, originalIdx)}
+                                              className="p-1 text-sky-600 hover:bg-sky-50 hover:text-sky-700 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 border border-sky-100 bg-white"
+                                              title="محاسبه‌گر حرفه‌ای قیمت فروش"
+                                            >
+                                              <Calculator size={13} />
+                                            </button>
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-3">
+                                          <input
+                                            type="text"
+                                            value={variant.priceRIYAL !== undefined ? Number(variant.priceRIYAL).toLocaleString('fa-IR') : ""}
+                                            onChange={(e) => {
+                                              const rawVal = e.target.value
+                                                .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+                                                .replace(/[^\d]/g, '');
+                                              const newV = [...variants];
+                                              newV[originalIdx].priceRIYAL = rawVal === "" ? undefined : Number(rawVal);
+                                              setVariants(newV);
+                                            }}
+                                            placeholder="۰"
+                                            className="w-28 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center font-bold text-slate-800"
+                                          />
+                                        </td>
+                                        <td className="py-2 px-3">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const newV = [...variants];
+                                              newV.splice(originalIdx, 1);
+                                              setVariants(newV);
+                                            }}
+                                            className="text-red-500 hover:text-red-600 hover:bg-red-50 p-1 rounded transition"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         ) : (
                           <div className="text-center py-6 text-slate-400 text-xs">
@@ -1459,7 +1812,7 @@ export default function ProductsView({
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setIsProductModalFullscreen(false); }}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-medium transition"
                 >
                   انصراف
@@ -1479,18 +1832,33 @@ export default function ProductsView({
 
       {/* Adjust Stock Modal */}
       {stockModalOpen && stockAdjustProd && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-sm overflow-hidden animate-scale-in">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isStockModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in flex flex-col transition-all duration-300 ${
+            isStockModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-sm my-4'
+          }`}>
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <h3 className="font-bold text-slate-800">
                 ثبت ورود/خروج انبار
               </h3>
-              <button 
-                onClick={() => setStockModalOpen(false)}
-                className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsStockModalFullscreen(!isStockModalFullscreen)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isStockModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isStockModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setStockModalOpen(false); setIsStockModalFullscreen(false); }}
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
@@ -1515,8 +1883,9 @@ export default function ProductsView({
                 
                 adjustProductStock(stockAdjustProd.id, finalAmt, stockAdjustVariantId || undefined, 'MANUAL', stockAdjustNotes);
                 setStockModalOpen(false);
+                setIsStockModalFullscreen(false);
               }
-            }} className="p-6 space-y-4">
+            }} className="p-6 space-y-4 overflow-y-auto flex-1">
               
               <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
                 <div className="font-bold text-slate-800 mb-1">{stockAdjustProd.displayName}</div>
@@ -1589,7 +1958,7 @@ export default function ProductsView({
               <div className="flex gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setStockModalOpen(false)}
+                  onClick={() => { setStockModalOpen(false); setIsStockModalFullscreen(false); }}
                   className="flex-1 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-medium transition"
                 >
                   انصراف
@@ -1609,21 +1978,36 @@ export default function ProductsView({
 
       {/* Batch Upload Modal */}
       {batchModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 overflow-y-auto ${isBatchModalFullscreen ? 'p-0' : 'p-4'}`}>
+          <div className={`bg-white shadow-xl border border-slate-100 overflow-hidden animate-scale-in flex flex-col transition-all duration-300 ${
+            isBatchModalFullscreen 
+              ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+              : 'rounded-2xl w-full max-w-md my-4'
+          }`}>
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <h3 className="font-bold text-slate-800">
                 ورود و خروج گروهی با اکسل
               </h3>
-              <button 
-                onClick={() => setBatchModalOpen(false)}
-                className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  type="button"
+                  onClick={() => setIsBatchModalFullscreen(!isBatchModalFullscreen)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                  title={isBatchModalFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                >
+                  {isBatchModalFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setBatchModalOpen(false); setIsBatchModalFullscreen(false); }}
+                  className="p-1 hover:bg-slate-200 text-slate-500 rounded-lg transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
               <div className="bg-blue-50 text-blue-800 p-4 rounded-xl text-sm leading-relaxed border border-blue-100">
                 برای ویرایش موجودی یا <strong>تعریف گروهی تجهیزات جدید</strong>، ابتدا فایل نمونه را دانلود کنید. <br/>
                 - <strong>نوع تامین</strong>: برای کالاهای موجود در انبار مقدار <code>INVENTORY</code> و برای کالاهای سفارشی مقدار <code>ORDER</code> را وارد کنید.<br/>
@@ -1659,7 +2043,7 @@ export default function ProductsView({
               <div className="flex gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setBatchModalOpen(false)}
+                  onClick={() => { setBatchModalOpen(false); setIsBatchModalFullscreen(false); }}
                   className="flex-1 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-medium transition"
                 >
                   انصراف
@@ -1724,10 +2108,14 @@ export default function ProductsView({
         const finalSellingPriceForeign = rate > 0 ? (finalSellingPriceRial / rate) : 0;
 
         return (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-55 overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-2xl border border-slate-150 w-full max-w-2xl overflow-hidden animate-scale-in flex flex-col my-8">
+          <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-55 overflow-y-auto ${isCalculatorFullscreen ? 'p-0' : 'p-4'}`}>
+            <div className={`bg-white shadow-2xl border border-slate-150 overflow-hidden animate-scale-in flex flex-col transition-all duration-300 ${
+              isCalculatorFullscreen 
+                ? 'w-screen h-screen rounded-none my-0 max-w-full max-h-screen' 
+                : 'rounded-2xl w-full max-w-2xl my-8 max-h-[calc(100vh-4rem)]'
+            }`}>
               {/* Header */}
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
                 <div className="flex items-center gap-2">
                   <Calculator className="text-sky-500" size={20} />
                   <div>
@@ -1737,16 +2125,27 @@ export default function ProductsView({
                     </p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowCalculator(false)}
-                  className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition"
-                >
-                  <X size={18} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    type="button"
+                    onClick={() => setIsCalculatorFullscreen(!isCalculatorFullscreen)}
+                    className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition flex items-center justify-center"
+                    title={isCalculatorFullscreen ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
+                  >
+                    {isCalculatorFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => { setShowCalculator(false); setIsCalculatorFullscreen(false); }}
+                    className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               {/* Body */}
-              <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto text-right">
+              <div className="p-6 space-y-5 overflow-y-auto text-right flex-1">
                 
                 {/* Result Display Box */}
                 <div className="bg-slate-900 text-white p-5 rounded-2xl relative overflow-hidden shadow-inner">
@@ -2005,7 +2404,7 @@ export default function ProductsView({
               <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowCalculator(false)}
+                  onClick={() => { setShowCalculator(false); setIsCalculatorFullscreen(false); }}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-medium transition"
                 >
                   انصراف

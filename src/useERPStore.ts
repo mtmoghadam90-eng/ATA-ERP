@@ -792,12 +792,13 @@ export function useERPStore() {
       );
       return updated;
     });
+    processWorkflowRules('customer_created', newCustomer);
     return newCustomer;
   };
 
   const updateCustomer = (updatedCust: Customer) => {
+    const before = customers.find((c) => c.id === updatedCust.id);
     setCustomers((prev) => {
-      const before = prev.find((c) => c.id === updatedCust.id);
       const updated = prev.map((c) =>
         c.id === updatedCust.id ? updatedCust : c,
       );
@@ -811,6 +812,12 @@ export function useERPStore() {
         updatedCust,
       );
       return updated;
+    });
+    processWorkflowRules('customer_updated', {
+      ...updatedCust,
+      oldCity: before?.city,
+      oldType: before?.customerType,
+      newStatus: updatedCust.customerType,
     });
   };
 
@@ -874,6 +881,7 @@ export function useERPStore() {
 
     const updated = [newProduct, ...products];
     saveToStorage("erp_products", updated, setProducts);
+    processWorkflowRules('product_created', newProduct);
 
     // Add initial stock transactions if any
     if (!newProduct.hasVariants && newProduct.stockLevel > 0) {
@@ -1103,9 +1111,9 @@ export function useERPStore() {
               
               const newVariants = combinations.map((combo, i) => {
                 const skuParts = [pCode];
-                Object.entries(combo).forEach(([fName, fVal]) => {
-                  const feat = features.find(f => f.name === fName);
-                  if (feat) {
+                features.forEach((feat) => {
+                  const fVal = combo[feat.name];
+                  if (fVal) {
                     const optIndex = feat.options.findIndex(o => o.value === fVal);
                     if (optIndex !== -1) {
                       const prefix = feat.code ? feat.code : '';
@@ -1260,9 +1268,9 @@ export function useERPStore() {
             const pCode = finalCode;
             variants = combinations.map((combo, i) => {
               const skuParts = [pCode];
-              Object.entries(combo).forEach(([fName, fVal]) => {
-                const feat = features.find(f => f.name === fName);
-                if (feat) {
+              features.forEach((feat) => {
+                const fVal = combo[feat.name];
+                if (fVal) {
                   const optIndex = feat.options.findIndex(o => o.value === fVal);
                   if (optIndex !== -1) {
                     const prefix = feat.code ? feat.code : '';
@@ -1418,6 +1426,9 @@ export function useERPStore() {
             before,
             after
           );
+          if (after.stockLevel < (after.minStockLevel || 0)) {
+            processWorkflowRules('product_low_stock', after);
+          }
         }
       });
 
@@ -1462,6 +1473,7 @@ export function useERPStore() {
       undefined,
       newSupplier,
     );
+    processWorkflowRules('supplier_created', newSupplier);
     return newSupplier;
   };
 
@@ -1535,8 +1547,9 @@ export function useERPStore() {
     const updated = [newTr, ...transactions];
     saveToStorage("erp_transactions", updated, setTransactions);
     
-    autoLogFactActivity(newTr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافت وجه از مشتری' : 'پرداخت وجه به تامین‌کننده'} بابت پروژه به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال (روش: ${newTr.method || '-'}، تاریخ: ${newTr.date || '-'})`);
+    autoLogFactActivity(newTr.projectId, 'تراکنش‌های مالی و پرداخت‌ها', `ثبت تراکنش ${newTr.type === 'دریافت' ? 'دریافت وجه از مشتری' : 'پرداخت وجه به تامین‌کننده'} بابت پروژه به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال (روش: ${newTr.paymentType || '-'}، تاریخ: ${newTr.date || '-'})`);
     notifyModuleResponsible('transactions', 'ثبت تراکنش مالی جدید', `تراکنش ${newTr.type} به مبلغ ${newTr.amountRIYAL?.toLocaleString() || 0} ریال ثبت شد.`, newTr.projectId);
+    processWorkflowRules('transaction_created', newTr);
     return newTr;
   };
 
@@ -1587,6 +1600,7 @@ export function useERPStore() {
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newPO.supplierName || newPO.supplierId || '');
     autoLogFactActivity(newPO.projectId, 'سفارشات خرید تامین‌کنندگان', `صدور سفارش خرید (شماره: ${newPO.poNumber}) برای تأمین‌کننده «${suppName}» جهت تأمین اقلام پروژه.`);
     notifyModuleResponsible('purchaseOrders', 'ثبت سفارش خرید جدید', `سفارش خرید شماره ${newPO.poNumber} ثبت شد.`, newPO.projectId);
+    processWorkflowRules('purchase_order_created', newPO);
     return newPO;
   };
 
@@ -1609,6 +1623,8 @@ export function useERPStore() {
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedPO.supplierName || updatedPO.supplierId || '');
     autoLogFactActivity(updatedPO.projectId, 'سفارشات خرید تامین‌کنندگان', `تغییر وضعیت سفارش خرید (شماره: ${updatedPO.poNumber}) مرتبط با تأمین‌کننده «${suppName}» به «${updatedPO.status}».`);
     notifyModuleResponsible('purchaseOrders', 'ویرایش سفارش خرید', `سفارش خرید شماره ${updatedPO.poNumber} ویرایش شد.`, updatedPO.projectId);
+
+    processWorkflowRules('purchase_order_status_change', { newStatus: updatedPO.status, oldStatus: before?.status, ...updatedPO });
 
     // Self-healing inventory stock adjustments
     if (before) {
@@ -1710,6 +1726,7 @@ export function useERPStore() {
 
   notifyModuleResponsible('projects', 'ثبت پروژه جدید', `پروژه جدید ${newProject.name} (${newProject.code}) توسط ${currentUser?.fullName || 'کاربر سیستم'} ایجاد شد.`, newProject.id);
   logAction('CREATE', 'پروژه‌ها', newProject.id, `ثبت پروژه جدید: ${newProject.name} (کد: ${newProject.code})`, undefined, newProject);
+  processWorkflowRules('project_created', newProject);
 
   return newProject;
 };
@@ -1827,6 +1844,8 @@ export function useERPStore() {
 
   notifyModuleResponsible('proformas', 'ثبت پیش‌فاکتور جدید', `پیش‌فاکتور شماره ${newProforma.proformaNumber} صادر شد.`, newProforma.projectId);
   logAction('CREATE', 'پیش‌فاکتورها', newProforma.id, `ایجاد پیش‌فاکتور جدید شماره ${newProforma.proformaNumber} به مبلغ کل ${(newProforma.totalAmount || 0).toLocaleString('fa-IR')} ${newProforma.currency || 'ریال'}`, undefined, newProforma);
+
+  processWorkflowRules('proforma_created', newProforma);
 
   const newOutcome = getProformaOutcomeStatus(newProforma);
   const relatedProj = newProforma.projectId ? projects.find(p => p.id === newProforma.projectId) : undefined;
@@ -2161,6 +2180,7 @@ export function useERPStore() {
     const updated = [...tasks, newTask];
     saveToStorage("erp_tasks", updated, setTasks);
     logAction("CREATE", "وظیفه", newTask.id, `ایجاد وظیفه: ${task.title}`);
+    processWorkflowRules('task_created', newTask);
   };
 
   const addModuleNotification = (notif: Omit<ModuleNotification, 'id' | 'timestamp' | 'read'>) => {
@@ -2218,9 +2238,86 @@ export function useERPStore() {
   const processWorkflowRules = (triggerType: string, payload: any) => {
     const activeRules = settings.workflows?.filter(r => r.active && r.triggerType === triggerType) || [];
     
+    // Enrich the payload to resolve friendly names from IDs
+    const enrichedPayload = { ...payload };
+
+    // 1. Resolve Project Info
+    if (enrichedPayload.projectId) {
+      const proj = projects.find(p => p.id === enrichedPayload.projectId);
+      if (proj) {
+        if (!enrichedPayload.projectName) enrichedPayload.projectName = proj.name;
+        if (!enrichedPayload.projectCode) enrichedPayload.projectCode = proj.code;
+      }
+    } else {
+      if (triggerType === 'project_created' || triggerType === 'project_status_change') {
+        if (!enrichedPayload.projectName) enrichedPayload.projectName = enrichedPayload.name;
+        if (!enrichedPayload.projectCode) enrichedPayload.projectCode = enrichedPayload.code;
+      }
+    }
+
+    // 2. Resolve Customer Info
+    if (enrichedPayload.customerId) {
+      const cust = customers.find(c => c.id === enrichedPayload.customerId);
+      if (cust) {
+        if (!enrichedPayload.customerName) enrichedPayload.customerName = cust.name || cust.companyName;
+      }
+    } else if (triggerType === 'customer_created' || triggerType === 'customer_updated') {
+      if (!enrichedPayload.customerName) enrichedPayload.customerName = enrichedPayload.name || enrichedPayload.companyName;
+    }
+
+    // 3. Resolve Supplier Info
+    if (enrichedPayload.supplierId) {
+      const supp = suppliers.find(s => s.id === enrichedPayload.supplierId);
+      if (supp) {
+        if (!enrichedPayload.supplierName) enrichedPayload.supplierName = supp.companyName || supp.name;
+      }
+    } else if (triggerType === 'supplier_created') {
+      if (!enrichedPayload.supplierName) enrichedPayload.supplierName = enrichedPayload.companyName || enrichedPayload.name;
+    }
+
+    // 4. Resolve Product Info
+    if (enrichedPayload.productId) {
+      const prod = products.find(p => p.id === enrichedPayload.productId);
+      if (prod) {
+        if (!enrichedPayload.productName) enrichedPayload.productName = prod.name;
+      }
+    } else if (triggerType === 'product_created' || triggerType === 'product_low_stock') {
+      if (!enrichedPayload.productName) enrichedPayload.productName = enrichedPayload.name;
+    }
+
+    // 5. Resolve Proforma Info
+    if (enrichedPayload.proformaId) {
+      const pf = proformas.find(p => p.id === enrichedPayload.proformaId);
+      if (pf) {
+        if (!enrichedPayload.proformaNumber) enrichedPayload.proformaNumber = pf.proformaNumber;
+      }
+    }
+
+    // 6. Resolve Purchase Order Info
+    if (enrichedPayload.purchaseOrderId) {
+      const po = purchaseOrders.find(p => p.id === enrichedPayload.purchaseOrderId);
+      if (po) {
+        if (!enrichedPayload.poNumber) enrichedPayload.poNumber = po.poNumber;
+      }
+    }
+
+    // 7. Ensure newStatus / status are in sync
+    if (enrichedPayload.newStatus === undefined && enrichedPayload.status !== undefined) {
+      enrichedPayload.newStatus = enrichedPayload.status;
+    }
+    if (enrichedPayload.status === undefined && enrichedPayload.newStatus !== undefined) {
+      enrichedPayload.status = enrichedPayload.newStatus;
+    }
+
+    // 8. Ensure newOutcome / outcome are in sync
+    if (enrichedPayload.newOutcome === undefined && enrichedPayload.outcome !== undefined) {
+      enrichedPayload.newOutcome = enrichedPayload.outcome;
+    }
+
+    // Supports both single and double curly braces, e.g., {projectName} and {{projectName}}
     const replaceTemplateVars = (template: string, data: any) => {
       if (!template) return '';
-      return template.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+      return template.replace(/\{{1,2}([^{}]+)\}{1,2}/g, (match, key) => {
         const k = key.trim();
         return data[k] !== undefined ? String(data[k]) : match;
       });
@@ -2229,7 +2326,7 @@ export function useERPStore() {
     for (const rule of activeRules) {
       let match = true;
       for (const cond of rule.conditions) {
-        const actualValue = payload[cond.field];
+        const actualValue = enrichedPayload[cond.field];
         if (cond.operator === 'equals' && String(actualValue) !== String(cond.value)) match = false;
         if (cond.operator === 'not_equals' && String(actualValue) === String(cond.value)) match = false;
         if (cond.operator === 'greater_than' && Number(actualValue) <= Number(cond.value)) match = false;
@@ -2247,17 +2344,17 @@ export function useERPStore() {
               finalAssignedTo = (settings.moduleResponsibles as any)?.[mod] || 'admin';
             } else if (finalAssignedTo === 'SALES_EXPERT') {
               let proj = undefined;
-              if (payload.projectId) {
-                proj = projects.find(p => p.id === payload.projectId);
+              if (enrichedPayload.projectId) {
+                proj = projects.find(p => p.id === enrichedPayload.projectId);
               }
-              finalAssignedTo = proj?.salesExpert || payload.salesExpert || 'admin';
+              finalAssignedTo = proj?.salesExpert || enrichedPayload.salesExpert || 'admin';
             }
 
             const dueDate = addDaysToShamsi(getTodayShamsi(), config.dueDaysOffset || 0);
 
             addTask({
-              title: replaceTemplateVars(config.titleTemplate, payload) || `وظیفه خودکار: ${rule.name}`,
-              description: replaceTemplateVars(config.descTemplate, payload) || '',
+              title: replaceTemplateVars(config.titleTemplate, enrichedPayload) || `وظیفه خودکار: ${rule.name}`,
+              description: replaceTemplateVars(config.descTemplate, enrichedPayload) || '',
               dueDate: dueDate,
               priority: config.priority || 'متوسط',
               status: 'در انتظار',
@@ -2274,8 +2371,8 @@ export function useERPStore() {
 
             addModuleNotification({
               module: config.module || 'سیستم',
-              title: replaceTemplateVars(config.titleTemplate, payload) || rule.name,
-              description: replaceTemplateVars(config.descTemplate, payload) || '',
+              title: replaceTemplateVars(config.titleTemplate, enrichedPayload) || rule.name,
+              description: replaceTemplateVars(config.descTemplate, enrichedPayload) || '',
               responsibleName: responsible
             });
           }
@@ -2285,9 +2382,11 @@ export function useERPStore() {
   };
 
   const updateTask = (updatedTask: any) => {
+    const before = tasks.find(t => t.id === updatedTask.id);
     const updated = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
     saveToStorage("erp_tasks", updated, setTasks);
     logAction("UPDATE", "وظیفه", updatedTask.id, `بروزرسانی وظیفه: ${updatedTask.title}`);
+    processWorkflowRules('task_status_change', { newStatus: updatedTask.status, oldStatus: before?.status, ...updatedTask });
   };
   const deleteTask = (id: string) => {
     const updated = tasks.filter(t => t.id !== id);
@@ -2317,6 +2416,8 @@ export function useERPStore() {
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `تغییر وضعیت عملیات «${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال و تحویل'}» کالا (شماره پکینگ‌لیست: ${updatedPd.packingListNumber}) به «${updatedPd.status}».`);
     notifyModuleResponsible('packagingDelivery', 'بروزرسانی مرحله بسته‌بندی/تحویل', `مرحله ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} به وضعیت ${updatedPd.status} تغییر یافت.`, updatedPd.projectId);
+
+    processWorkflowRules('packaging_delivery_status_change', { newStatus: updatedPd.status, oldStatus: before?.status, ...updatedPd });
 
     if (!before?.actualDeliveryDate && updatedPd.actualDeliveryDate) {
       setCompletionPrompt({
@@ -2385,6 +2486,7 @@ export function useERPStore() {
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
     autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات پس از فروش برای کالای «${newAss.itemName || 'نامشخص'}» (شرح خرابی: ${newAss.issueDescription || '-'}، وضعیت: ${newAss.status}).`);
     notifyModuleResponsible('afterSalesServices', 'ثبت درخواست خدمات پس از فروش جدید', `درخواست خدمات جدید برای کالا ${newAss.itemName || ''} با وضعیت ${newAss.status} ثبت شد.`, newAss.projectId);
+    processWorkflowRules('after_sales_service_created', newAss);
   };
   const updateAfterSalesService = (updatedAss: any) => {
     const before = afterSalesServices.find(a => a.id === updatedAss.id);
@@ -2392,6 +2494,8 @@ export function useERPStore() {
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
     autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `تغییر وضعیت درخواست خدمات پس از فروش کالای «${updatedAss.itemName || 'نامشخص'}» به «${updatedAss.status}» (اقدامات انجام‌شده: ${updatedAss.actionsTaken || '-'}).`);
     notifyModuleResponsible('afterSalesServices', 'بروزرسانی درخواست خدمات پس از فروش', `درخواست خدمات برای کالا ${updatedAss.itemName || ''} به وضعیت ${updatedAss.status} تغییر یافت.`, updatedAss.projectId);
+
+    processWorkflowRules('after_sales_service_status_change', { newStatus: updatedAss.status, oldStatus: before?.status, ...updatedAss });
 
     if (before?.status !== updatedAss.status && updatedAss.status === 'تحویل داده شده') {
       setCompletionPrompt({
@@ -2463,15 +2567,18 @@ export function useERPStore() {
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newSi.supplierName || newSi.supplierId || '');
     autoLogFactActivity(newSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `ثبت درخواست استعلام قیمت از تأمین‌کننده «${suppName}» (مبلغ اعلامی: ${newSi.price?.toLocaleString('fa-IR') || 0} ${newSi.currency || 'ریال'}، وضعیت: ${newSi.status}).`);
     notifyModuleResponsible('supplierInquiries', 'ثبت استعلام قیمت جدید', `استعلام قیمت جدید برای تأمین‌کننده «${suppName}» ثبت شد.`, newSi.projectId);
+    processWorkflowRules('supplier_inquiry_created', newSi);
     return newSi;
   };
   const updateSupplierInquiry = (updatedSi: any) => {
+    const oldSi = supplierInquiries.find(s => s.id === updatedSi.id);
     const updated = supplierInquiries.map(s => s.id === updatedSi.id ? updatedSi : s);
     saveToStorage("erp_supplier_inquiries", updated, setSupplierInquiries);
     
     const supplierObj = suppliers.find(s => s.id === updatedSi.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedSi.supplierName || updatedSi.supplierId || '');
     autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `بروزرسانی وضعیت استعلام قیمت از تأمین‌کننده «${suppName}» به «${updatedSi.status}» (مبلغ اعلامی: ${updatedSi.price?.toLocaleString('fa-IR') || 0} ${updatedSi.currency || 'ریال'}).`);
+    processWorkflowRules('supplier_inquiry_status_change', { newStatus: updatedSi.status, oldStatus: oldSi?.status, ...updatedSi });
   };
   const deleteSupplierInquiry = (id: string, deleteLogs: boolean = false) => {
     const record = supplierInquiries.find(s => s.id === id);
@@ -2774,6 +2881,10 @@ export function useERPStore() {
           });
         }
 
+        if (newActivity.referral) {
+          processWorkflowRules('referral_created', newActivity.referral);
+        }
+
         return { ...g, activities: [...(g.activities || []), newActivity] };
       }
       return g;
@@ -2802,18 +2913,23 @@ export function useERPStore() {
   };
 
   const toggleReferralStatus = (categoryGroupId: string, activityId: string) => {
+    let changedReferral: any = null;
+    let oldStatus = '';
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
         return {
           ...g,
           activities: (g.activities || []).map((a: any) => {
             if (a.id === activityId && a.referral) {
+              oldStatus = a.referral.status;
+              const newStatus = a.referral.status === "انجام شده" ? "در انتظار اقدام" : "انجام شده";
+              changedReferral = {
+                ...a.referral,
+                status: newStatus
+              };
               return {
                 ...a,
-                referral: {
-                  ...a.referral,
-                  status: a.referral.status === "انجام شده" ? "در انتظار اقدام" : "انجام شده"
-                }
+                referral: changedReferral
               };
             }
             return a;
@@ -2823,6 +2939,9 @@ export function useERPStore() {
       return g;
     });
     saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
+    if (changedReferral) {
+      processWorkflowRules('referral_status_change', { newStatus: changedReferral.status, oldStatus, ...changedReferral });
+    }
   };
 
   const respondToReferral = (
@@ -2834,12 +2953,15 @@ export function useERPStore() {
     markAsDone?: boolean,
     forwardTo?: string
   ) => {
+    let changedReferral: any = null;
+    let oldStatus = '';
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
         return {
           ...g,
           activities: (g.activities || []).map((a: any) => {
             if (a.id === activityId && a.referral) {
+              oldStatus = a.referral.status;
               let updatedReferral = { ...a.referral };
               if (responseText || attachment) {
                 const newMessage = {
@@ -2859,6 +2981,7 @@ export function useERPStore() {
                 updatedReferral.assignedTo = forwardTo;
                 updatedReferral.status = "در انتظار اقدام";
               }
+              changedReferral = updatedReferral;
               return { ...a, referral: updatedReferral };
             }
             return a;
@@ -2868,6 +2991,9 @@ export function useERPStore() {
       return g;
     });
     saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
+    if (changedReferral) {
+      processWorkflowRules('referral_status_change', { newStatus: changedReferral.status, oldStatus, ...changedReferral });
+    }
   };
   return {
     customers,
