@@ -71,6 +71,8 @@ export interface ProductFeatureOption {
   id: string;
   value: string;
   code?: string;
+  price?: number;
+  currency?: string;
 }
 
 export interface ProductFeature {

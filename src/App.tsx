@@ -17,7 +17,7 @@ import PackagingDeliveryView from './components/PackagingDeliveryView';
 import SupplierInquiriesView from './components/SupplierInquiriesView';
 import LoginView from './components/LoginView';
 import { useERPStore } from './useERPStore';
-import { ShieldAlert, Bell, Inbox, Menu, Calendar, CheckCircle2, Clock, User } from 'lucide-react';
+import { ShieldAlert, Bell, Inbox, Menu, Calendar, CheckCircle2, Clock, User, Sun, Moon } from 'lucide-react';
 import TaskCalendarModal from './components/TaskCalendarModal';
 import { getTodayShamsi, toShamsiStr } from './dateUtils';
 import ShamsiDatePicker from './components/ShamsiDatePicker';
@@ -27,6 +27,19 @@ import { Project } from './types';
 
 export default function App() {
   const store = useERPStore();
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('erp-theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('erp-theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
   const [activeView, setActiveView] = useState<string>('dashboard');
   const [referralsTab, setReferralsTab] = useState<'toMe' | 'fromMe' | 'notifications'>('toMe');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
@@ -592,6 +605,13 @@ export default function App() {
             <div className="font-bold text-slate-800 text-sm md:text-base hidden sm:block">سیستم مدیریت منابع سازمانی</div>
           </div>
           <div className="flex items-center gap-5 mr-auto">
+             <button 
+               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+               className="text-slate-500 hover:text-amber-500 transition p-1"
+               title={theme === 'dark' ? "تغییر به پوسته روشن" : "تغییر به پوسته تیره"}
+             >
+               {theme === 'dark' ? <Sun size={22} className="text-amber-400" /> : <Moon size={22} />}
+             </button>
              <button 
                className="relative text-slate-500 hover:text-amber-600 transition p-1"
                onClick={() => { setReferralsTab('toMe'); setActiveView('referrals'); }}

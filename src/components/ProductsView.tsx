@@ -146,9 +146,15 @@ export default function ProductsView({
 
   const handleOpenCalculator = (variant: ProductVariant, index: number) => {
     setCalcVariantIndex(index);
-    const initialPriceForeign = variant.calcPriceForeign !== undefined ? variant.calcPriceForeign : (variant.priceForeign || 0);
+    const curr = simpleCurrencyForeign || 'یورو';
+    let initialPriceForeign = variant.calcPriceForeign !== undefined ? variant.calcPriceForeign : (variant.priceForeign || 0);
+    
+    // Fallback: If no FOB price is set, automatically calculate it from its combined attribute values!
+    if (!initialPriceForeign && variant.attributes) {
+      initialPriceForeign = getCombinedVariantFOBPrice(variant.attributes, curr);
+    }
+
     setCalcPriceForeign(String(initialPriceForeign));
-    const curr = variant.currencyForeign || 'یورو';
     setCalcCurrency(curr);
     
     // Find rate in exchangeRates
@@ -196,6 +202,20 @@ export default function ProductsView({
     const storeRate = mappedEng ? exchangeRates.find(r => r.currency === mappedEng)?.rateToRIYAL : null;
     const rate = storeRate || 700000;
     return Math.round(priceForeign * rate);
+  };
+
+  const getCombinedVariantFOBPrice = (attributes: Record<string, string>, targetCurrency: string) => {
+    let sum = 0;
+    for (const [fName, fVal] of Object.entries(attributes)) {
+      const feat = features.find(f => f.name === fName);
+      if (feat) {
+        const opt = feat.options.find(o => o.value === fVal);
+        if (opt && opt.price) {
+          sum += opt.price;
+        }
+      }
+    }
+    return Math.round(sum * 100) / 100;
   };
 
   const calculateAutoRialPrice = (priceForeign: number, currency: string, variantDetails: Partial<ProductVariant>) => {
@@ -930,8 +950,6 @@ export default function ProductsView({
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-
-
                   {/* Supply Type */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">نوع تامین</label>
@@ -945,9 +963,40 @@ export default function ProductsView({
                     </select>
                   </div>
 
+                  {/* Currency Selection */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">ارز مرجع کالا</label>
+                    <select
+                      value={simpleCurrencyForeign}
+                      onChange={(e) => {
+                        const curr = e.target.value;
+                        setSimpleCurrencyForeign(curr);
+                        // Also update simple RIYAL price if a simple price is set
+                        if (simplePriceForeign !== "") {
+                          const calculatedRial = convertForeignToRialSimple(Number(simplePriceForeign), curr);
+                          setSimplePriceRIYAL(String(calculatedRial));
+                        }
+                        // Update variants currency if they exist
+                        if (variants.length > 0) {
+                          const updated = variants.map(v => ({
+                            ...v,
+                            currencyForeign: curr,
+                            priceRIYAL: v.priceForeign !== undefined ? convertForeignToRialSimple(v.priceForeign, curr) : undefined
+                          }));
+                          setVariants(updated);
+                        }
+                      }}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-medium text-slate-800"
+                    >
+                      <option value="یورو">یورو</option>
+                      <option value="دلار">دلار</option>
+                      <option value="درهم">درهم</option>
+                      <option value="یوان">یوان</option>
+                    </select>
+                  </div>
                   {/* Initial Stock (Only for New Products & Inventory) */}
                   {!editingProduct && supplyType === 'INVENTORY' && !hasVariants && (
-                    <div className="space-y-1.5 border-t border-slate-100 pt-3 mt-3">
+                    <div className="space-y-1.5 border-t border-slate-100 pt-3 mt-3 col-span-2">
                       <label className="text-xs font-semibold text-emerald-600">موجودی اولیه در انبار</label>
                       <input
                         type="number"
@@ -971,7 +1020,7 @@ export default function ProductsView({
                       {/* Foreign Price and Currency */}
                       <div className="md:col-span-5 space-y-1.5 w-full">
                         <label className="text-xs font-semibold text-slate-500">قیمت ارزی</label>
-                        <div className="flex gap-2">
+                        <div className="relative flex items-center">
                           <input
                             type="number"
                             min="0"
@@ -988,25 +1037,11 @@ export default function ProductsView({
                               }
                             }}
                             placeholder="0"
-                            className="flex-1 min-w-[80px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono bg-white"
+                            className="w-full border border-slate-200 rounded-lg pl-16 pr-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-center font-mono bg-white"
                           />
-                          <select
-                            value={simpleCurrencyForeign}
-                            onChange={(e) => {
-                              const curr = e.target.value;
-                              setSimpleCurrencyForeign(curr);
-                              if (simplePriceForeign !== "") {
-                                const calculatedRial = convertForeignToRialSimple(Number(simplePriceForeign), curr);
-                                setSimplePriceRIYAL(String(calculatedRial));
-                              }
-                            }}
-                            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none bg-white min-w-[75px]"
-                          >
-                            <option value="یورو">یورو</option>
-                            <option value="دلار">دلار</option>
-                            <option value="درهم">درهم</option>
-                            <option value="یوان">یوان</option>
-                          </select>
+                          <div className="absolute inset-y-0 left-0 flex items-center justify-center bg-slate-100 border-r border-slate-200 text-xs font-bold text-slate-600 px-3 rounded-l-lg select-none min-w-[55px]">
+                            {simpleCurrencyForeign}
+                          </div>
                         </div>
                       </div>
 
@@ -1230,27 +1265,57 @@ export default function ProductsView({
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <div className="flex flex-wrap gap-2">
-                          {feature.options.map((opt, oIndex) => (
-                            <div key={opt.id} className="flex items-center bg-white border border-slate-200 rounded-md overflow-hidden shadow-sm">
-                              <span className="px-2 text-xs font-medium">{opt.value}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newF = [...features];
-                                  newF[fIndex] = {
-                                    ...newF[fIndex],
-                                    options: newF[fIndex].options.filter((_, idx) => idx !== oIndex)
-                                  };
-                                  setFeatures(newF);
-                                }}
-                                className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100"
-                              >
-                                <X size={12} />
-                              </button>
+                        {feature.options.length > 0 && (
+                          <div className="bg-white rounded-lg border border-slate-150 overflow-hidden divide-y divide-slate-100">
+                            <div className="bg-slate-50 px-3 py-1.5 grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 text-right">
+                              <div className="col-span-6 sm:col-span-7">مقدار ویژگی</div>
+                              <div className="col-span-5 sm:col-span-4 text-center">قیمت ارزی مبدا ({simpleCurrencyForeign})</div>
+                              <div className="col-span-1 text-center">حذف</div>
                             </div>
-                          ))}
-                        </div>
+                            {feature.options.map((opt, oIndex) => (
+                              <div key={opt.id} className="px-3 py-1.5 grid grid-cols-12 gap-2 items-center text-xs">
+                                <div className="col-span-6 sm:col-span-7 font-medium text-slate-700">
+                                  {opt.value}
+                                </div>
+                                <div className="col-span-5 sm:col-span-4 flex justify-center items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={opt.price === undefined ? "" : opt.price}
+                                    onChange={(e) => {
+                                      const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                      const newF = [...features];
+                                      const updatedOptions = [...newF[fIndex].options];
+                                      updatedOptions[oIndex] = { ...updatedOptions[oIndex], price: val, currency: simpleCurrencyForeign };
+                                      newF[fIndex] = { ...newF[fIndex], options: updatedOptions };
+                                      setFeatures(newF);
+                                    }}
+                                    placeholder="0"
+                                    className="w-full max-w-[100px] text-center font-mono border border-slate-200 rounded px-2 py-0.5 text-xs outline-none focus:border-sky-500"
+                                  />
+                                  <span className="text-[10px] text-slate-500 font-bold">{simpleCurrencyForeign}</span>
+                                </div>
+                                <div className="col-span-1 flex justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newF = [...features];
+                                      newF[fIndex] = {
+                                        ...newF[fIndex],
+                                        options: newF[fIndex].options.filter((_, idx) => idx !== oIndex)
+                                      };
+                                      setFeatures(newF);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div className="flex flex-col gap-1">
                           <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full">
                             <input
@@ -1266,7 +1331,12 @@ export default function ProductsView({
                                   if (val) {
                                     const vals = val.split(/[,،]/).map(v => v.trim()).filter(Boolean);
                                     if (vals.length > 0) {
-                                      const newOptions = vals.map((v, i) => ({ id: Date.now().toString() + i.toString() + Math.random().toString(), value: v }));
+                                      const newOptions = vals.map((v, i) => ({
+                                        id: Date.now().toString() + i.toString() + Math.random().toString(),
+                                        value: v,
+                                        price: 0,
+                                        currency: simpleCurrencyForeign
+                                      }));
                                       const newF = [...features];
                                       newF[fIndex] = {
                                         ...newF[fIndex],
@@ -1288,7 +1358,12 @@ export default function ProductsView({
                                   if (val) {
                                     const vals = val.split(/[,،]/).map(v => v.trim()).filter(Boolean);
                                     if (vals.length > 0) {
-                                      const newOptions = vals.map((v, i) => ({ id: Date.now().toString() + i.toString() + Math.random().toString(), value: v }));
+                                      const newOptions = vals.map((v, i) => ({
+                                        id: Date.now().toString() + i.toString() + Math.random().toString(),
+                                        value: v,
+                                        price: 0,
+                                        currency: simpleCurrencyForeign
+                                      }));
                                       const newF = [...features];
                                       newF[fIndex] = {
                                         ...newF[fIndex],
@@ -1389,8 +1464,19 @@ export default function ProductsView({
                                   return vKeys.every(k => v.attributes[k] === combo[k]);
                                 });
                                 
+                                const targetCurrency = simpleCurrencyForeign || "یورو";
+                                const calculatedFob = getCombinedVariantFOBPrice(combo, targetCurrency);
+
                                 if (existing) {
-                                  return { ...existing, sku: existing.sku || generatedSku };
+                                  const existingPrice = existing.priceForeign !== undefined ? existing.priceForeign : (calculatedFob > 0 ? calculatedFob : undefined);
+                                  const existingRiyal = existing.priceRIYAL !== undefined ? existing.priceRIYAL : (existingPrice !== undefined ? convertForeignToRialSimple(existingPrice, existing.currencyForeign || targetCurrency) : undefined);
+                                  return { 
+                                    ...existing, 
+                                    sku: existing.sku || generatedSku,
+                                    priceForeign: existingPrice,
+                                    priceRIYAL: existingRiyal,
+                                    currencyForeign: existing.currencyForeign || targetCurrency
+                                  };
                                 }
 
                                 return {
@@ -1398,15 +1484,42 @@ export default function ProductsView({
                                   sku: generatedSku,
                                   attributes: combo,
                                   stockLevel: 0,
-                                  minStockLevel: 0
+                                  minStockLevel: 0,
+                                  priceForeign: calculatedFob > 0 ? calculatedFob : undefined,
+                                  currencyForeign: targetCurrency,
+                                  priceRIYAL: calculatedFob > 0 ? convertForeignToRialSimple(calculatedFob, targetCurrency) : undefined
                                 };
                               });
                               setVariants(newVariants);
                             }}
-                            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition"
+                            className="px-3 py-1.5 bg-sky-50 text-sky-600 border border-sky-200 text-xs font-semibold rounded-lg hover:bg-sky-100 transition shadow-sm"
                           >
                             تولید ترکیب‌ها
                           </button>
+                          {variants.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = variants.map(v => {
+                                  const targetCurrency = v.currencyForeign || simpleCurrencyForeign || "یورو";
+                                  const calculatedFob = getCombinedVariantFOBPrice(v.attributes, targetCurrency);
+                                  if (calculatedFob > 0) {
+                                    return {
+                                      ...v,
+                                      priceForeign: calculatedFob,
+                                      priceRIYAL: convertForeignToRialSimple(calculatedFob, targetCurrency)
+                                    };
+                                  }
+                                  return v;
+                                });
+                                setVariants(updated);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-200 text-xs font-semibold rounded-lg hover:bg-emerald-100 transition shadow-sm"
+                              title="محاسبه مجدد قیمت ارزی ردیف‌ها بر اساس مبالغ ویژگی‌ها"
+                            >
+                              به‌روزرسانی قیمت‌های ارزی بر اساس ویژگی‌ها
+                            </button>
+                          )}
                         </div>
                         
                         {variants.length > 0 ? (
@@ -1508,7 +1621,7 @@ export default function ProductsView({
                                         const val = e.target.value;
                                         setBulkPriceForeign(val);
                                         if (val !== "") {
-                                          const converted = convertForeignToRialSimple(Number(val), bulkCurrencyForeign);
+                                          const converted = convertForeignToRialSimple(Number(val), simpleCurrencyForeign);
                                           setBulkPriceRIYAL(String(converted));
                                         } else {
                                           setBulkPriceRIYAL("");
@@ -1521,23 +1634,9 @@ export default function ProductsView({
 
                                   <div className="space-y-1">
                                     <label className="text-[11px] text-slate-500 font-medium block">واحد ارز</label>
-                                    <select
-                                      value={bulkCurrencyForeign}
-                                      onChange={(e) => {
-                                        const curr = e.target.value;
-                                        setBulkCurrencyForeign(curr);
-                                        if (bulkPriceForeign !== "") {
-                                          const converted = convertForeignToRialSimple(Number(bulkPriceForeign), curr);
-                                          setBulkPriceRIYAL(String(converted));
-                                        }
-                                      }}
-                                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500 bg-white"
-                                    >
-                                      <option value="یورو">یورو</option>
-                                      <option value="دلار">دلار</option>
-                                      <option value="درهم">درهم</option>
-                                      <option value="یوان">یوان</option>
-                                    </select>
+                                    <div className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-center font-bold text-slate-600 min-h-[32px] flex items-center justify-center select-none">
+                                      {simpleCurrencyForeign}
+                                    </div>
                                   </div>
 
                                   <div className="space-y-1">
@@ -1605,7 +1704,7 @@ export default function ProductsView({
                                             return {
                                               ...v,
                                               priceForeign: bulkPriceForeign !== "" ? Number(bulkPriceForeign) : undefined,
-                                              currencyForeign: bulkCurrencyForeign,
+                                              currencyForeign: simpleCurrencyForeign,
                                               priceRIYAL: bulkPriceRIYAL !== "" ? Number(bulkPriceRIYAL) : undefined
                                             };
                                           }
@@ -1705,52 +1804,55 @@ export default function ProductsView({
                                           </td>
                                         )}
                                         <td className="py-2 px-3">
-                                          <div className="flex items-center gap-1.5">
-                                            <input
-                                              type="number"
-                                              min="0"
-                                              step="any"
-                                              value={variant.priceForeign !== undefined ? variant.priceForeign : ""}
-                                              onChange={(e) => {
-                                                const newV = [...variants];
-                                                const val = e.target.value === "" ? undefined : Number(e.target.value);
-                                                newV[originalIdx].priceForeign = val;
-                                                if (val !== undefined) {
-                                                  newV[originalIdx].priceRIYAL = convertForeignToRialSimple(val, newV[originalIdx].currencyForeign || "یورو");
-                                                } else {
-                                                  newV[originalIdx].priceRIYAL = undefined;
-                                                }
-                                                setVariants(newV);
-                                              }}
-                                              placeholder="0"
-                                              className="w-20 border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center"
-                                            />
-                                            <select
-                                              value={variant.currencyForeign || "یورو"}
-                                              onChange={(e) => {
-                                                const newV = [...variants];
-                                                const curr = e.target.value;
-                                                newV[originalIdx].currencyForeign = curr;
-                                                if (newV[originalIdx].priceForeign !== undefined) {
-                                                  newV[originalIdx].priceRIYAL = convertForeignToRialSimple(newV[originalIdx].priceForeign!, curr);
-                                                }
-                                                setVariants(newV);
-                                              }}
-                                              className="border border-slate-200 rounded px-1 py-1 text-[11px] outline-none focus:border-sky-500 bg-white"
-                                            >
-                                              <option value="یورو">یورو</option>
-                                              <option value="دلار">دلار</option>
-                                              <option value="درهم">درهم</option>
-                                              <option value="یوان">یوان</option>
-                                            </select>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleOpenCalculator(variant, originalIdx)}
-                                              className="p-1 text-sky-600 hover:bg-sky-50 hover:text-sky-700 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 border border-sky-100 bg-white"
-                                              title="محاسبه‌گر حرفه‌ای قیمت فروش"
-                                            >
-                                              <Calculator size={13} />
-                                            </button>
+                                          <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5">
+                                              <div className="relative flex items-center">
+                                                <input
+                                                  type="number"
+                                                  min="0"
+                                                  step="any"
+                                                  value={variant.priceForeign !== undefined ? variant.priceForeign : ""}
+                                                  onChange={(e) => {
+                                                    const newV = [...variants];
+                                                    const val = e.target.value === "" ? undefined : Number(e.target.value);
+                                                    newV[originalIdx].priceForeign = val;
+                                                    if (val !== undefined) {
+                                                      newV[originalIdx].priceRIYAL = convertForeignToRialSimple(val, simpleCurrencyForeign);
+                                                      newV[originalIdx].currencyForeign = simpleCurrencyForeign;
+                                                    } else {
+                                                      newV[originalIdx].priceRIYAL = undefined;
+                                                    }
+                                                    setVariants(newV);
+                                                  }}
+                                                  placeholder="0"
+                                                  className="w-24 border border-slate-200 rounded-r pl-2 pr-2 py-1 text-xs outline-none focus:border-sky-500 font-mono text-center"
+                                                />
+                                                <div className="bg-slate-100 border-y border-l border-slate-200 text-[10px] font-bold text-slate-600 px-2.5 py-1 rounded-l select-none min-w-[50px] text-center">
+                                                  {simpleCurrencyForeign}
+                                                </div>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenCalculator(variant, originalIdx)}
+                                                className="p-1 text-sky-600 hover:bg-sky-50 hover:text-sky-700 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 border border-sky-100 bg-white"
+                                                title="محاسبه‌گر حرفه‌ای قیمت فروش"
+                                              >
+                                                <Calculator size={13} />
+                                              </button>
+                                            </div>
+                                            {(() => {
+                                              const combinedPrice = getCombinedVariantFOBPrice(variant.attributes, simpleCurrencyForeign);
+                                              if (combinedPrice > 0) {
+                                                return (
+                                                  <div className="flex items-center gap-1 text-[9px] text-slate-500 mr-1 mt-0.5 whitespace-nowrap">
+                                                    <span>مجموع ویژگی‌ها:</span>
+                                                    <span className="font-mono font-bold text-sky-600">{combinedPrice}</span>
+                                                    <span>{simpleCurrencyForeign}</span>
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
+                                            })()}
                                           </div>
                                         </td>
                                         <td className="py-2 px-3">
