@@ -1992,7 +1992,9 @@ export default function TransactionsView({
 
             <div className="p-5 space-y-4 text-right">
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500">نام شرکت / برند تامین‌کننده *</label>
+                <label className="text-[11px] font-bold text-slate-500">
+                  نام شرکت / برند تامین‌کننده {settings?.fieldRequirements?.suppliers?.name !== false && <span className="text-rose-500 font-bold">*</span>}
+                </label>
                 <input
                   type="text"
                   value={quickSupName}
@@ -2004,7 +2006,9 @@ export default function TransactionsView({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500">کشور مبدا *</label>
+                  <label className="text-[11px] font-bold text-slate-500">
+                    کشور مبدا {settings?.fieldRequirements?.suppliers?.country !== false && <span className="text-rose-500 font-bold">*</span>}
+                  </label>
                   <input
                     type="text"
                     value={quickSupCountry}
@@ -2062,11 +2066,13 @@ export default function TransactionsView({
               <button
                 type="button"
                 onClick={() => {
-                  if (!quickSupName.trim()) {
+                  const reqName = settings?.fieldRequirements?.suppliers?.name !== false;
+                  if (reqName && !quickSupName.trim()) {
                     alert('لطفاً نام تامین‌کننده را وارد کنید.');
                     return;
                   }
-                  if (!quickSupCountry.trim()) {
+                  const reqCountry = settings?.fieldRequirements?.suppliers?.country !== false;
+                  if (reqCountry && !quickSupCountry.trim()) {
                     alert('لطفاً کشور را وارد کنید.');
                     return;
                   }

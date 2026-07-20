@@ -105,7 +105,7 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows' | 'rates'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows' | 'rates' | 'fieldRequirements'>('general');
 
   // Workflow builder states
   const [editingRule, setEditingRule] = useState<WorkflowRule | null>(null);
@@ -857,6 +857,17 @@ export default function SettingsView({
         >
           <TrendingUp size={16} className="text-emerald-500" />
           نرخ ارز روزانه
+        </button>
+        <button
+          onClick={() => setActiveTab('fieldRequirements')}
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
+            activeTab === 'fieldRequirements'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <CheckSquare size={16} className="text-indigo-500" />
+          فیلدهای اجباری
         </button>
       </div>
 
@@ -3415,6 +3426,93 @@ export default function SettingsView({
                 )}
               </div>
             )}
+          </div>
+        ) : activeTab === 'fieldRequirements' ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+            <div>
+              <h3 className="font-bold text-lg text-slate-800">تعیین فیلدهای اجباری/اختیاری فرم‌ها</h3>
+              <p className="text-slate-500 text-xs mt-1">
+                در این بخش می‌توانید مشخص کنید که کدام‌یک از فیلدهای اصلی هر فرم اجباری یا اختیاری باشند. در صورت اختیاری بودن، امکان ثبت بدون پر کردن آن‌ها وجود دارد.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              {/* ماژول تامین‌کنندگان */}
+              <div className="border border-slate-150 rounded-xl p-5 space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
+                  <h4 className="font-bold text-sm text-slate-700">ماژول تامین‌کنندگان (Suppliers)</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* نام تامین‌کننده */}
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <div>
+                      <p className="text-xs font-bold text-slate-700">نام تامین‌کننده</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-medium">نام کامل شرکت یا شخص تامین‌کننده کالا و خدمات</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.fieldRequirements?.suppliers?.name !== false}
+                        onChange={(e) => {
+                          const currentReqs = settings.fieldRequirements || {};
+                          const suppliersReqs = currentReqs.suppliers || { name: true, country: true };
+                          updateSettings({
+                            ...settings,
+                            fieldRequirements: {
+                              ...currentReqs,
+                              suppliers: {
+                                ...suppliersReqs,
+                                name: e.target.checked
+                              }
+                            }
+                          });
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                      <span className="ms-2 text-xs font-semibold text-slate-600">
+                        {settings.fieldRequirements?.suppliers?.name !== false ? 'اجباری' : 'اختیاری'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* کشور */}
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <div>
+                      <p className="text-xs font-bold text-slate-700">کشور تامین‌کننده</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-medium">کشور محل استقرار یا ثبت تامین‌کننده (داخلی/خارجی)</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.fieldRequirements?.suppliers?.country !== false}
+                        onChange={(e) => {
+                          const currentReqs = settings.fieldRequirements || {};
+                          const suppliersReqs = currentReqs.suppliers || { name: true, country: true };
+                          updateSettings({
+                            ...settings,
+                            fieldRequirements: {
+                              ...currentReqs,
+                              suppliers: {
+                                ...suppliersReqs,
+                                country: e.target.checked
+                              }
+                            }
+                          });
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                      <span className="ms-2 text-xs font-semibold text-slate-600">
+                        {settings.fieldRequirements?.suppliers?.country !== false ? 'اجباری' : 'اختیاری'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : null)}
 

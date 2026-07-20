@@ -507,6 +507,7 @@ export interface ERPSettings {
   }>;
   deliveryChecklistTemplate?: string[];
   workflows?: WorkflowRule[];
+  fieldRequirements?: Record<string, Record<string, boolean>>;
 }
 
 export interface ProjectReferralResponse {

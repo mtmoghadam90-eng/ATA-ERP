@@ -99,6 +99,18 @@ export default function SuppliersView({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const reqName = settings?.fieldRequirements?.suppliers?.name !== false;
+    if (reqName && !name.trim()) {
+      alert("وارد کردن نام تامین‌کننده اجباری است.");
+      return;
+    }
+
+    const reqCountry = settings?.fieldRequirements?.suppliers?.country !== false;
+    if (reqCountry && !country.trim()) {
+      alert("وارد کردن کشور تامین‌کننده اجباری است.");
+      return;
+    }
+
     // Custom Fields Validation
     const moduleFields = (settings?.customFields || []).filter(f => f.module === 'suppliers');
     for (const field of moduleFields) {
@@ -489,10 +501,12 @@ export default function SuppliersView({
                 
                 {/* Company Name */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">نام کمپانی تأمین‌کننده (انگلیسی/فارسی) *</label>
+                  <label className="text-xs font-semibold text-slate-500">
+                    نام کمپانی تأمین‌کننده (انگلیسی/فارسی) {settings?.fieldRequirements?.suppliers?.name !== false && <span className="text-rose-500 font-bold">*</span>}
+                  </label>
                   <input
                     type="text"
-                    required
+                    required={settings?.fieldRequirements?.suppliers?.name !== false}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="مثال: WIKA Instruments"
@@ -502,10 +516,12 @@ export default function SuppliersView({
 
                 {/* Country */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">کشور مبدا تولید / دفتر توزیع *</label>
+                  <label className="text-xs font-semibold text-slate-500">
+                    کشور مبدا تولید / دفتر توزیع {settings?.fieldRequirements?.suppliers?.country !== false && <span className="text-rose-500 font-bold">*</span>}
+                  </label>
                   <input
                     type="text"
-                    required
+                    required={settings?.fieldRequirements?.suppliers?.country !== false}
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
                     placeholder="مثال: آلمان، امارات، ژاپن"

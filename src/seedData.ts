@@ -740,5 +740,11 @@ export const DEFAULT_SETTINGS: ERPSettings = {
         }
       ]
     }
-  ]
+  ],
+  fieldRequirements: {
+    suppliers: {
+      name: true,
+      country: true
+    }
+  }
 };
