@@ -570,7 +570,8 @@ export default function ProductsView({
     const matchesSearch = 
       p.displayName.toLowerCase().includes(search.toLowerCase()) ||
       p.category.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase());
+      p.description.toLowerCase().includes(search.toLowerCase()) ||
+      (p.code || '').toLowerCase().includes(search.toLowerCase());
     
     const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
 
@@ -690,6 +691,12 @@ export default function ProductsView({
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-slate-800 text-sm leading-snug">{p.displayName}</div>
+                          {p.code && (
+                            <div className="text-[11px] font-mono font-bold text-sky-600 mt-1 flex items-center gap-1">
+                              <span>کد کالا:</span>
+                              <span className="bg-sky-50/70 dark:bg-sky-950/40 border border-sky-100/80 dark:border-sky-900/40 px-1.5 py-0.5 rounded select-all font-mono tracking-wider text-xs">{p.code}</span>
+                            </div>
+                          )}
                           
                           <div className="flex flex-wrap gap-1.5 mt-1 text-[10px]">
                             {p.brand && (
@@ -1268,16 +1275,17 @@ export default function ProductsView({
                         {feature.options.length > 0 && (
                           <div className="bg-white rounded-lg border border-slate-150 overflow-hidden divide-y divide-slate-100">
                             <div className="bg-slate-50 px-3 py-1.5 grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 text-right">
-                              <div className="col-span-6 sm:col-span-7">مقدار ویژگی</div>
-                              <div className="col-span-5 sm:col-span-4 text-center">قیمت ارزی مبدا ({simpleCurrencyForeign})</div>
+                              <div className="col-span-5 sm:col-span-6">مقدار ویژگی</div>
+                              <div className="col-span-4 sm:col-span-3 text-center">قیمت ارزی مبدا ({simpleCurrencyForeign})</div>
+                              <div className="col-span-2 text-center">ترتیب</div>
                               <div className="col-span-1 text-center">حذف</div>
                             </div>
                             {feature.options.map((opt, oIndex) => (
                               <div key={opt.id} className="px-3 py-1.5 grid grid-cols-12 gap-2 items-center text-xs">
-                                <div className="col-span-6 sm:col-span-7 font-medium text-slate-700">
+                                <div className="col-span-5 sm:col-span-6 font-medium text-slate-700">
                                   {opt.value}
                                 </div>
-                                <div className="col-span-5 sm:col-span-4 flex justify-center items-center gap-1.5">
+                                <div className="col-span-4 sm:col-span-3 flex justify-center items-center gap-1.5">
                                   <input
                                     type="number"
                                     min="0"
@@ -1292,9 +1300,55 @@ export default function ProductsView({
                                       setFeatures(newF);
                                     }}
                                     placeholder="0"
-                                    className="w-full max-w-[100px] text-center font-mono border border-slate-200 rounded px-2 py-0.5 text-xs outline-none focus:border-sky-500"
+                                    className="w-full max-w-[100px] text-center font-mono border border-slate-200 rounded px-2 py-0.5 text-xs outline-none focus:border-sky-500 bg-white"
                                   />
                                   <span className="text-[10px] text-slate-500 font-bold">{simpleCurrencyForeign}</span>
+                                </div>
+                                <div className="col-span-2 flex justify-center items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={oIndex === 0}
+                                    onClick={() => {
+                                      if (oIndex === 0) return;
+                                      const newF = [...features];
+                                      const updatedOptions = [...newF[fIndex].options];
+                                      const temp = updatedOptions[oIndex];
+                                      updatedOptions[oIndex] = updatedOptions[oIndex - 1];
+                                      updatedOptions[oIndex - 1] = temp;
+                                      newF[fIndex] = { ...newF[fIndex], options: updatedOptions };
+                                      setFeatures(newF);
+                                    }}
+                                    className={`p-1 rounded transition ${
+                                      oIndex === 0 
+                                        ? 'text-slate-300 cursor-not-allowed' 
+                                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                                    }`}
+                                    title="انتقال به بالا"
+                                  >
+                                    <ArrowUp size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={oIndex === feature.options.length - 1}
+                                    onClick={() => {
+                                      if (oIndex === feature.options.length - 1) return;
+                                      const newF = [...features];
+                                      const updatedOptions = [...newF[fIndex].options];
+                                      const temp = updatedOptions[oIndex];
+                                      updatedOptions[oIndex] = updatedOptions[oIndex + 1];
+                                      updatedOptions[oIndex + 1] = temp;
+                                      newF[fIndex] = { ...newF[fIndex], options: updatedOptions };
+                                      setFeatures(newF);
+                                    }}
+                                    className={`p-1 rounded transition ${
+                                      oIndex === feature.options.length - 1 
+                                        ? 'text-slate-300 cursor-not-allowed' 
+                                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                                    }`}
+                                    title="انتقال به پایین"
+                                  >
+                                    <ArrowDown size={12} />
+                                  </button>
                                 </div>
                                 <div className="col-span-1 flex justify-center">
                                   <button

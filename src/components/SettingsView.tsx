@@ -14,6 +14,7 @@ import {
   Lock,
   Plus,
   Trash2,
+  Edit2,
   HelpCircle,
   AlertCircle,
   Calendar,
@@ -128,6 +129,8 @@ export default function SettingsView({
   // Dropdown items state
   const [selectedDropdownKey, setSelectedDropdownKey] = useState<keyof ERPSettings['dropdownItems'] | 'lossReasons'>('industries');
   const [newDropdownItem, setNewDropdownItem] = useState('');
+  const [editingDropdownIndex, setEditingDropdownIndex] = useState<number | null>(null);
+  const [editingDropdownValue, setEditingDropdownValue] = useState<string>('');
 
   // Delete confirm state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -251,6 +254,76 @@ export default function SettingsView({
     setDeleteTargetId(itemToDelete);
     setDeleteTargetName(itemToDelete);
     setDeleteConfirmOpen(true);
+  };
+
+  const handleSaveDropdownEdit = (idx: number) => {
+    if (!editingDropdownValue.trim()) return;
+    
+    if (selectedDropdownKey === 'lossReasons') {
+      const currentList = settings.lossReasons || [];
+      // check if it's a duplicate of another item
+      if (currentList.some((item, i) => i !== idx && item.toLowerCase() === editingDropdownValue.trim().toLowerCase())) {
+        alert('این آیتم قبلاً در لیست وجود دارد.');
+        return;
+      }
+      const updatedList = [...currentList];
+      updatedList[idx] = editingDropdownValue.trim();
+      updateSettings({
+        ...settings,
+        lossReasons: updatedList
+      });
+    } else {
+      const currentList = settings.dropdownItems[selectedDropdownKey] || [];
+      // check if it's a duplicate of another item
+      if (currentList.some((item, i) => i !== idx && item.toLowerCase() === editingDropdownValue.trim().toLowerCase())) {
+        alert('این آیتم قبلاً در لیست وجود دارد.');
+        return;
+      }
+      const updatedList = [...currentList];
+      updatedList[idx] = editingDropdownValue.trim();
+      updateSettings({
+        ...settings,
+        dropdownItems: {
+          ...settings.dropdownItems,
+          [selectedDropdownKey]: updatedList
+        }
+      });
+    }
+    setEditingDropdownIndex(null);
+    setEditingDropdownValue('');
+  };
+
+  const handleMoveDropdownItem = (idx: number, direction: 'up' | 'down') => {
+    if (selectedDropdownKey === 'lossReasons') {
+      const currentList = [...(settings.lossReasons || [])];
+      const targetIndex = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIndex < 0 || targetIndex >= currentList.length) return;
+      
+      const temp = currentList[idx];
+      currentList[idx] = currentList[targetIndex];
+      currentList[targetIndex] = temp;
+      
+      updateSettings({
+        ...settings,
+        lossReasons: currentList
+      });
+    } else {
+      const currentList = [...(settings.dropdownItems[selectedDropdownKey] || [])];
+      const targetIndex = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIndex < 0 || targetIndex >= currentList.length) return;
+      
+      const temp = currentList[idx];
+      currentList[idx] = currentList[targetIndex];
+      currentList[targetIndex] = temp;
+      
+      updateSettings({
+        ...settings,
+        dropdownItems: {
+          ...settings.dropdownItems,
+          [selectedDropdownKey]: currentList
+        }
+      });
+    }
   };
 
   const handleAddCategory = (e: React.FormEvent) => {
@@ -1423,26 +1496,114 @@ export default function SettingsView({
                       <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold">
                         <th className="py-3 px-4 w-16">ردیف</th>
                         <th className="py-3 px-4">عنوان آیتم</th>
-                        <th className="py-3 px-4 text-left w-20">عملیات</th>
+                        <th className="py-3 px-4 text-left w-32">عملیات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {(selectedDropdownKey === 'lossReasons' ? (settings.lossReasons || []) : (settings.dropdownItems[selectedDropdownKey as keyof ERPSettings['dropdownItems']] || [])).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition">
-                          <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
-                          <td className="py-3 px-4 font-semibold text-slate-800">{item}</td>
-                          <td className="py-3 px-4 text-left">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteDropdownItem(item)}
-                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition"
-                              title="حذف این آیتم"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {(selectedDropdownKey === 'lossReasons' ? (settings.lossReasons || []) : (settings.dropdownItems[selectedDropdownKey as keyof ERPSettings['dropdownItems']] || [])).map((item, idx) => {
+                        const isEditing = editingDropdownIndex === idx;
+                        const itemsCount = (selectedDropdownKey === 'lossReasons' ? (settings.lossReasons || []) : (settings.dropdownItems[selectedDropdownKey as keyof ERPSettings['dropdownItems']] || [])).length;
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition">
+                            <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
+                            <td className="py-3 px-4 font-semibold text-slate-800">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editingDropdownValue}
+                                  onChange={(e) => setEditingDropdownValue(e.target.value)}
+                                  className="w-full max-w-md border border-slate-300 rounded px-2.5 py-1 text-xs focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none text-right font-semibold bg-white"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleSaveDropdownEdit(idx);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingDropdownIndex(null);
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                item
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-left">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {isEditing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveDropdownEdit(idx)}
+                                      className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition cursor-pointer"
+                                      title="ذخیره تغییرات"
+                                    >
+                                      <Check size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingDropdownIndex(null);
+                                        setEditingDropdownValue('');
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                                      title="انصراف"
+                                    >
+                                      <XCircle size={15} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => handleMoveDropdownItem(idx, 'up')}
+                                      className={`p-1 rounded transition cursor-pointer ${
+                                        idx === 0 
+                                          ? 'text-slate-300 cursor-not-allowed' 
+                                          : 'text-slate-500 hover:text-sky-600 hover:bg-sky-50'
+                                      }`}
+                                      title="انتقال به بالا"
+                                    >
+                                      <ArrowUp size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === itemsCount - 1}
+                                      onClick={() => handleMoveDropdownItem(idx, 'down')}
+                                      className={`p-1 rounded transition cursor-pointer ${
+                                        idx === itemsCount - 1 
+                                          ? 'text-slate-300 cursor-not-allowed' 
+                                          : 'text-slate-500 hover:text-sky-600 hover:bg-sky-50'
+                                      }`}
+                                      title="انتقال به پایین"
+                                    >
+                                      <ArrowDown size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingDropdownIndex(idx);
+                                        setEditingDropdownValue(item);
+                                      }}
+                                      className="p-1 text-sky-500 hover:text-sky-700 hover:bg-sky-50 rounded transition cursor-pointer"
+                                      title="ویرایش این آیتم"
+                                    >
+                                      <Edit2 size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteDropdownItem(item)}
+                                      className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
+                                      title="حذف این آیتم"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {(selectedDropdownKey === 'lossReasons' ? (settings.lossReasons || []) : (settings.dropdownItems[selectedDropdownKey as keyof ERPSettings['dropdownItems']] || [])).length === 0 && (
                         <tr>
                           <td colSpan={3} className="text-center py-6 text-slate-400 bg-white">
