@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -20,7 +20,9 @@ import {
   Globe,
   DollarSign,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Printer,
+  Eye
 } from 'lucide-react';
 import { Transaction, Customer, Supplier, Project, ERPSettings, Proforma, ExchangeRate } from '../types';
 import { getTodayShamsi } from '../dateUtils';
@@ -34,6 +36,8 @@ import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
 
 interface TransactionsViewProps {
+  initialPrintDocId?: string;
+  onClearInitialPrintDocId?: () => void;
   transactions: Transaction[];
   customers: Customer[];
   suppliers: Supplier[];
@@ -51,6 +55,8 @@ interface TransactionsViewProps {
 }
 
 export default function TransactionsView({
+  initialPrintDocId,
+  onClearInitialPrintDocId,
   transactions,
   customers,
   suppliers,
@@ -72,6 +78,19 @@ export default function TransactionsView({
   const [isTransactionModalFullscreen, setIsTransactionModalFullscreen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [quickAddType, setQuickAddType] = useState<'customer' | 'project' | 'supplier' | 'product' | null>(null);
+
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printTargetTx, setPrintTargetTx] = useState<Transaction | null>(null);
+
+  useEffect(() => {
+    if (initialPrintDocId) {
+      const tx = transactions.find(t => t.id === initialPrintDocId);
+      if (tx) {
+        setPrintTargetTx(tx);
+        setShowPrintModal(true);
+      }
+    }
+  }, [initialPrintDocId, transactions]);
 
   // Dynamic Custom Fields State
   const [customValues, setCustomValues] = useState<Record<string, any>>({});
@@ -2234,6 +2253,109 @@ export default function TransactionsView({
             }
           }}
         />
+      )}
+
+      {showPrintModal && printTargetTx && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs overflow-y-auto p-4 md:p-8 z-50 flex justify-center">
+          <div className="bg-white text-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl p-6 md:p-10 flex flex-col justify-between h-fit min-h-screen text-right animate-scale-in">
+            {/* Action Bar */}
+            <div className="flex justify-between items-center pb-6 mb-6 border-b border-slate-200 print:hidden">
+              <h3 className="font-bold text-sm text-slate-800">پیش‌نمایش سند تراکنش مالی</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-md shadow-sky-600/10"
+                >
+                  <Printer size={14} />
+                  <span>چاپ سند</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPrintModal(false);
+                    onClearInitialPrintDocId?.();
+                  }}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-600 transition"
+                >
+                  بستن پیش‌نمایش
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Sheet */}
+            <div className="print-sheet space-y-6 text-xs flex-1">
+              <div className="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    {printTargetTx.type === 'دریافت' ? 'رسید دریافت وجه (سند بستانکار)' : 'سند پرداخت وجه (سند بدهکار)'}
+                  </h2>
+                  <p className="text-slate-400 text-[10px]">امور مالی و خزانه‌داری ابزار تامین عرشیا</p>
+                </div>
+                <div className="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+                  <div>Voucher No: {printTargetTx.documentNumber}</div>
+                  <div>Date: {printTargetTx.date}</div>
+                  <div>Ref No: {printTargetTx.referenceNumber || '-'}</div>
+                </div>
+              </div>
+
+              <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-700 text-xs">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-slate-400 font-bold">بابت پروژه:</span>
+                    <span className="text-slate-800 font-bold mr-1">
+                      {projects.find(p => p.id === printTargetTx.projectId)?.name || 'متفرقه / بدون پروژه'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-bold">طرف حساب:</span>
+                    <span className="text-slate-800 font-bold mr-1">
+                      {printTargetTx.partyType === 'customer' 
+                        ? customers.find(c => c.id === printTargetTx.customerId)?.companyName 
+                        : printTargetTx.partyType === 'supplier' 
+                          ? suppliers.find(s => s.id === printTargetTx.supplierId)?.name 
+                          : printTargetTx.partyNameManual || 'نامشخص'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-3 flex justify-between items-center">
+                  <div>
+                    <span className="text-slate-400 font-bold">مبلغ تراکنش:</span>
+                    <strong className="text-slate-950 text-sm font-mono mr-1">
+                      {printTargetTx.amountRIYAL?.toLocaleString('fa-IR')} ریال
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-bold">نوع پرداخت/دریافت:</span>
+                    <span className="text-slate-800 font-bold mr-1">{printTargetTx.paymentType}</span>
+                  </div>
+                </div>
+
+                {printTargetTx.bankName && (
+                  <div className="border-t border-slate-100 pt-3">
+                    <span className="text-slate-400 font-bold">نام بانک مبدا/مقصد:</span>
+                    <span className="text-slate-800 mr-1">{printTargetTx.bankName}</span>
+                  </div>
+                )}
+
+                <div className="border-t border-slate-100 pt-3">
+                  <span className="text-slate-400 font-bold">شرح تراکنش و بابت:</span>
+                  <p className="text-slate-800 mr-1 inline">{printTargetTx.notes || 'بدون بابت'}</p>
+                </div>
+              </div>
+
+              <div className="pt-12 text-center text-[10px] text-slate-400 flex justify-between">
+                <div>
+                  <p className="font-bold text-slate-700">تحویل‌دهنده سند / پرداخت‌کننده</p>
+                  <div className="h-16"></div>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-700">مدیر خزانه‌داری و امور مالی</p>
+                  <div className="h-16"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

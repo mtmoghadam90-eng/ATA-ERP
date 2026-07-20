@@ -40,7 +40,14 @@ export default function App() {
     }
   }, [theme]);
 
-  const [activeView, setActiveView] = useState<string>('dashboard');
+  const [activeView, setActiveView] = useState<string>(() => {
+    const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const printModule = urlParams.get('printModule');
+    if (printModule) {
+      return printModule;
+    }
+    return 'dashboard';
+  });
   const [referralsTab, setReferralsTab] = useState<'toMe' | 'fromMe' | 'notifications'>('toMe');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [selectedProjectIdForActivities, setSelectedProjectIdForActivities] = useState<string | null>(null);
@@ -48,7 +55,15 @@ export default function App() {
   const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
   const [triggeredReminders, setTriggeredReminders] = useState<string[]>([]);
   const [activeReminderTask, setActiveReminderTask] = useState<any>(null);
-  const [printDocumentRequest, setPrintDocumentRequest] = useState<{ module: string, docId: string } | null>(null);
+  const [printDocumentRequest, setPrintDocumentRequest] = useState<{ module: string, docId: string } | null>(() => {
+    const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const printModule = urlParams.get('printModule');
+    const printId = urlParams.get('printId');
+    if (printModule && printId) {
+      return { module: printModule, docId: printId };
+    }
+    return null;
+  });
   const [previousView, setPreviousView] = useState<string | null>(null);
 
   const handleOpenDocument = (module: string, docId: string) => {
@@ -62,6 +77,11 @@ export default function App() {
     if (previousView) {
       setActiveView(previousView as any);
       setPreviousView(null);
+    } else {
+      const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+      if (urlParams.get('printModule')) {
+        window.close();
+      }
     }
   };
 
@@ -422,6 +442,8 @@ export default function App() {
       case 'transactions':
         return (
           <TransactionsView 
+            initialPrintDocId={printDocumentRequest?.module === 'transactions' ? printDocumentRequest.docId : undefined}
+            onClearInitialPrintDocId={handleClearPrintDoc}
             transactions={store.transactions}
             customers={store.customers}
             suppliers={store.suppliers}
@@ -475,6 +497,8 @@ export default function App() {
       case 'afterSalesServices':
         return (
           <AfterSalesServicesView 
+            initialPrintDocId={printDocumentRequest?.module === 'afterSalesServices' ? printDocumentRequest.docId : undefined}
+            onClearInitialPrintDocId={handleClearPrintDoc}
             afterSalesServices={store.afterSalesServices}
             projects={store.projects}
             customers={store.customers}
@@ -570,88 +594,93 @@ export default function App() {
 
   const activeTemplate = store.settings?.proformaTemplates?.find(t => t.name === store.settings?.activeTemplateId) || store.settings?.proformaTemplates?.[0];
   const logoUrl = activeTemplate?.logoUrl;
+  const isStandalone = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('standalone') === 'true';
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-right" dir="rtl">
+    <div className={`flex h-screen bg-slate-50 font-sans text-right ${isStandalone ? 'p-0' : ''}`} dir="rtl">
       
       {/* Sidebar Navigation */}
-      <Sidebar 
-        activeTab={activeView} 
-        setActiveTab={setActiveView} 
-        taskCount={store.tasks.filter(t => t.status !== 'انجام شده' && t.status !== 'کنسل شده').length}
-        lowStockCount={store.products.filter(p => p.stockLevel <= p.minStockLevel).length}
-        userRole={store.userRole}
-        changeRole={store.changeRole}
-        referralsCount={pendingReferrals.length}
-        currentUser={store.currentUser}
-        onLogout={store.logout}
-        sidebarModuleOrder={store.settings.sidebarModuleOrder}
-        isOpen={sidebarOpen}
-        setIsOpen={setSidebarOpen}
-        logoUrl={logoUrl}
-      />
+      {!isStandalone && (
+        <Sidebar 
+          activeTab={activeView} 
+          setActiveTab={setActiveView} 
+          taskCount={store.tasks.filter(t => t.status !== 'انجام شده' && t.status !== 'کنسل شده').length}
+          lowStockCount={store.products.filter(p => p.stockLevel <= p.minStockLevel).length}
+          userRole={store.userRole}
+          changeRole={store.changeRole}
+          referralsCount={pendingReferrals.length}
+          currentUser={store.currentUser}
+          onLogout={store.logout}
+          sidebarModuleOrder={store.settings.sidebarModuleOrder}
+          isOpen={sidebarOpen}
+          setIsOpen={setSidebarOpen}
+          logoUrl={logoUrl}
+        />
+      )}
 
       {/* Main Panel Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between z-10 shrink-0">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition"
-              title={sidebarOpen ? "بستن منو" : "باز کردن منو"}
-            >
-              <Menu size={20} />
-            </button>
-            <div className="font-bold text-slate-800 text-sm md:text-base hidden sm:block">سیستم مدیریت منابع سازمانی</div>
-          </div>
-          <div className="flex items-center gap-5 mr-auto">
-             <button 
-               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-               className="text-slate-500 hover:text-amber-500 transition p-1"
-               title={theme === 'dark' ? "تغییر به پوسته روشن" : "تغییر به پوسته تیره"}
-             >
-               {theme === 'dark' ? <Sun size={22} className="text-amber-400" /> : <Moon size={22} />}
-             </button>
-             <button 
-               className="relative text-slate-500 hover:text-amber-600 transition p-1"
-               onClick={() => { setReferralsTab('toMe'); setActiveView('referrals'); }}
-               title="ارجاعات کار (نیاز به اقدام)"
-             >
-               <Inbox size={22} />
-               {pendingReferrals.length > 0 && (
-                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-amber-500 text-[10px] font-bold flex justify-center items-center rounded-full text-white shadow-sm border-2 border-white">
-                   {pendingReferrals.length}
-                 </span>
-               )}
-             </button>
-             <button 
-               className="relative text-slate-500 hover:text-sky-600 transition p-1"
-               onClick={() => setCalendarOpen(true)}
-               title="تقویم پیگیری و وظایف روزانه"
-             >
-               <Calendar size={22} />
-               {store.tasks.filter(t => (!t.assignedTo || t.assignedTo === store.currentUser?.fullName) && t.status !== 'انجام شده' && t.status !== 'کنسل شده').length > 0 && (
-                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-sky-500 text-[10px] font-bold flex justify-center items-center rounded-full text-white shadow-sm border-2 border-white">
-                   {store.tasks.filter(t => (!t.assignedTo || t.assignedTo === store.currentUser?.fullName) && t.status !== 'انجام شده' && t.status !== 'کنسل شده').length}
-                 </span>
-               )}
-             </button>
-             <button 
-               className="relative text-slate-500 hover:text-rose-600 transition p-1"
-               onClick={() => { setReferralsTab('notifications'); setActiveView('referrals'); }} 
-               title="اعلان‌های سیستم"
-             >
-               <Bell size={22} />
-               {totalUnreadCount > 0 && (
-                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-[10px] font-bold flex justify-center items-center rounded-full text-white shadow-sm border-2 border-white">
-                   {totalUnreadCount}
-                 </span>
-               )}
-             </button>
-          </div>
-        </header>
+        {!isStandalone && (
+          <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between z-10 shrink-0">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition"
+                title={sidebarOpen ? "بستن منو" : "باز کردن منو"}
+              >
+                <Menu size={20} />
+              </button>
+              <div className="font-bold text-slate-800 text-sm md:text-base hidden sm:block">سیستم مدیریت منابع سازمانی</div>
+            </div>
+            <div className="flex items-center gap-5 mr-auto">
+               <button 
+                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                 className="text-slate-500 hover:text-amber-500 transition p-1"
+                 title={theme === 'dark' ? "تغییر به پوسته روشن" : "تغییر به پوسته تیره"}
+               >
+                 {theme === 'dark' ? <Sun size={22} className="text-amber-400" /> : <Moon size={22} />}
+               </button>
+               <button 
+                 className="relative text-slate-500 hover:text-amber-600 transition p-1"
+                 onClick={() => { setReferralsTab('toMe'); setActiveView('referrals'); }}
+                 title="ارجاعات کار (نیاز به اقدام)"
+               >
+                 <Inbox size={22} />
+                 {pendingReferrals.length > 0 && (
+                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-amber-500 text-[10px] font-bold flex justify-center items-center rounded-full text-white shadow-sm border-2 border-white">
+                     {pendingReferrals.length}
+                   </span>
+                 )}
+               </button>
+               <button 
+                 className="relative text-slate-500 hover:text-sky-600 transition p-1"
+                 onClick={() => setCalendarOpen(true)}
+                 title="تقویم پیگیری و وظایف روزانه"
+               >
+                 <Calendar size={22} />
+                 {store.tasks.filter(t => (!t.assignedTo || t.assignedTo === store.currentUser?.fullName) && t.status !== 'انجام شده' && t.status !== 'کنسل شده').length > 0 && (
+                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-sky-500 text-[10px] font-bold flex justify-center items-center rounded-full text-white shadow-sm border-2 border-white">
+                     {store.tasks.filter(t => (!t.assignedTo || t.assignedTo === store.currentUser?.fullName) && t.status !== 'انجام شده' && t.status !== 'کنسل شده').length}
+                   </span>
+                 )}
+               </button>
+               <button 
+                 className="relative text-slate-500 hover:text-rose-600 transition p-1"
+                 onClick={() => { setReferralsTab('notifications'); setActiveView('referrals'); }} 
+                 title="اعلان‌های سیستم"
+               >
+                 <Bell size={22} />
+                 {totalUnreadCount > 0 && (
+                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-[10px] font-bold flex justify-center items-center rounded-full text-white shadow-sm border-2 border-white">
+                     {totalUnreadCount}
+                   </span>
+                 )}
+               </button>
+            </div>
+          </header>
+        )}
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+        <div className={`flex-1 overflow-y-auto ${isStandalone ? 'p-0 bg-white' : 'p-4 md:p-8 space-y-6'}`}>
           {renderActiveView()}
         </div>
       </main>

@@ -106,6 +106,20 @@ export interface ProductVariant {
   calcMarginType?: 'PERCENT' | 'FIXED';
 }
 
+export interface ProductConfigRule {
+  id: string;
+  name?: string;
+  active: boolean;
+  conditions: {
+    featureName: string;
+    values: string[];
+  }[];
+  actions: {
+    featureName: string;
+    values: string[];
+  }[];
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -125,6 +139,7 @@ export interface Product {
   features?: ProductFeature[]; // ویژگی‌های قابل تنظیم
   hasVariants?: boolean;
   variants?: ProductVariant[];
+  configRules?: ProductConfigRule[];
 
   // Simple product price details
   priceForeign?: number;
@@ -212,6 +227,8 @@ export interface Proforma {
   historicalExchangeRate?: number; // نرخ تسعیر تاریخی فروش
   customValues?: Record<string, any>;
   moduleNotes?: ModuleNote[];
+  sentMethod?: string;
+  sentRecipients?: string[];
 }
 
 export interface PurchaseOrderItem {
@@ -478,6 +495,7 @@ export interface ERPSettings {
     returnReasons?: string[];
     equipmentTypes?: string[];
     supplierInquirySteps?: string[];
+    proformaSentMethods?: string[];
   };
   lossReasons: string[];
   activityCategories: { id: string; name: string; module: string; responsibleUserId?: string }[];

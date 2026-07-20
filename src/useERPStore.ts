@@ -1980,7 +1980,7 @@ export function useERPStore() {
       );
     }
   };
-  const updateProformaStatus = (id: string, newStatus: Proforma['status'], lossReason?: string) => {
+  const updateProformaStatus = (id: string, newStatus: Proforma['status'], lossReason?: string, sentMethod?: string, sentRecipients?: string[]) => {
   const oldProforma = proformas.find(p => p.id === id);
   if (!oldProforma) return;
 
@@ -2000,7 +2000,9 @@ export function useERPStore() {
         status: newStatus,
         isCancelled: false,
         lossReason: newStatus === 'باخته' ? lossReason : p.lossReason,
-        items: updatedItems
+        items: updatedItems,
+        sentMethod: newStatus === 'ارسال شده' ? sentMethod : p.sentMethod,
+        sentRecipients: newStatus === 'ارسال شده' ? sentRecipients : p.sentRecipients
       };
     }
     return p;
@@ -2184,6 +2186,13 @@ export function useERPStore() {
   };
 
   const addModuleNotification = (notif: Omit<ModuleNotification, 'id' | 'timestamp' | 'read'>) => {
+    // Exclude self-notifications
+    const isSelf = currentUser && (
+      currentUser.fullName === notif.responsibleName ||
+      currentUser.username === notif.responsibleName
+    );
+    if (isSelf) return;
+
     const newNotif: ModuleNotification = {
       ...notif,
       id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -2885,6 +2894,22 @@ export function useERPStore() {
           processWorkflowRules('referral_created', newActivity.referral);
         }
 
+        // Notify category responsible:
+        const cat = settings.activityCategories?.find(c => c.id === g.categoryId);
+        const responsibleName = cat?.responsibleUserId;
+        const proj = projects.find(p => p.id === projectId);
+        const projectName = proj ? proj.name : "نامشخص";
+        const creatorName = createdBy || currentUser?.fullName || 'سیستم';
+        
+        if (responsibleName && responsibleName !== creatorName) {
+          addModuleNotification({
+            module: 'projects',
+            title: `فعالیت جدید در ${g.categoryName}`,
+            description: `ثبت فعالیت جدید در دسته‌بندی "${g.categoryName}" پروژه "${projectName}" توسط ${creatorName}: ${text}`,
+            responsibleName: responsibleName
+          });
+        }
+
         return { ...g, activities: [...(g.activities || []), newActivity] };
       }
       return g;
@@ -2892,20 +2917,72 @@ export function useERPStore() {
     saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
   };
 
-  const updateProjectActivity = (categoryGroupId: string, activity: any) => {
+  const updateProjectActivity = (
+    projectId: string,
+    categoryGroupId: string,
+    activityId: string,
+    text: string
+  ) => {
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
-        return { ...g, activities: (g.activities || []).map((a: any) => a.id === activity.id ? activity : a) };
+        // Find existing activity to update
+        const activities = (g.activities || []).map((a: any) => {
+          if (a.id === activityId) {
+            return { ...a, text };
+          }
+          return a;
+        });
+
+        // Notify category responsible:
+        const cat = settings.activityCategories?.find(c => c.id === g.categoryId);
+        const responsibleName = cat?.responsibleUserId;
+        const proj = projects.find(p => p.id === projectId);
+        const projectName = proj ? proj.name : "نامشخص";
+        const editorName = currentUser?.fullName || "کاربر سیستم";
+
+        if (responsibleName && responsibleName !== editorName) {
+          addModuleNotification({
+            module: 'projects',
+            title: `ویرایش فعالیت در ${g.categoryName}`,
+            description: `فعالیت دسته‌بندی "${g.categoryName}" پروژه "${projectName}" توسط ${editorName} ویرایش شد: ${text}`,
+            responsibleName: responsibleName
+          });
+        }
+
+        return { ...g, activities };
       }
       return g;
     });
     saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
   };
 
-  const deleteProjectActivity = (categoryGroupId: string, activityId: string) => {
+  const deleteProjectActivity = (
+    projectId: string,
+    categoryGroupId: string,
+    activityId: string
+  ) => {
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
-        return { ...g, activities: (g.activities || []).filter((a: any) => a.id !== activityId) };
+        const activityToDelete = (g.activities || []).find((a: any) => a.id === activityId);
+        const activities = (g.activities || []).filter((a: any) => a.id !== activityId);
+
+        // Notify category responsible:
+        const cat = settings.activityCategories?.find(c => c.id === g.categoryId);
+        const responsibleName = cat?.responsibleUserId;
+        const proj = projects.find(p => p.id === projectId);
+        const projectName = proj ? proj.name : "نامشخص";
+        const deleterName = currentUser?.fullName || "کاربر سیستم";
+
+        if (responsibleName && responsibleName !== deleterName && activityToDelete) {
+          addModuleNotification({
+            module: 'projects',
+            title: `حذف فعالیت از ${g.categoryName}`,
+            description: `یک فعالیت از دسته‌بندی "${g.categoryName}" پروژه "${projectName}" توسط ${deleterName} حذف شد. متن فعالیت حذف شده: ${activityToDelete.text}`,
+            responsibleName: responsibleName
+          });
+        }
+
+        return { ...g, activities };
       }
       return g;
     });
@@ -2915,6 +2992,7 @@ export function useERPStore() {
   const toggleReferralStatus = (categoryGroupId: string, activityId: string) => {
     let changedReferral: any = null;
     let oldStatus = '';
+    let activityText = '';
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
         return {
@@ -2922,6 +3000,7 @@ export function useERPStore() {
           activities: (g.activities || []).map((a: any) => {
             if (a.id === activityId && a.referral) {
               oldStatus = a.referral.status;
+              activityText = a.text;
               const newStatus = a.referral.status === "انجام شده" ? "در انتظار اقدام" : "انجام شده";
               changedReferral = {
                 ...a.referral,
@@ -2941,6 +3020,25 @@ export function useERPStore() {
     saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
     if (changedReferral) {
       processWorkflowRules('referral_status_change', { newStatus: changedReferral.status, oldStatus, ...changedReferral });
+      
+      // Notify category responsible:
+      const group = projectCategoryGroups.find(g => g.id === categoryGroupId);
+      if (group) {
+        const cat = settings.activityCategories?.find(c => c.id === group.categoryId);
+        const responsibleName = cat?.responsibleUserId;
+        const proj = projects.find(p => p.id === group.projectId);
+        const projectName = proj ? proj.name : "نامشخص";
+        const editorName = currentUser?.fullName || "کاربر سیستم";
+
+        if (responsibleName && responsibleName !== editorName) {
+          addModuleNotification({
+            module: 'projects',
+            title: `تغییر وضعیت ارجاع در ${group.categoryName}`,
+            description: `وضعیت ارجاع فعالیت "${activityText}" در دسته‌بندی "${group.categoryName}" پروژه "${projectName}" توسط ${editorName} به "${changedReferral.status}" تغییر یافت.`,
+            responsibleName: responsibleName
+          });
+        }
+      }
     }
   };
 
@@ -2955,6 +3053,7 @@ export function useERPStore() {
   ) => {
     let changedReferral: any = null;
     let oldStatus = '';
+    let activityText = '';
     const updated = projectCategoryGroups.map(g => {
       if (g.id === categoryGroupId) {
         return {
@@ -2962,6 +3061,7 @@ export function useERPStore() {
           activities: (g.activities || []).map((a: any) => {
             if (a.id === activityId && a.referral) {
               oldStatus = a.referral.status;
+              activityText = a.text;
               let updatedReferral = { ...a.referral };
               if (responseText || attachment) {
                 const newMessage = {
@@ -2993,6 +3093,36 @@ export function useERPStore() {
     saveToStorage("erp_project_category_groups", updated, setProjectCategoryGroups);
     if (changedReferral) {
       processWorkflowRules('referral_status_change', { newStatus: changedReferral.status, oldStatus, ...changedReferral });
+
+      // Notify category responsible:
+      const group = projectCategoryGroups.find(g => g.id === categoryGroupId);
+      if (group) {
+        const cat = settings.activityCategories?.find(c => c.id === group.categoryId);
+        const responsibleName = cat?.responsibleUserId;
+        const proj = projects.find(p => p.id === group.projectId);
+        const projectName = proj ? proj.name : "نامشخص";
+        const responder = currentUser?.fullName || responderName || "کاربر سیستم";
+
+        let actionDesc = '';
+        if (responseText) {
+          actionDesc += ` پاسخ ثبت کرد: "${responseText}"`;
+        }
+        if (markAsDone) {
+          actionDesc += (actionDesc ? ' و ' : ' ') + `کار را انجام شده علامت زد`;
+        }
+        if (forwardTo) {
+          actionDesc += (actionDesc ? ' و ' : ' ') + `کار را به ${forwardTo} ارجاع داد`;
+        }
+
+        if (responsibleName && responsibleName !== responder) {
+          addModuleNotification({
+            module: 'projects',
+            title: `پاسخ ارجاع در ${group.categoryName}`,
+            description: `روی ارجاع فعالیت "${activityText}" در دسته‌بندی "${group.categoryName}" پروژه "${projectName}"، ${responder}${actionDesc}.`,
+            responsibleName: responsibleName
+          });
+        }
+      }
     }
   };
   return {

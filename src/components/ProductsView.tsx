@@ -19,7 +19,7 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import { Product, ProductVariant, ERPSettings, InventoryTransaction, ProductFeature, ExchangeRate } from '../types';
+import { Product, ProductVariant, ERPSettings, InventoryTransaction, ProductFeature, ExchangeRate, ProductConfigRule } from '../types';
 import { toShamsiStr, toGregorianStr } from '../dateUtils';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -95,6 +95,12 @@ export default function ProductsView({
   const [features, setFeatures] = useState<ProductFeature[]>([]);
   const [hasVariants, setHasVariants] = useState(false);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [configRules, setConfigRules] = useState<ProductConfigRule[]>([]);
+  const [showAddRuleForm, setShowAddRuleForm] = useState(false);
+  const [newRuleConditions, setNewRuleConditions] = useState<{ featureName: string; values: string[] }[]>([]);
+  const [newRuleActionFeature, setNewRuleActionFeature] = useState<string>('');
+  const [newRuleActionValues, setNewRuleActionValues] = useState<string[]>([]);
+  const [newRuleName, setNewRuleName] = useState<string>('');
 
   // SKU Filters & Bulk Pricing States
   const [variantSearchQuery, setVariantSearchQuery] = useState('');
@@ -273,6 +279,7 @@ export default function ProductsView({
     setFeatures([]);
     setHasVariants(false);
     setVariants([]);
+    setConfigRules([]);
     setSimplePriceForeign('');
     setSimpleCurrencyForeign('یورو');
     setSimplePriceRIYAL('');
@@ -294,6 +301,7 @@ export default function ProductsView({
     setFeatures(prod.features || []);
     setHasVariants(prod.hasVariants || false);
     setVariants(prod.variants || []);
+    setConfigRules(prod.configRules || []);
     setSimplePriceForeign(prod.priceForeign !== undefined ? String(prod.priceForeign) : '');
     setSimpleCurrencyForeign(prod.currencyForeign || 'یورو');
     setSimplePriceRIYAL(prod.basePriceRIYAL !== undefined ? String(prod.basePriceRIYAL) : '');
@@ -513,6 +521,7 @@ export default function ProductsView({
         features,
         hasVariants,
         variants,
+        configRules,
         basePriceRIYAL: Number(simplePriceRIYAL) || 0,
         priceForeign: simplePriceForeign ? Number(simplePriceForeign) : undefined,
         currencyForeign: simpleCurrencyForeign,
@@ -547,6 +556,7 @@ export default function ProductsView({
         features,
         hasVariants,
         variants,
+        configRules,
         priceForeign: simplePriceForeign ? Number(simplePriceForeign) : undefined,
         currencyForeign: simpleCurrencyForeign,
         calcPriceForeign: simpleCalcDetails.calcPriceForeign,
@@ -1453,6 +1463,335 @@ export default function ProductsView({
                     </div>
                   )}
                 </div>
+
+                {/* Configurator Rules Engine */}
+                {features.length > 0 && (
+                  <div className="space-y-4 pt-4 border-t border-slate-100">
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                        قوانین فیلترینگ و شرط‌های انتخاب ویژگی‌ها
+                      </label>
+                      {!showAddRuleForm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewRuleName('');
+                            setNewRuleConditions([{ featureName: features[0]?.name || '', values: [] }]);
+                            setNewRuleActionFeature(features[1]?.name || features[0]?.name || '');
+                            setNewRuleActionValues([]);
+                            setShowAddRuleForm(true);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-semibold text-xs rounded-lg transition-colors flex items-center gap-1 border border-indigo-150"
+                        >
+                          <Plus size={14} />
+                          قانون جدید (یا / و)
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Rule Builder Form */}
+                    {showAddRuleForm && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 text-right">
+                        <div className="flex justify-between items-center pb-2 border-b border-slate-150">
+                          <span className="text-xs font-bold text-slate-700">تعریف قانون محدودیت جدید</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddRuleForm(false)}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+
+                        {/* Rule Name */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-500">عنوان قانون (اختیاری)</label>
+                          <input
+                            type="text"
+                            placeholder="مثال: فیلتر لاینر رابر برای سایزهای بزرگ"
+                            value={newRuleName}
+                            onChange={(e) => setNewRuleName(e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-indigo-500 bg-white"
+                          />
+                        </div>
+
+                        {/* Conditions List */}
+                        <div className="space-y-3">
+                          <label className="text-xs font-semibold text-slate-600 block">شرط‌ها (اگر ویژگی‌های زیر انتخاب شده باشند - رابطه "و" بین شرط‌ها):</label>
+                          
+                          {newRuleConditions.map((cond, cIdx) => {
+                            const selectedFeatureObj = features.find(f => f.name === cond.featureName);
+                            return (
+                              <div key={cIdx} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3 relative">
+                                <div className="flex justify-between items-center">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold font-mono">شرط {cIdx + 1}</span>
+                                    <select
+                                      value={cond.featureName}
+                                      onChange={(e) => {
+                                        const next = [...newRuleConditions];
+                                        next[cIdx] = { featureName: e.target.value, values: [] };
+                                        setNewRuleConditions(next);
+                                      }}
+                                      className="border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-indigo-500 font-bold text-slate-700 bg-white"
+                                    >
+                                      {features.map((f, i) => (
+                                        <option key={i} value={f.name}>{f.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  
+                                  {newRuleConditions.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setNewRuleConditions(prev => prev.filter((_, idx) => idx !== cIdx));
+                                      }}
+                                      className="text-red-500 hover:text-red-600 hover:bg-red-50 p-1 rounded transition text-xs font-bold"
+                                    >
+                                      حذف شرط
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Option Checklist for Condition (OR relation within a single condition) */}
+                                {selectedFeatureObj && (
+                                  <div className="space-y-1.5 pt-1">
+                                    <span className="text-[10px] text-slate-400 font-medium block">
+                                      برابر با یکی از مقادیر زیر باشد (رابطه "یا" بین گزینه‌ها):
+                                    </span>
+                                    <div className="flex flex-wrap gap-2.5">
+                                      {selectedFeatureObj.options.map((opt) => {
+                                        const isChecked = cond.values.includes(opt.value);
+                                        return (
+                                          <label
+                                            key={opt.id}
+                                            className="flex items-center gap-1.5 bg-slate-50 border border-slate-150 px-2.5 py-1 rounded-md text-[11px] text-slate-600 cursor-pointer hover:bg-indigo-50/50 hover:text-indigo-700 hover:border-indigo-200 transition select-none"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isChecked}
+                                              onChange={(e) => {
+                                                const next = [...newRuleConditions];
+                                                if (e.target.checked) {
+                                                  next[cIdx].values = [...cond.values, opt.value];
+                                                } else {
+                                                  next[cIdx].values = cond.values.filter(v => v !== opt.value);
+                                                }
+                                                setNewRuleConditions(next);
+                                              }}
+                                              className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                            />
+                                            <span>{opt.value}</span>
+                                          </label>
+                                        );
+                                      })}
+                                      {selectedFeatureObj.options.length === 0 && (
+                                        <span className="text-[10px] text-amber-500">هیچ مقداری برای این ویژگی تعریف نشده است.</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Find first feature not already added as condition
+                              const remaining = features.find(f => !newRuleConditions.some(c => c.featureName === f.name));
+                              const featName = remaining ? remaining.name : (features[0]?.name || '');
+                              setNewRuleConditions(prev => [...prev, { featureName: featName, values: [] }]);
+                            }}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1"
+                          >
+                            <Plus size={12} />
+                            افزودن شرط جدید (AND / و)
+                          </button>
+                        </div>
+
+                        {/* Action / Consequence */}
+                        <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
+                          <label className="text-xs font-bold text-slate-700 block">
+                            آنگاه (Action) در ویژگی هدف:
+                          </label>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">ویژگی هدف:</span>
+                            <select
+                              value={newRuleActionFeature}
+                              onChange={(e) => {
+                                setNewRuleActionFeature(e.target.value);
+                                setNewRuleActionValues([]);
+                              }}
+                              className="border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-indigo-500 font-bold text-slate-700 bg-white"
+                            >
+                              {features.map((f, i) => (
+                                <option key={i} value={f.name}>{f.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Target options checklist */}
+                          {(() => {
+                            const actFeat = features.find(f => f.name === newRuleActionFeature);
+                            if (!actFeat) return null;
+                            return (
+                              <div className="space-y-1.5 pt-1">
+                                <span className="text-[10px] text-red-500 font-bold block">
+                                  مقادیر زیر غیرقابل انتخاب و غیرمجاز شوند:
+                                </span>
+                                <div className="flex flex-wrap gap-2.5">
+                                  {actFeat.options.map((opt) => {
+                                    const isChecked = newRuleActionValues.includes(opt.value);
+                                    return (
+                                      <label
+                                        key={opt.id}
+                                        className="flex items-center gap-1.5 bg-slate-50 border border-slate-150 px-2.5 py-1 rounded-md text-[11px] text-slate-600 cursor-pointer hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition select-none"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setNewRuleActionValues(prev => [...prev, opt.value]);
+                                            } else {
+                                              setNewRuleActionValues(prev => prev.filter(v => v !== opt.value));
+                                            }
+                                          }}
+                                          className="w-3.5 h-3.5 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
+                                        />
+                                        <span>{opt.value}</span>
+                                      </label>
+                                    );
+                                  })}
+                                  {actFeat.options.length === 0 && (
+                                    <span className="text-[10px] text-amber-500">هیچ مقداری برای این ویژگی تعریف نشده است.</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Submit rule buttons */}
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddRuleForm(false)}
+                            className="px-3 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold transition"
+                          >
+                            انصراف
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Validation
+                              const validConditions = newRuleConditions.filter(c => c.featureName && c.values.length > 0);
+                              if (validConditions.length === 0) {
+                                alert('لطفاً حداقل یک شرط معتبر با مقادیر مشخص انتخاب کنید.');
+                                return;
+                              }
+                              if (!newRuleActionFeature || newRuleActionValues.length === 0) {
+                                alert('لطفاً ویژگی هدف و مقادیر غیرمجاز مربوطه را انتخاب کنید.');
+                                return;
+                              }
+
+                              const ruleId = `rule-${Date.now()}`;
+                              const rule: ProductConfigRule = {
+                                id: ruleId,
+                                name: newRuleName.trim() || undefined,
+                                active: true,
+                                conditions: validConditions,
+                                actions: [{ featureName: newRuleActionFeature, values: newRuleActionValues }]
+                              };
+
+                              setConfigRules(prev => [...prev, rule]);
+                              setShowAddRuleForm(false);
+                            }}
+                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                          >
+                            ثبت قانون
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Rules List */}
+                    <div className="space-y-2">
+                      {configRules.length === 0 ? (
+                        <div className="text-center py-4 bg-slate-50 border border-slate-150 rounded-xl text-slate-400 text-xs font-medium">
+                          هیچ قانون و شرط فیلترینگی برای این کالا تعریف نشده است.
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {configRules.map((rule, rIdx) => {
+                            return (
+                              <div key={rule.id} className="bg-slate-50/50 border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-right">
+                                <div className="space-y-1 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                                    <span className="text-xs font-bold text-slate-800">
+                                      {rule.name || `قانون فیلتر شماره ${rIdx + 1}`}
+                                    </span>
+                                    {!rule.active && (
+                                      <span className="text-[9px] bg-slate-200 text-slate-600 font-bold px-1.5 py-0.5 rounded">غیرفعال</span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                                    <span className="text-slate-400 font-bold">اگر: </span>
+                                    {rule.conditions.map((cond, cI) => (
+                                      <span key={cI}>
+                                        {cI > 0 && <span className="text-indigo-500 font-bold"> و </span>}
+                                        {`[${cond.featureName}] برابر با [${cond.values.join(' یا ')}] باشد`}
+                                      </span>
+                                    ))}
+                                    <span className="text-slate-400 font-bold"> ؛ آنگاه: </span>
+                                    {rule.actions.map((act, aI) => (
+                                      <span key={aI}>
+                                        {`در [${act.featureName}] مقادیر `}
+                                        <span className="text-red-500 font-bold">[{act.values.join('، ')}]</span>
+                                        {` غیرمجاز شود`}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setConfigRules(prev => prev.map(r => r.id === rule.id ? { ...r, active: !r.active } : r));
+                                    }}
+                                    className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${
+                                      rule.active 
+                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-150 hover:bg-emerald-100' 
+                                        : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {rule.active ? 'فعال' : 'غیرفعال'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setConfigRules(prev => prev.filter(r => r.id !== rule.id));
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition"
+                                    title="حذف قانون"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Variants Configuration */}
                 {features.length > 0 && (

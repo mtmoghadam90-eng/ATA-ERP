@@ -8,6 +8,7 @@ import {
   Trash2,
   Printer,
   CheckCircle,
+  Check,
   Clock,
   XCircle,
   Ban,
@@ -188,6 +189,8 @@ interface ProformasViewProps {
     id: string,
     status: Proforma["status"],
     lossReason?: string,
+    sentMethod?: string,
+    sentRecipients?: string[],
   ) => void;
   batchUpdateProjectProformasStatus: (
     projectId: string,
@@ -242,6 +245,7 @@ export default function ProformasView({
     number | null
   >(null);
   const [isQuickAddingContact, setIsQuickAddingContact] = useState(false);
+  const [isQuickAddingSentRecipient, setIsQuickAddingSentRecipient] = useState(false);
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreateModalFullscreen, setIsCreateModalFullscreen] = useState(false);
@@ -283,6 +287,12 @@ export default function ProformasView({
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelProjectId, setCancelProjectId] = useState("");
   const [cancelProjectName, setCancelProjectName] = useState("");
+
+  // Proforma sending detail fields (used in status change & create/edit)
+  const [sentMethodType, setSentMethodType] = useState<string>(() => (settings?.dropdownItems?.proformaSentMethods || [])[0] || "ایمیل");
+  const [customSentMethod, setCustomSentMethod] = useState<string>("");
+  const [selectedSentRecipients, setSelectedSentRecipients] = useState<string[]>([]);
+  const [recipientSearchTerm, setRecipientSearchTerm] = useState("");
   React.useEffect(() => {
     if (initialPrintDocId) {
       const pf = proformas.find((p) => p.id === initialPrintDocId);
@@ -422,6 +432,10 @@ export default function ProformasView({
   // Open Create Modal
   const handleOpenCreate = () => {
     setEditingProforma(null);
+    setSentMethodType((settings?.dropdownItems?.proformaSentMethods || [])[0] || "ایمیل");
+    setCustomSentMethod("");
+    setSelectedSentRecipients([]);
+    setRecipientSearchTerm("");
     const firstCust = customers[0];
     setCustomerId(firstCust?.id || "");
     setContactCustomerId("");
@@ -476,6 +490,12 @@ export default function ProformasView({
   };
   // Open Edit Modal
   const handleOpenEdit = (pf: Proforma) => {
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.isSystemAdmin;
+    if (pf.status === "ارسال شده" && !isAdmin) {
+      alert("این پیش‌فاکتور ارسال شده است و امکان ویرایش آن وجود ندارد.");
+      return;
+    }
+
     setEditingProforma(pf);
     setProformaType(pf.proformaType || "FINANCIAL");
     setCustomerId(pf.customerId);
@@ -489,6 +509,23 @@ export default function ProformasView({
     setHistoricalExchangeRate(pf.historicalExchangeRate || 0);
     setDiscountPercent(pf.discountPercent);
     setTaxPercent(pf.taxPercent);
+
+    // Initialize sending details if they exist in pf
+    if (pf.sentMethod) {
+      const commonMethods = settings?.dropdownItems?.proformaSentMethods || ["ایمیل", "واتس‌اپ", "تلگرام", "پست", "حضوری", "سایر"];
+      if (commonMethods.includes(pf.sentMethod)) {
+        setSentMethodType(pf.sentMethod);
+        setCustomSentMethod("");
+      } else {
+        setSentMethodType("سایر");
+        setCustomSentMethod(pf.sentMethod);
+      }
+    } else {
+      setSentMethodType((settings?.dropdownItems?.proformaSentMethods || [])[0] || "ایمیل");
+      setCustomSentMethod("");
+    }
+    setSelectedSentRecipients(pf.sentRecipients || []);
+    setRecipientSearchTerm("");
 
     const loadedItems = pf.items.map((item) => ({
       productId: item.productId,
@@ -903,6 +940,21 @@ export default function ProformasView({
       ...item,
       totalPriceRIYAL: item.quantity * item.unitPriceRIYAL,
     }));
+
+    const finalSentMethod = status === "ارسال شده" ? (sentMethodType === "سایر" ? customSentMethod : sentMethodType) : undefined;
+    const finalSentRecipients = status === "ارسال شده" ? selectedSentRecipients : undefined;
+
+    if (status === "ارسال شده") {
+      if (!finalSentMethod || !finalSentMethod.trim()) {
+        alert("لطفاً طریقه ارسال پیش‌فاکتور را مشخص کنید.");
+        return;
+      }
+      if (!finalSentRecipients || finalSentRecipients.length === 0) {
+        alert("لطفاً حداقل یک شخص دریافت‌کننده (مشتری حقیقی) را انتخاب کنید.");
+        return;
+      }
+    }
+
     if (editingProforma) {
       updateProforma({
         ...editingProforma,
@@ -929,6 +981,8 @@ export default function ProformasView({
         taxAmount,
         finalAmount,
         notes,
+        sentMethod: finalSentMethod,
+        sentRecipients: finalSentRecipients,
       });
       setEditingProforma(null);
     } else {
@@ -956,6 +1010,8 @@ export default function ProformasView({
         taxAmount,
         finalAmount,
         notes,
+        sentMethod: finalSentMethod,
+        sentRecipients: finalSentRecipients,
       });
     }
     setShowCreateModal(false);
@@ -965,17 +1021,57 @@ export default function ProformasView({
     pfId: string,
     currentStatus: Proforma["status"],
   ) => {
+    const targetPf = proformas.find((p) => p.id === pfId);
     setStatusTargetId(pfId);
     setNewStatusSelected(currentStatus);
     setLossReason("");
+
+    // Initialize sending details if they exist in targetPf
+    if (targetPf && targetPf.status === "ارسال شده") {
+      if (targetPf.sentMethod) {
+        const commonMethods = settings?.dropdownItems?.proformaSentMethods || ["ایمیل", "واتس‌اپ", "تلگرام", "پست", "حضوری", "سایر"];
+        if (commonMethods.includes(targetPf.sentMethod)) {
+          setSentMethodType(targetPf.sentMethod);
+          setCustomSentMethod("");
+        } else {
+          setSentMethodType("سایر");
+          setCustomSentMethod(targetPf.sentMethod);
+        }
+      } else {
+        setSentMethodType((settings?.dropdownItems?.proformaSentMethods || [])[0] || "ایمیل");
+        setCustomSentMethod("");
+      }
+      setSelectedSentRecipients(targetPf.sentRecipients || []);
+    } else {
+      setSentMethodType((settings?.dropdownItems?.proformaSentMethods || [])[0] || "ایمیل");
+      setCustomSentMethod("");
+      setSelectedSentRecipients([]);
+    }
+    setRecipientSearchTerm("");
     setShowStatusModal(true);
   };
   const handleSaveStatusChange = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const finalSentMethod = sentMethodType === "سایر" ? customSentMethod : sentMethodType;
+
+    if (newStatusSelected === "ارسال شده") {
+      if (!finalSentMethod || !finalSentMethod.trim()) {
+        alert("لطفاً طریقه ارسال پیش‌فاکتور را مشخص کنید.");
+        return;
+      }
+      if (selectedSentRecipients.length === 0) {
+        alert("لطفاً حداقل یک شخص دریافت‌کننده (مشتری حقیقی) را انتخاب کنید.");
+        return;
+      }
+    }
+
     updateProformaStatus(
       statusTargetId,
       newStatusSelected,
       newStatusSelected === "باخته" ? lossReason : undefined,
+      newStatusSelected === "ارسال شده" ? finalSentMethod : undefined,
+      newStatusSelected === "ارسال شده" ? selectedSentRecipients : undefined,
     );
     setShowStatusModal(false);
   };
@@ -2370,9 +2466,21 @@ export default function ProformasView({
                                   پیش‌نویس
                                 </span>
                               ) : (
-                                <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-sky-50 text-sky-700 border-sky-200">
-                                  ارسال شده برای کارفرما
-                                </span>
+                                <div className="space-y-1">
+                                  <span className="px-2.5 py-1 rounded-full font-bold text-[10px] border bg-sky-50 text-sky-700 border-sky-200 block">
+                                    ارسال شده برای کارفرما
+                                  </span>
+                                  {pf.sentMethod && (
+                                    <span className="text-[9px] text-slate-400 block font-medium">
+                                      طریق: {pf.sentMethod}
+                                    </span>
+                                  )}
+                                  {pf.sentRecipients && pf.sentRecipients.length > 0 && (
+                                    <span className="text-[9px] text-slate-500 block font-medium max-w-[120px] truncate" title={pf.sentRecipients.join("، ")}>
+                                      به: {pf.sentRecipients.join("، ")}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </td>
@@ -2429,65 +2537,85 @@ export default function ProformasView({
                           </td>
                           {/* Actions */}
                           <td className="p-4">
-                            <div className="flex items-center justify-center gap-2 flex-wrap">
-                              {/* Print View Trigger */}
-                              <button
-                                onClick={() => handleOpenPrint(pf)}
-                                className="p-1.5 bg-slate-50 hover:bg-sky-50 text-sky-600 rounded-lg border border-slate-200 hover:border-sky-200 transition"
-                                title="مشاهده پیش‌فاکتور رسمی و چاپ"
-                              >
-                                <Eye size={14} />
-                              </button>
-                              {/* Edit Proforma */}
-                              <button
-                                onClick={() => handleOpenEdit(pf)}
-                                className="p-1.5 bg-slate-50 hover:bg-amber-50 text-amber-600 rounded-lg border border-slate-200 hover:border-amber-200 transition"
-                                title="ویرایش پیش‌فاکتور"
-                              >
-                                <Edit size={14} />
-                              </button>
-                              {/* Copy Proforma */}
-                              <button
-                                onClick={() => handleCopyProforma(pf)}
-                                className="p-1.5 bg-slate-50 hover:bg-emerald-50 text-emerald-600 rounded-lg border border-slate-200 hover:border-emerald-200 transition"
-                                title="کپی پیش‌فاکتور"
-                              >
-                                <Copy size={14} />
-                              </button>
-                              {/* Prominent status update button - Exactly fixing user complaint */}
-                              <button
-                                onClick={() =>
-                                  handleOpenStatusChange(pf.id, pf.status)
-                                }
-                                className="px-2.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-[10px] font-extrabold transition shadow-xs flex items-center gap-1"
-                                title="تغییر وضعیت کلی پیش‌فاکتور و علت باخت"
-                              >
-                                <Settings size={10} />
-                                تغییر وضعیت
-                              </button>
-                              {/* Manage Items Status */}
-                              <button
-                                onClick={() => handleOpenItemsModal(pf)}
-                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-[10px] font-extrabold transition"
-                                title="تغییر وضعیت تک‌تک ردیف‌های پیش‌فاکتور"
-                              >
-                                ردیف‌ها
-                              </button>
-                              {/* Delete */}
-                              <button
-                                onClick={() => {
-                                  setProformaToDeleteId(pf.id);
-                                  setProformaToDeleteNumber(
-                                    pf.proformaNumber || "",
-                                  );
-                                  setDeleteConfirmOpen(true);
-                                }}
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-150 hover:border-red-150 transition"
-                                title="حذف پیش‌فاکتور"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
+                            {(() => {
+                              const isAdminUser = currentUser?.role === "admin" || currentUser?.isSystemAdmin;
+                              const isLocked = pf.status === "ارسال شده" && !isAdminUser;
+                              return (
+                                <div className="flex items-center justify-center gap-2 flex-wrap">
+                                  {/* Print View Trigger */}
+                                  <button
+                                    onClick={() => handleOpenPrint(pf)}
+                                    className="p-1.5 bg-slate-50 hover:bg-sky-50 text-sky-600 rounded-lg border border-slate-200 hover:border-sky-200 transition"
+                                    title="مشاهده پیش‌فاکتور رسمی و چاپ"
+                                  >
+                                    <Eye size={14} />
+                                  </button>
+                                  {/* Edit Proforma */}
+                                  <button
+                                    onClick={() => {
+                                      if (isLocked) return;
+                                      handleOpenEdit(pf);
+                                    }}
+                                    disabled={isLocked}
+                                    className={`p-1.5 rounded-lg border transition ${
+                                      isLocked
+                                        ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                                        : "bg-slate-50 hover:bg-amber-50 text-amber-600 border-slate-200 hover:border-amber-200"
+                                    }`}
+                                    title={isLocked ? "ویرایش قفل شده است (پیش‌فاکتور ارسال شده است)" : "ویرایش پیش‌فاکتور"}
+                                  >
+                                    <Edit size={14} />
+                                  </button>
+                                  {/* Copy Proforma */}
+                                  <button
+                                    onClick={() => handleCopyProforma(pf)}
+                                    className="p-1.5 bg-slate-50 hover:bg-emerald-50 text-emerald-600 rounded-lg border border-slate-200 hover:border-emerald-200 transition"
+                                    title="کپی پیش‌فاکتور"
+                                  >
+                                    <Copy size={14} />
+                                  </button>
+                                  {/* Prominent status update button - Exactly fixing user complaint */}
+                                  <button
+                                    onClick={() =>
+                                      handleOpenStatusChange(pf.id, pf.status)
+                                    }
+                                    className="px-2.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-[10px] font-extrabold transition shadow-xs flex items-center gap-1"
+                                    title="تغییر وضعیت کلی پیش‌فاکتور و علت باخت"
+                                  >
+                                    <Settings size={10} />
+                                    تغییر وضعیت
+                                  </button>
+                                  {/* Manage Items Status */}
+                                  <button
+                                    onClick={() => handleOpenItemsModal(pf)}
+                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-[10px] font-extrabold transition"
+                                    title="تغییر وضعیت تک‌تک ردیف‌های پیش‌فاکتور"
+                                  >
+                                    ردیف‌ها
+                                  </button>
+                                  {/* Delete */}
+                                  <button
+                                    onClick={() => {
+                                      if (isLocked) return;
+                                      setProformaToDeleteId(pf.id);
+                                      setProformaToDeleteNumber(
+                                        pf.proformaNumber || "",
+                                      );
+                                      setDeleteConfirmOpen(true);
+                                    }}
+                                    disabled={isLocked}
+                                    className={`p-1.5 rounded-lg border transition ${
+                                      isLocked
+                                        ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                                        : "text-slate-400 hover:text-red-600 hover:bg-red-50 border-slate-150 hover:border-red-150"
+                                    }`}
+                                    title={isLocked ? "حذف قفل شده است (پیش‌فاکتور ارسال شده است)" : "حذف پیش‌فاکتور"}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </td>
                         </tr>
                       ))}
@@ -2550,10 +2678,147 @@ export default function ProformasView({
                   }
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-semibold"
                 >
-                  <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
+                  {(!(proformas.find((p) => p.id === statusTargetId)?.status === "ارسال شده" && !((currentUser?.role as string) === "admin" || currentUser?.isSystemAdmin)) || ((currentUser?.role as string) === "admin" || currentUser?.isSystemAdmin)) && (
+                    <option value="پیش‌نویس">پیش‌نویس (Draft)</option>
+                  )}
                   <option value="ارسال شده">ارسال شده به کارفرما (Sent)</option>
                 </select>
               </div>
+
+              {newStatusSelected === "ارسال شده" && (() => {
+                const targetPf = proformas.find((p) => p.id === statusTargetId);
+                const pfCustomerObj = targetPf ? customers.find((c) => c.id === targetPf.customerId) : null;
+                return (
+                  <div className="space-y-4 border-t border-slate-100 pt-3 animate-fade-in">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-600">طریقه ارسال پیش‌فاکتور *</label>
+                      <select
+                        value={sentMethodType}
+                        onChange={(e) => setSentMethodType(e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                      >
+                        {(settings?.dropdownItems?.proformaSentMethods || ["ایمیل", "واتس‌اپ", "تلگرام", "پست", "حضوری", "سایر"]).map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {sentMethodType === "سایر" && (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-600">توضیح طریقه ارسال *</label>
+                        <input
+                          type="text"
+                          value={customSentMethod}
+                          onChange={(e) => setCustomSentMethod(e.target.value)}
+                          placeholder="مثلاً: بورد پروژه، اتوماسیون اداری و..."
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
+                          required
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 relative">
+                      <label className="text-xs font-semibold text-slate-600">ارسال شده برای چه شخص یا اشخاصی؟ (مشتریان حقیقی) *</label>
+                      
+                      <div className="flex flex-wrap gap-1 p-1.5 border border-slate-200 rounded-lg bg-slate-50 min-h-[36px]">
+                        {selectedSentRecipients.length === 0 ? (
+                          <span className="text-slate-400 text-[10px] self-center">هیچ شخصی انتخاب نشده است</span>
+                        ) : (
+                          selectedSentRecipients.map(name => (
+                            <span key={name} className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 border border-sky-150 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                              {name}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSentRecipients(prev => prev.filter(n => n !== name))}
+                                className="hover:bg-sky-200 text-sky-500 hover:text-sky-800 rounded-full p-0.5 transition"
+                              >
+                                <X size={10} />
+                              </button>
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      
+                      <div className="mt-1 flex gap-1.5 items-center w-full min-w-0">
+                        <div className="relative flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={recipientSearchTerm}
+                            onChange={(e) => setRecipientSearchTerm(e.target.value)}
+                            placeholder="جستجوی نام شخص (مشتری حقیقی)..."
+                            className="w-full border border-slate-200 rounded-lg pr-8 pl-3 py-1.5 text-[11px] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
+                          />
+                          <div className="absolute right-2.5 top-2 text-slate-400">
+                            <Search size={12} />
+                          </div>
+                          
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                            {(() => {
+                              const filtered = customers
+                                .filter(c => c.customerType === "حقیقی")
+                                .filter(c => {
+                                  if (!pfCustomerObj) return false;
+                                  if (pfCustomerObj.customerType === "حقوقی") {
+                                    return pfCustomerObj.linkedCustomerIds?.includes(c.id) || c.companyName === pfCustomerObj.companyName;
+                                  } else {
+                                    return c.id === pfCustomerObj.id || pfCustomerObj.linkedCustomerIds?.includes(c.id);
+                                  }
+                                })
+                                .filter(c => {
+                                  const fullName = c.companyName || `${c.firstName || ""} ${c.lastName || ""}`.trim();
+                                  return fullName.toLowerCase().includes(recipientSearchTerm.toLowerCase());
+                                });
+                              
+                              if (filtered.length === 0) {
+                                return <div className="p-2 text-[10px] text-slate-400 text-center">مشتری حقیقی یافت نشد.</div>;
+                              }
+                              
+                              return filtered.map(c => {
+                                const fullName = c.companyName || `${c.firstName || ""} ${c.lastName || ""}`.trim();
+                                const isSelected = selectedSentRecipients.includes(fullName);
+                                
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setSelectedSentRecipients(prev => prev.filter(n => n !== fullName));
+                                      } else {
+                                        setSelectedSentRecipients(prev => [...prev, fullName]);
+                                      }
+                                      setRecipientSearchTerm("");
+                                    }}
+                                    className={`w-full text-right px-3 py-1.5 text-[11px] transition flex items-center justify-between hover:bg-slate-50 ${
+                                      isSelected ? "bg-sky-50/50 text-sky-700 font-semibold" : "text-slate-700"
+                                    }`}
+                                  >
+                                    <span>{fullName}</span>
+                                    {isSelected && <Check size={10} className="text-sky-600" />}
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
+                        </div>
+                        {addCustomer && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsQuickAddingSentRecipient(true);
+                              setQuickAddType("customer");
+                            }}
+                            className="px-2 py-1.5 text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 hover:border-violet-300 transition shrink-0 flex items-center justify-center font-bold"
+                            title="تعریف سریع مخاطب حقیقی جدید"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -3237,12 +3502,151 @@ export default function ProformasView({
                     onChange={(e) =>
                       setStatus(e.target.value as Proforma["status"])
                     }
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-bold"
                   >
-                    <option value="پیش‌نویس">پیش‌نویس</option>
+                    {(!(editingProforma?.status === "ارسال شده" && !((currentUser?.role as string) === "admin" || currentUser?.isSystemAdmin)) || ((currentUser?.role as string) === "admin" || currentUser?.isSystemAdmin)) && (
+                      <option value="پیش‌نویس">پیش‌نویس</option>
+                    )}
                     <option value="ارسال شده">ارسال شده به کارفرما</option>
                   </select>
                 </div>
+
+                {status === "ارسال شده" && (
+                  <div className="space-y-4 border border-slate-100 bg-slate-50/50 p-3.5 rounded-xl animate-fade-in md:col-span-2">
+                    <h4 className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5 border-b border-slate-100 pb-1.5 mb-2">
+                      <span>📬 جزئیات ارسال پیش‌فاکتور به کارفرما</span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-600">طریقه ارسال پیش‌فاکتور *</label>
+                        <select
+                          value={sentMethodType}
+                          onChange={(e) => setSentMethodType(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
+                        >
+                          {(settings?.dropdownItems?.proformaSentMethods || ["ایمیل", "واتس‌اپ", "تلگرام", "پست", "حضوری", "سایر"]).map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {sentMethodType === "سایر" && (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-600">توضیح طریقه ارسال *</label>
+                          <input
+                            type="text"
+                            value={customSentMethod}
+                            onChange={(e) => setCustomSentMethod(e.target.value)}
+                            placeholder="مثلاً: بورد پروژه، اتوماسیون اداری و..."
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5 relative">
+                      <label className="text-xs font-semibold text-slate-600">ارسال شده برای چه شخص یا اشخاصی؟ (مشتریان حقیقی) *</label>
+                      
+                      <div className="flex flex-wrap gap-1 p-1.5 border border-slate-200 rounded-lg bg-slate-50 min-h-[36px]">
+                        {selectedSentRecipients.length === 0 ? (
+                          <span className="text-slate-400 text-[10px] self-center">هیچ شخصی انتخاب نشده است</span>
+                        ) : (
+                          selectedSentRecipients.map(name => (
+                            <span key={name} className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 border border-sky-150 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                              {name}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSentRecipients(prev => prev.filter(n => n !== name))}
+                                className="hover:bg-sky-200 text-sky-500 hover:text-sky-800 rounded-full p-0.5 transition"
+                              >
+                                <X size={10} />
+                              </button>
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      
+                      <div className="mt-1 flex gap-1.5 items-center w-full min-w-0">
+                        <div className="relative flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={recipientSearchTerm}
+                            onChange={(e) => setRecipientSearchTerm(e.target.value)}
+                            placeholder="جستجوی نام شخص (مشتری حقیقی)..."
+                            className="w-full border border-slate-200 rounded-lg pr-8 pl-3 py-1.5 text-[11px] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right"
+                          />
+                          <div className="absolute right-2.5 top-2 text-slate-400">
+                            <Search size={12} />
+                          </div>
+                          
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                            {(() => {
+                              const pfCustomerObj = customers.find((c) => c.id === customerId);
+                              const filtered = customers
+                                .filter(c => c.customerType === "حقیقی")
+                                .filter(c => {
+                                  if (!pfCustomerObj) return false;
+                                  if (pfCustomerObj.customerType === "حقوقی") {
+                                    return pfCustomerObj.linkedCustomerIds?.includes(c.id) || c.companyName === pfCustomerObj.companyName;
+                                  } else {
+                                    return c.id === pfCustomerObj.id || pfCustomerObj.linkedCustomerIds?.includes(c.id);
+                                  }
+                                })
+                                .filter(c => {
+                                  const fullName = c.companyName || `${c.firstName || ""} ${c.lastName || ""}`.trim();
+                                  return fullName.toLowerCase().includes(recipientSearchTerm.toLowerCase());
+                                });
+                              
+                              if (filtered.length === 0) {
+                                return <div className="p-2 text-[10px] text-slate-400 text-center">مشتری حقیقی یافت نشد.</div>;
+                              }
+                              
+                              return filtered.map(c => {
+                                const fullName = c.companyName || `${c.firstName || ""} ${c.lastName || ""}`.trim();
+                                const isSelected = selectedSentRecipients.includes(fullName);
+                                
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setSelectedSentRecipients(prev => prev.filter(n => n !== fullName));
+                                      } else {
+                                        setSelectedSentRecipients(prev => [...prev, fullName]);
+                                      }
+                                      setRecipientSearchTerm("");
+                                    }}
+                                    className={`w-full text-right px-3 py-1.5 text-[11px] transition flex items-center justify-between hover:bg-slate-50 ${
+                                      isSelected ? "bg-sky-50/50 text-sky-700 font-semibold" : "text-slate-700"
+                                    }`}
+                                  >
+                                    <span>{fullName}</span>
+                                    {isSelected && <Check size={10} className="text-sky-600" />}
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
+                        </div>
+                        {addCustomer && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsQuickAddingSentRecipient(true);
+                              setQuickAddType("customer");
+                            }}
+                            className="px-2 py-1.5 text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 hover:border-violet-300 transition shrink-0 flex items-center justify-center font-bold"
+                            title="تعریف سریع مخاطب حقیقی جدید"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* Currency Selection */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">
@@ -4288,56 +4692,134 @@ export default function ProformasView({
                     فنی ردیف اضافه خواهند شد.
                   </div>
 
-                  {prod.features.map((feature) => (
-                    <div
-                      key={feature.id}
-                      className="space-y-2 border border-slate-100 rounded-lg p-3"
-                    >
-                      <label className="text-sm font-bold text-slate-700">
-                        {feature.name}
-                      </label>
-                      <div className="flex flex-col gap-2 mt-2">
-                        {feature.options.map((opt) => {
-                          const isSelected = (
-                            configSelections[feature.id] || []
-                          ).includes(opt.value);
-                          return (
-                            <label
-                              key={opt.id}
-                              className="flex items-center gap-2 cursor-pointer group"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  setConfigSelections((prev) => {
-                                    const current = prev[feature.id] || [];
+                  {(() => {
+                    // Helper function to prune cascading selections based on configRules
+                    const getPrunedSelections = (selections: Record<string, string[]>) => {
+                      if (!prod.configRules || prod.configRules.length === 0) return selections;
+                      let current = { ...selections };
+                      let loop = true;
+                      let iterations = 0;
+                      while (loop && iterations < 10) {
+                        loop = false;
+                        iterations++;
+                        for (const rule of prod.configRules) {
+                          if (!rule.active) continue;
+                          
+                          // Evaluate conditions
+                          const allConditionsMet = rule.conditions.every(cond => {
+                            const f = prod.features?.find(feat => feat.name === cond.featureName);
+                            if (!f) return false;
+                            const selectedVals = current[f.id] || [];
+                            return selectedVals.some(v => cond.values.includes(v));
+                          });
+                          
+                          if (allConditionsMet) {
+                            for (const act of rule.actions) {
+                              const f = prod.features?.find(feat => feat.name === act.featureName);
+                              if (f) {
+                                const selectedVals = current[f.id] || [];
+                                const nextVals = selectedVals.filter(v => !act.values.includes(v));
+                                if (nextVals.length !== selectedVals.length) {
+                                  current[f.id] = nextVals;
+                                  loop = true; // repeat because changes occurred
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      return current;
+                    };
+
+                    // Check if a specific feature option is currently excluded
+                    const checkIsOptionExcluded = (featName: string, optionVal: string) => {
+                      if (!prod.configRules || prod.configRules.length === 0) return false;
+                      for (const rule of prod.configRules) {
+                        if (!rule.active) continue;
+                        
+                        const allConditionsMet = rule.conditions.every(cond => {
+                          const f = prod.features?.find(feat => feat.name === cond.featureName);
+                          if (!f) return false;
+                          const selectedVals = configSelections[f.id] || [];
+                          return selectedVals.some(v => cond.values.includes(v));
+                        });
+                        
+                        if (allConditionsMet) {
+                          const hasExclusion = rule.actions.some(act => act.featureName === featName && act.values.includes(optionVal));
+                          if (hasExclusion) return true;
+                        }
+                      }
+                      return false;
+                    };
+
+                    return prod.features.map((feature) => (
+                      <div
+                        key={feature.id}
+                        className="space-y-2 border border-slate-100 rounded-lg p-3"
+                      >
+                        <label className="text-sm font-bold text-slate-700">
+                          {feature.name}
+                        </label>
+                        <div className="flex flex-col gap-2 mt-2">
+                          {feature.options.map((opt) => {
+                            const isSelected = (
+                              configSelections[feature.id] || []
+                            ).includes(opt.value);
+                            const isExcluded = checkIsOptionExcluded(feature.name, opt.value);
+                            
+                            return (
+                              <label
+                                key={opt.id}
+                                className={`flex items-center gap-2 select-none ${
+                                  isExcluded 
+                                    ? "opacity-40 cursor-not-allowed" 
+                                    : "cursor-pointer group"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected && !isExcluded}
+                                  disabled={isExcluded}
+                                  onChange={(e) => {
+                                    let nextSelections = { ...configSelections };
+                                    const current = nextSelections[feature.id] || [];
                                     if (e.target.checked) {
-                                      return {
-                                        ...prev,
-                                        [feature.id]: [...current, opt.value],
-                                      };
+                                      nextSelections[feature.id] = [...current, opt.value];
                                     } else {
-                                      return {
-                                        ...prev,
-                                        [feature.id]: current.filter(
-                                          (v) => v !== opt.value,
-                                        ),
-                                      };
+                                      nextSelections[feature.id] = current.filter(
+                                        (v) => v !== opt.value,
+                                      );
                                     }
-                                  });
-                                }}
-                                className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer"
-                              />
-                              <span className="text-sm text-slate-600 group-hover:text-slate-900">
-                                {opt.value}
-                              </span>
-                            </label>
-                          );
-                        })}
+                                    
+                                    // Cascading prune of any newly restricted options
+                                    nextSelections = getPrunedSelections(nextSelections);
+                                    setConfigSelections(nextSelections);
+                                  }}
+                                  className={`w-4 h-4 rounded border-slate-300 focus:ring-sky-500 ${
+                                    isExcluded 
+                                      ? "text-slate-300 cursor-not-allowed" 
+                                      : "text-sky-600 cursor-pointer"
+                                  }`}
+                                />
+                                <span className={`text-sm ${
+                                  isExcluded 
+                                    ? "text-slate-400 line-through" 
+                                    : "text-slate-600 group-hover:text-slate-900 font-medium"
+                                }`}>
+                                  {opt.value}
+                                </span>
+                                {isExcluded && (
+                                  <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded font-bold mr-auto">
+                                    غیرمجاز طبق شروط
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
 
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
@@ -4848,6 +5330,7 @@ export default function ProformasView({
           onClose={() => {
             setQuickAddType(null);
             setIsQuickAddingContact(false);
+            setIsQuickAddingSentRecipient(false);
           }}
           type={quickAddType}
           settings={settings}
@@ -4856,14 +5339,38 @@ export default function ProformasView({
           addProject={addProject}
           addProduct={addProduct}
           products={products}
-          initialCustType={isQuickAddingContact ? "حقیقی" : undefined}
+          initialCustType={(isQuickAddingContact || isQuickAddingSentRecipient) ? "حقیقی" : undefined}
           initialLinkedCustomerIds={
-            isQuickAddingContact && customerId ? [customerId] : undefined
+            (isQuickAddingContact || isQuickAddingSentRecipient)
+              ? [customerId || proformas.find(p => p.id === statusTargetId)?.customerId || ""]
+              : undefined
           }
           onSuccess={(newEntity) => {
             if (newEntity && newEntity.id) {
               if (quickAddType === "customer") {
-                if (isQuickAddingContact) {
+                if (isQuickAddingSentRecipient) {
+                  const fullName = newEntity.companyName || `${newEntity.firstName || ""} ${newEntity.lastName || ""}`.trim();
+                  setSelectedSentRecipients(prev => {
+                    if (prev.includes(fullName)) return prev;
+                    return [...prev, fullName];
+                  });
+                  const currentProformaCustomerId = customerId || proformas.find(p => p.id === statusTargetId)?.customerId;
+                  if (currentProformaCustomerId) {
+                    const selectedCustObj = customers.find(c => c.id === currentProformaCustomerId);
+                    if (updateCustomer && selectedCustObj) {
+                      const updatedLinks = Array.from(
+                        new Set([
+                          ...(selectedCustObj.linkedCustomerIds || []),
+                          newEntity.id,
+                        ]),
+                      );
+                      updateCustomer({
+                        ...selectedCustObj,
+                        linkedCustomerIds: updatedLinks,
+                      });
+                    }
+                  }
+                } else if (isQuickAddingContact) {
                   setContactCustomerId(newEntity.id);
                   if (newEntity.gender === "مرد") {
                     setContactPrefix("جناب آقای مهندس");

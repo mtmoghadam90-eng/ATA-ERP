@@ -105,7 +105,7 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'moduleResponsibles' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows' | 'rates'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows' | 'rates'>('general');
 
   // Workflow builder states
   const [editingRule, setEditingRule] = useState<WorkflowRule | null>(null);
@@ -156,6 +156,7 @@ export default function SettingsView({
     'returnReasons',
     'equipmentTypes',
     'supplierInquirySteps',
+    'proformaSentMethods',
     'lossReasons'
   ];
 
@@ -176,6 +177,7 @@ export default function SettingsView({
     returnReasons: 'دلایل برگشت کالا (خدمات پس از فروش)',
     equipmentTypes: 'انواع پیش‌فرض تجهیزات ابزار دقیق (پروژه‌ها)',
     supplierInquirySteps: 'مراحل و رویدادهای استعلام (استعلام‌ها)',
+    proformaSentMethods: 'طرق ارسال پیش‌فاکتور (پیش‌فاکتور)',
     lossReasons: 'دلایل باخت پروژه/اقلام (پروژه‌ها/پیش‌فاکتور)'
   };
 
@@ -196,6 +198,7 @@ export default function SettingsView({
     returnReasons: 'لیست دلایل و مشکلات خرابی یا برگشت کالا در بخش خدمات پس از فروش.',
     equipmentTypes: 'لیست انواع تجهیزات ابزار دقیق (مانند فلومتر کوریولیس، ترانسمیتر فشار، لول ترانسمیتر راداری و غیره) برای ثبت سریع درخواست‌های پروژه‌ها.',
     supplierInquirySteps: 'مراحل و رویدادهای پیش‌فرض برای ثبت گردش کار استعلام‌های قیمت از تأمین‌کنندگان خارجی.',
+    proformaSentMethods: 'روش‌های ارسال پیش‌فاکتور به کارفرما جهت ثبت در زمان اعلام وضعیت ارسال‌شده.',
     lossReasons: 'دلایل باخت تعریف شده که کاربر می‌تواند هنگام مشخص کردن وضعیت بازنده یا لغو پروژه/پیش‌فاکتور انتخاب کند.'
   };
 
@@ -795,17 +798,6 @@ export default function SettingsView({
         >
           <Menu size={16} className="text-teal-500" />
           ترتیب منوی سایدبار
-        </button>
-        <button
-          onClick={() => setActiveTab('moduleResponsibles')}
-          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
-            activeTab === 'moduleResponsibles'
-              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
-              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
-          }`}
-        >
-          <UserCog size={16} className="text-indigo-500" />
-          مسئولین ماژول‌ها
         </button>
         {userRole === 'admin' && (
           <button
@@ -1528,74 +1520,64 @@ export default function SettingsView({
                             </td>
                             <td className="py-3 px-4 text-left">
                               <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => handleMoveDropdownItem(idx, 'up')}
+                                  className={`p-1 rounded transition ${idx === 0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                  title="انتقال به بالا"
+                                >
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === itemsCount - 1}
+                                  onClick={() => handleMoveDropdownItem(idx, 'down')}
+                                  className={`p-1 rounded transition ${idx === itemsCount - 1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                  title="انتقال به پایین"
+                                >
+                                  <ArrowDown size={14} />
+                                </button>
+
                                 {isEditing ? (
                                   <>
                                     <button
                                       type="button"
                                       onClick={() => handleSaveDropdownEdit(idx)}
-                                      className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition cursor-pointer"
-                                      title="ذخیره تغییرات"
+                                      className="p-1 rounded text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition"
+                                      title="ذخیره"
                                     >
-                                      <Check size={15} />
+                                      <Check size={14} />
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        setEditingDropdownIndex(null);
-                                        setEditingDropdownValue('');
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                                      onClick={() => setEditingDropdownIndex(null)}
+                                      className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition"
                                       title="انصراف"
                                     >
-                                      <XCircle size={15} />
+                                      <XCircle size={14} />
                                     </button>
                                   </>
                                 ) : (
                                   <>
                                     <button
                                       type="button"
-                                      disabled={idx === 0}
-                                      onClick={() => handleMoveDropdownItem(idx, 'up')}
-                                      className={`p-1 rounded transition cursor-pointer ${
-                                        idx === 0 
-                                          ? 'text-slate-300 cursor-not-allowed' 
-                                          : 'text-slate-500 hover:text-sky-600 hover:bg-sky-50'
-                                      }`}
-                                      title="انتقال به بالا"
-                                    >
-                                      <ArrowUp size={15} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={idx === itemsCount - 1}
-                                      onClick={() => handleMoveDropdownItem(idx, 'down')}
-                                      className={`p-1 rounded transition cursor-pointer ${
-                                        idx === itemsCount - 1 
-                                          ? 'text-slate-300 cursor-not-allowed' 
-                                          : 'text-slate-500 hover:text-sky-600 hover:bg-sky-50'
-                                      }`}
-                                      title="انتقال به پایین"
-                                    >
-                                      <ArrowDown size={15} />
-                                    </button>
-                                    <button
-                                      type="button"
                                       onClick={() => {
                                         setEditingDropdownIndex(idx);
                                         setEditingDropdownValue(item);
                                       }}
-                                      className="p-1 text-sky-500 hover:text-sky-700 hover:bg-sky-50 rounded transition cursor-pointer"
-                                      title="ویرایش این آیتم"
+                                      className="p-1 rounded text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition"
+                                      title="ویرایش"
                                     >
-                                      <Edit2 size={15} />
+                                      <Edit2 size={14} />
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteDropdownItem(item)}
-                                      className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
-                                      title="حذف این آیتم"
+                                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                      title="حذف"
                                     >
-                                      <Trash2 size={15} />
+                                      <Trash2 size={14} />
                                     </button>
                                   </>
                                 )}
@@ -1620,56 +1602,142 @@ export default function SettingsView({
 
           </div>
         ) : activeTab === 'activityCategories' ? (
-          /* Activity Categories Tab */
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
-              <Sliders size={18} className="text-sky-500" />
-              <h3 className="font-bold text-sm">مدیریت دسته‌بندی‌های فعالیت پروژه‌ها (فرصت‌ها)</h3>
-            </div>
-            
-            <p className="text-slate-500 text-xs leading-relaxed">
-              دسته‌بندی‌های مشخص‌شده در این بخش، ساختار ثبت فعالیت‌های روزانه، گزارش کار، تماس‌ها و ارجاعات همکاران در هر پروژه را تشکیل می‌دهند. کاربران برای هر پروژه فقط قادر به ثبت فعالیت در این دسته‌های مشخص خواهند بود و از ایجاد دسته‌بندی تکراری و متفرقه ممانعت به عمل می‌آید.
-            </p>
+          /* Activity Categories & System Categories Tab */
+          <div className="space-y-6">
+            {/* Custom Activity Categories Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
+                <Sliders size={18} className="text-sky-500" />
+                <h3 className="font-bold text-sm">۱. دسته‌بندی‌های اختصاصی فعالیت پروژه</h3>
+              </div>
+              
+              <p className="text-slate-500 text-xs leading-relaxed">
+                دسته‌بندی‌های مشخص‌شده در این بخش، ساختار ثبت فعالیت‌های روزانه، گزارش کار، تماس‌ها و ارجاعات همکاران در هر پروژه را تشکیل می‌دهند. کاربران برای هر پروژه فقط قادر به ثبت فعالیت در این دسته‌های مشخص خواهند بود و از ایجاد دسته‌بندی تکراری و متفرقه ممانعت به عمل می‌آید.
+              </p>
 
-            <form onSubmit={handleAddCategory} className="flex gap-3 max-w-lg">
-              <input
-                type="text"
-                placeholder="مثال: پیگیری استعلام قیمت، تست فنی کارگاهی، ارسال مدارک نهایی"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                required
-                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-right"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
-              >
-                <Plus size={14} />
-                افزودن دسته‌بندی جدید
-              </button>
-            </form>
+              <form onSubmit={handleAddCategory} className="flex gap-3 max-w-lg">
+                <input
+                  type="text"
+                  placeholder="مثال: پیگیری استعلام قیمت، تست فنی کارگاهی، ارسال مدارک نهایی"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  required
+                  className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-right"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+                >
+                  <Plus size={14} />
+                  افزودن دسته‌بندی جدید
+                </button>
+              </form>
 
-            <div className="hidden md:block border border-slate-150 rounded-xl overflow-hidden max-w-2xl bg-slate-50/50">
-              <table className="w-full text-right border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold">
-                    <th className="py-3 px-4">ردیف</th>
-                    <th className="py-3 px-4">نام دسته‌بندی فعالیت</th>
-                    <th className="py-3 px-4">مسئول (تایید کننده اقدامات)</th>
-                    <th className="py-3 px-4">وضعیت استفاده در پروژه‌ها</th>
-                    <th className="py-3 px-4 text-left">عملیات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {(settings.activityCategories || []).map((cat, idx) => {
-                    const isUsed = (projectCategoryGroups || []).some(g => g.categoryId === cat.id);
-                    return (
-                      <tr key={cat.id} className="hover:bg-white transition bg-white/40">
-                        <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
-                        <td className="py-3 px-4 font-semibold text-slate-800">{cat.name}</td>
-                        <td className="py-3 px-4">
+              {/* Desktop View */}
+              <div className="hidden md:block border border-slate-150 rounded-xl overflow-hidden max-w-2xl bg-slate-50/50">
+                <table className="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold">
+                      <th className="py-3 px-4">ردیف</th>
+                      <th className="py-3 px-4">نام دسته‌بندی فعالیت</th>
+                      <th className="py-3 px-4">مسئول (تایید کننده اقدامات)</th>
+                      <th className="py-3 px-4">وضعیت استفاده در پروژه‌ها</th>
+                      <th className="py-3 px-4 text-left">عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(settings.activityCategories || []).map((cat, idx) => {
+                      const isUsed = (projectCategoryGroups || []).some(g => g.categoryId === cat.id);
+                      return (
+                        <tr key={cat.id} className="hover:bg-white transition bg-white/40">
+                          <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-800">{cat.name}</td>
+                          <td className="py-3 px-4">
+                            <select
+                              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1 outline-none focus:border-sky-500 bg-white"
+                              value={cat.responsibleUserId || ''}
+                              onChange={(e) => {
+                                const updatedCats = (settings.activityCategories || []).map(c => 
+                                  c.id === cat.id ? { ...c, responsibleUserId: e.target.value } : c
+                                );
+                                updateSettings({ ...settings, activityCategories: updatedCats });
+                              }}
+                            >
+                              <option value="">بدون مسئول خاص</option>
+                              {users?.map(u => (
+                                <option key={u.id} value={u.fullName}>{u.fullName}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-3 px-4">
+                            {isUsed ? (
+                              <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                                استفاده شده (غیرقابل حذف)
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-medium">بدون استفاده</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-left">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                              disabled={isUsed}
+                              className={`p-1 rounded transition ${
+                                isUsed 
+                                  ? 'text-slate-300 cursor-not-allowed bg-slate-50' 
+                                  : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
+                              }`}
+                              title={isUsed ? 'این دسته‌بندی در پروژه‌ها استفاده شده و قابل حذف نیست.' : 'حذف دسته‌بندی'}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {(settings.activityCategories || []).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="text-center py-6 text-slate-400 bg-white">
+                          هیچ دسته‌بندی فعالیتی تعریف نشده است. لطفاً حداقل یک مورد را بیفزایید.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile View */}
+              <div className="md:hidden space-y-4">
+                {(settings.activityCategories || []).map((cat, idx) => {
+                  const isUsed = (projectCategoryGroups || []).some(g => g.categoryId === cat.id);
+                  return (
+                    <div key={`mob-${cat.id}`} className="bg-white rounded-xl border border-slate-200 p-4 space-y-4 shadow-sm relative">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <span className="text-slate-400 font-mono text-[10px]">ردیف {idx + 1}</span>
+                          <h4 className="font-bold text-slate-800 text-sm">{cat.name}</h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                          disabled={isUsed}
+                          className={`p-1.5 rounded-lg transition ${
+                            isUsed 
+                              ? 'text-slate-300 cursor-not-allowed bg-slate-50' 
+                              : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
+                          }`}
+                          title={isUsed ? 'این دسته‌بندی در پروژه‌ها استفاده شده و قابل حذف نیست.' : 'حذف دسته‌بندی'}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <div>
+                          <span className="text-xs text-slate-500 block mb-1 font-semibold">مسئول (تایید کننده اقدامات)</span>
                           <select
-                            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1 outline-none focus:border-sky-500"
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-2 outline-none focus:border-sky-500 bg-white"
                             value={cat.responsibleUserId || ''}
                             onChange={(e) => {
                               const updatedCats = (settings.activityCategories || []).map(c => 
@@ -1683,110 +1751,161 @@ export default function SettingsView({
                               <option key={u.id} value={u.fullName}>{u.fullName}</option>
                             ))}
                           </select>
-                        </td>
-                        <td className="py-3 px-4">
+                        </div>
+
+                        <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          <span className="text-xs text-slate-500 font-semibold">وضعیت</span>
                           {isUsed ? (
-                            <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
-                              استفاده شده (غیرقابل حذف)
+                            <span className="text-amber-600 bg-amber-100 px-2.5 py-1 rounded-md font-bold text-[10px]">
+                              استفاده شده
                             </span>
                           ) : (
-                            <span className="text-slate-400 font-medium">بدون استفاده</span>
+                            <span className="text-slate-400 font-medium text-[10px]">بدون استفاده</span>
                           )}
-                        </td>
-                        <td className="py-3 px-4 text-left">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                            disabled={isUsed}
-                            className={`p-1 rounded transition ${
-                              isUsed 
-                                ? 'text-slate-300 cursor-not-allowed bg-slate-50' 
-                                : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
-                            }`}
-                            title={isUsed ? 'این دسته‌بندی در پروژه‌ها استفاده شده و قابل حذف نیست.' : 'حذف دسته‌بندی'}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {(settings.activityCategories || []).length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center py-6 text-slate-400 bg-white">
-                        هیچ دسته‌بندی فعالیتی تعریف نشده است. لطفاً حداقل یک مورد را بیفزایید.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(settings.activityCategories || []).length === 0 && (
+                  <div className="text-center py-6 text-slate-400 bg-white border border-slate-200 rounded-xl text-xs font-medium">
+                    هیچ دسته‌بندی فعالیتی تعریف نشده است. لطفاً حداقل یک مورد را بیفزایید.
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Mobile View */}
-            <div className="md:hidden space-y-4">
-              {(settings.activityCategories || []).map((cat, idx) => {
-                const isUsed = (projectCategoryGroups || []).some(g => g.categoryId === cat.id);
-                return (
-                  <div key={`mob-${cat.id}`} className="bg-white rounded-xl border border-slate-200 p-4 space-y-4 shadow-sm relative">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <span className="text-slate-400 font-mono text-[10px]">ردیف {idx + 1}</span>
-                        <h4 className="font-bold text-slate-800 text-sm">{cat.name}</h4>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                        disabled={isUsed}
-                        className={`p-1.5 rounded-lg transition ${
-                          isUsed 
-                            ? 'text-slate-300 cursor-not-allowed bg-slate-50' 
-                            : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
-                        }`}
-                        title={isUsed ? 'این دسته‌بندی در پروژه‌ها استفاده شده و قابل حذف نیست.' : 'حذف دسته‌بندی'}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+            {/* System Categories Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
+                <UserCog size={18} className="text-indigo-500" />
+                <h3 className="font-bold text-sm">۲. دسته‌بندی‌های سیستمی نرم‌افزار (مسئولین ماژول‌ها)</h3>
+              </div>
+              
+              <p className="text-slate-500 text-xs leading-relaxed">
+                این دسته‌بندی‌ها به صورت پیش‌فرض در هسته سیستم تعریف شده‌اند و فرآیندهای اصلی نرم‌افزار را پوشش می‌دهند. با تعیین مسئول برای هر کدام، اعلان‌ها و وظایف خودکار آن ماژول به شخص مشخص شده ارجاع داده خواهد شد.
+              </p>
 
-                    <div className="grid grid-cols-1 gap-3">
-                      <div>
-                        <span className="text-xs text-slate-500 block mb-1 font-semibold">مسئول (تایید کننده اقدامات)</span>
-                        <select
-                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-2 outline-none focus:border-sky-500"
-                          value={cat.responsibleUserId || ''}
-                          onChange={(e) => {
-                            const updatedCats = (settings.activityCategories || []).map(c => 
-                              c.id === cat.id ? { ...c, responsibleUserId: e.target.value } : c
-                            );
-                            updateSettings({ ...settings, activityCategories: updatedCats });
-                          }}
-                        >
-                          <option value="">بدون مسئول خاص</option>
-                          {users?.map(u => (
-                            <option key={u.id} value={u.fullName}>{u.fullName}</option>
-                          ))}
-                        </select>
+              {/* Desktop View */}
+              <div className="hidden md:block border border-slate-150 rounded-xl overflow-hidden max-w-2xl bg-slate-50/50">
+                <table className="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold">
+                      <th className="py-3 px-4">ردیف</th>
+                      <th className="py-3 px-4">نام دسته‌بندی سیستمی</th>
+                      <th className="py-3 px-4">توضیحات فرآیند</th>
+                      <th className="py-3 px-4">نوع</th>
+                      <th className="py-3 px-4">مسئول (دریافت‌کننده ارجاعات و اعلان‌ها)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[
+                      { id: 'customers', name: 'مشتریان', desc: 'مدیریت خریداران و مخاطبین' },
+                      { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)', desc: 'پیش‌برد پروژه‌ها و پیگیری فرصت‌ها' },
+                      { id: 'products', name: 'کالاها و تجهیزات', desc: 'کاتالوگ کالاها و تجهیزات فنی' },
+                      { id: 'proformas', name: 'پیش‌فاکتورها', desc: 'صدور و پیگیری پیش‌فاکتورها' },
+                      { id: 'suppliers', name: 'تأمین‌کنندگان', desc: 'مدیریت و ارزیابی تأمین‌کنندگان کالا' },
+                      { id: 'supplierInquiries', name: 'استعلام قیمت تأمین‌کنندگان', desc: 'ثبت و پیگیری استعلام‌های قیمتی' },
+                      { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', desc: 'سفارشات خرید قطعی از خارج کشور' },
+                      { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا', desc: 'فرآیند آماده‌سازی و ارسال کالا' },
+                      { id: 'afterSalesServices', name: 'خدمات پس از فروش', desc: 'پیگیری گارانتی و تعمیرات کالا' },
+                      { id: 'transactions', name: 'تراکنش‌های مالی', desc: 'ثبت اسناد دریافتی، پرداختی و مالی' }
+                    ].map((mod, idx) => {
+                      return (
+                        <tr key={mod.id} className="hover:bg-white transition bg-white/40">
+                          <td className="py-3 px-4 font-mono text-slate-400">{idx + 1}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-800">{mod.name}</td>
+                          <td className="py-3 px-4 text-slate-500">{mod.desc}</td>
+                          <td className="py-3 px-4">
+                            <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                              سیستمی
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <select
+                              value={settings.moduleResponsibles?.[mod.id] || ''}
+                              onChange={(e) => {
+                                updateSettings({
+                                  ...settings,
+                                  moduleResponsibles: {
+                                    ...(settings.moduleResponsibles || {}),
+                                    [mod.id]: e.target.value
+                                  }
+                                });
+                              }}
+                              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1 outline-none focus:border-indigo-500 bg-white"
+                            >
+                              <option value="">بدون مسئول مشخص</option>
+                              {users.map(u => (
+                                <option key={u.id} value={u.fullName}>
+                                  {u.fullName} ({u.role === 'admin' ? 'مدیر' : 'کاربر'})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile View */}
+              <div className="md:hidden space-y-4">
+                {[
+                  { id: 'customers', name: 'مشتریان', desc: 'مدیریت خریداران و مخاطبین' },
+                  { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)', desc: 'پیش‌برد پروژه‌ها و پیگیری فرصت‌ها' },
+                  { id: 'products', name: 'کالاها و تجهیزات', desc: 'کاتالوگ کالاها و تجهیزات فنی' },
+                  { id: 'proformas', name: 'پیش‌فاکتورها', desc: 'صدور و پیگیری پیش‌فاکتورها' },
+                  { id: 'suppliers', name: 'تأمین‌کنندگان', desc: 'مدیریت و ارزیابی تأمین‌کنندگان کالا' },
+                  { id: 'supplierInquiries', name: 'استعلام قیمت تأمین‌کنندگان', desc: 'ثبت و پیگیری استعلام‌های قیمتی' },
+                  { id: 'purchaseOrders', name: 'سفارشات خرید خارجی', desc: 'سفارشات خرید قطعی از خارج کشور' },
+                  { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا', desc: 'فرآیند آماده‌سازی و ارسال کالا' },
+                  { id: 'afterSalesServices', name: 'خدمات پس از فروش', desc: 'پیگیری گارانتی و تعمیرات کالا' },
+                  { id: 'transactions', name: 'تراکنش‌های مالی', desc: 'ثبت اسناد دریافتی، پرداختی و مالی' }
+                ].map((mod, idx) => {
+                  return (
+                    <div key={`sys-mob-${mod.id}`} className="bg-white rounded-xl border border-slate-200 p-4 space-y-4 shadow-sm relative">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <span className="text-slate-400 font-mono text-[10px]">ردیف {idx + 1}</span>
+                          <h4 className="font-bold text-slate-800 text-sm">{mod.name}</h4>
+                          <p className="text-[11px] text-slate-500">{mod.desc}</p>
+                        </div>
+                        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold text-[9px]">
+                          سیستمی
+                        </span>
                       </div>
 
-                      <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        <span className="text-xs text-slate-500 font-semibold">وضعیت</span>
-                        {isUsed ? (
-                          <span className="text-amber-600 bg-amber-100 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                            استفاده شده
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-medium text-[10px]">بدون استفاده</span>
-                        )}
+                      <div className="grid grid-cols-1 gap-3">
+                        <div>
+                          <span className="text-xs text-slate-500 block mb-1 font-semibold">مسئول (دریافت‌کننده ارجاعات و اعلان‌ها)</span>
+                          <select
+                            value={settings.moduleResponsibles?.[mod.id] || ''}
+                            onChange={(e) => {
+                              updateSettings({
+                                ...settings,
+                                moduleResponsibles: {
+                                  ...(settings.moduleResponsibles || {}),
+                                  [mod.id]: e.target.value
+                                }
+                              });
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white"
+                          >
+                            <option value="">بدون مسئول مشخص</option>
+                            {users.map(u => (
+                              <option key={u.id} value={u.fullName}>
+                                {u.fullName} ({u.role === 'admin' ? 'مدیر' : 'کاربر'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-              {(settings.activityCategories || []).length === 0 && (
-                <div className="text-center py-6 text-slate-400 bg-white border border-slate-200 rounded-xl text-xs font-medium">
-                  هیچ دسته‌بندی فعالیتی تعریف نشده است. لطفاً حداقل یک مورد را بیفزایید.
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : activeTab === 'sidebarOrder' ? (
@@ -1987,58 +2106,6 @@ export default function SettingsView({
                   );
                 });
               })()}
-            </div>
-          </div>
-        ) : activeTab === 'moduleResponsibles' ? (
-          /* Module Responsibles Tab */
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-6">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-150 text-slate-800">
-              <UserCog size={18} className="text-sky-500" />
-              <h3 className="font-bold text-sm">تعیین مسئولین ماژول‌ها</h3>
-            </div>
-            
-            <p className="text-slate-500 text-xs leading-relaxed">
-              با تعیین مسئول برای هر ماژول، تمامی تغییرات و ثبت‌های جدید در آن ماژول مستقیماً به عنوان یک اعلان در تب "اعلان‌های ماژول‌ها" در کارتابل ارجاعات مسئول مربوطه نمایش داده خواهد شد.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[
-                { id: 'customers', name: 'مشتریان' },
-                { id: 'projects', name: 'پروژه‌ها (فرصت‌ها)' },
-                { id: 'products', name: 'کالاها و تجهیزات' },
-                { id: 'proformas', name: 'پیش‌فاکتورها' },
-                { id: 'suppliers', name: 'تأمین‌کنندگان' },
-                { id: 'supplierInquiries', name: 'استعلام قیمت تأمین‌کنندگان' },
-                { id: 'purchaseOrders', name: 'سفارشات خرید خارجی' },
-                { id: 'packagingDelivery', name: 'بسته‌بندی و تحویل کالا' },
-                { id: 'afterSalesServices', name: 'خدمات پس از فروش' },
-                { id: 'transactions', name: 'تراکنش‌های مالی' },
-                { id: 'tasks', name: 'وظایف و پیگیری' }
-              ].map(mod => (
-                <div key={mod.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                  <div className="font-bold text-sm text-slate-800">{mod.name}</div>
-                  <select
-                    value={settings.moduleResponsibles?.[mod.id] || ''}
-                    onChange={(e) => {
-                      updateSettings({
-                        ...settings,
-                        moduleResponsibles: {
-                          ...(settings.moduleResponsibles || {}),
-                          [mod.id]: e.target.value
-                        }
-                      });
-                    }}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 bg-white"
-                  >
-                    <option value="">بدون مسئول مشخص</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.fullName}>
-                        {u.fullName} ({u.role === 'admin' ? 'مدیر' : 'کاربر'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
             </div>
           </div>
         ) : activeTab === 'adminNotifications' && userRole === 'admin' && currentUser ? (

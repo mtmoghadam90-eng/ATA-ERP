@@ -4,7 +4,8 @@ import {
   Plus, Search, Filter, Briefcase, Edit, Trash2, XCircle, AlertCircle, TrendingUp, X,
   FileSpreadsheet, Clock, Sliders, User, Paperclip, ChevronLeft, ChevronDown, ChevronUp,
   Send, CheckCircle2, History, Check, Folder, FolderOpen, File, Download, Eye, Upload,
-  ChevronRight, Loader2, Image as ImageIcon, Maximize2, Minimize2, ArrowLeftRight, Flag, Zap, MessageSquare
+  ChevronRight, Loader2, Image as ImageIcon, Maximize2, Minimize2, ArrowLeftRight, Flag, Zap, MessageSquare,
+  ExternalLink
 } from 'lucide-react';
 
 import { getTodayShamsi, addDaysToShamsi, addWorkingDaysToShamsi, formatDateTimeToShamsi } from '../dateUtils';
@@ -1310,6 +1311,32 @@ export default function ProjectsView({
   };
 
   const handlePreviewOrDownload = (doc: any) => {
+    if (doc.type === 'system' && doc.id) {
+      let printModule = '';
+      let printId = '';
+      if (doc.id.startsWith('proforma-')) {
+        printModule = 'proformas';
+        printId = doc.id.replace('proforma-', '');
+      } else if (doc.id.startsWith('po-')) {
+        printModule = 'purchaseOrders';
+        printId = doc.id.replace('po-', '');
+      } else if (doc.id.startsWith('delivery-pl-')) {
+        printModule = 'packagingDelivery';
+        printId = doc.id.replace('delivery-pl-', '');
+      } else if (doc.id.startsWith('tx-')) {
+        printModule = 'transactions';
+        printId = doc.id.replace('tx-', '');
+      } else if (doc.id.startsWith('service-')) {
+        printModule = 'afterSalesServices';
+        printId = doc.id.replace('service-', '');
+      }
+      if (printModule && printId) {
+        const url = `/?printModule=${printModule}&printId=${printId}&standalone=true`;
+        window.open(url, '_blank');
+        return;
+      }
+    }
+
     const isImage = doc.url && (doc.url.startsWith('data:image/') || doc.url.startsWith('http') || doc.name.endsWith('.png') || doc.name.endsWith('.jpg') || doc.name.endsWith('.jpeg'));
 
     if (doc.url !== '#' && !isImage && !doc.url.startsWith('data:')) {
@@ -2292,9 +2319,9 @@ export default function ProjectsView({
                             <button
                               onClick={() => handlePreviewOrDownload(doc)}
                               className="p-1.5 hover:bg-sky-50 rounded text-sky-600 hover:text-sky-700 transition"
-                              title="پیش‌نمایش مدرک"
+                              title={isSystem ? "مشاهده سند در ماژول اصلی (تب جدید)" : "پیش‌نمایش مدرک"}
                             >
-                              <Eye size={14} />
+                              {isSystem ? <ExternalLink size={14} /> : <Eye size={14} />}
                             </button>
                             {!isSystem && (
                               <button

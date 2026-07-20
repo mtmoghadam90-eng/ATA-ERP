@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AfterSalesService, AfterSalesServiceItem, Project, Proforma, User, ERPSettings, Customer } from '../types';
 import { 
   Wrench, 
@@ -16,7 +16,9 @@ import {
   Check,
   AlertTriangle,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Printer,
+  Eye
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { SearchableSelect } from './SearchableSelect';
@@ -27,6 +29,8 @@ import ModuleNotesSection from './ModuleNotesSection';
 import CustomerAgreementAlert from './CustomerAgreementAlert';
 
 interface AfterSalesServicesViewProps {
+  initialPrintDocId?: string;
+  onClearInitialPrintDocId?: () => void;
   afterSalesServices: AfterSalesService[];
   projects: Project[];
   customers: Customer[];
@@ -39,6 +43,8 @@ interface AfterSalesServicesViewProps {
 }
 
 export default function AfterSalesServicesView({
+  initialPrintDocId,
+  onClearInitialPrintDocId,
   afterSalesServices,
   projects,
   customers,
@@ -55,6 +61,19 @@ export default function AfterSalesServicesView({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalFullscreen, setIsModalFullscreen] = useState(false);
   const [editingService, setEditingService] = useState<AfterSalesService | null>(null);
+
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printTargetService, setPrintTargetService] = useState<AfterSalesService | null>(null);
+
+  useEffect(() => {
+    if (initialPrintDocId) {
+      const service = afterSalesServices.find(s => s.id === initialPrintDocId);
+      if (service) {
+        setPrintTargetService(service);
+        setShowPrintModal(true);
+      }
+    }
+  }, [initialPrintDocId, afterSalesServices]);
   
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedProformaNumber, setSelectedProformaNumber] = useState('');
@@ -913,6 +932,126 @@ export default function AfterSalesServicesView({
           </label>
         </div>
       </ConfirmModal>
+
+      {showPrintModal && printTargetService && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs overflow-y-auto p-4 md:p-8 z-50 flex justify-center">
+          <div className="bg-white text-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl p-6 md:p-10 flex flex-col justify-between h-fit min-h-screen text-right animate-scale-in">
+            {/* Action Bar */}
+            <div className="flex justify-between items-center pb-6 mb-6 border-b border-slate-200 print:hidden">
+              <h3 className="font-bold text-sm text-slate-800">پیش‌نمایش برگه گارانتی و خدمات پس از فروش</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-md shadow-sky-600/10"
+                >
+                  <Printer size={14} />
+                  <span>چاپ برگه</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPrintModal(false);
+                    onClearInitialPrintDocId?.();
+                  }}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-600 transition"
+                >
+                  بستن پیش‌نمایش
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Sheet */}
+            <div className="print-sheet space-y-6 text-xs flex-1">
+              <div className="flex justify-between items-center pb-4 border-b-2 border-slate-200">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">برگه رسمی خدمات پس از فروش و گارانتی</h2>
+                  <p className="text-slate-400 text-[10px]">دپارتمان مهندسی خدمات و پشتیبانی فنی ابزار تامین عرشیا</p>
+                </div>
+                <div className="text-[10px] space-y-1 text-slate-500 font-mono text-left" dir="ltr">
+                  <div>Service ID: {printTargetService.id}</div>
+                  <div>Start Date: {printTargetService.startDate}</div>
+                  <div>Status: {printTargetService.status}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 text-slate-700">
+                <div>
+                  <span className="text-slate-400 font-bold">پروژه مرتبط:</span>
+                  <span className="text-slate-900 font-bold mr-1">
+                    {projects.find(p => p.id === printTargetService.projectId)?.name || 'بدون پروژه'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold">تجهیز / کالای تحت پوشش:</span>
+                  <span className="text-slate-900 font-bold mr-1">{printTargetService.itemName}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold">شماره پیش‌فاکتور مرجع:</span>
+                  <span className="text-slate-900 font-mono mr-1">{printTargetService.proformaNumber || 'ثبت نشده'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold">کاربر ثبت‌کننده:</span>
+                  <span className="text-slate-900 mr-1">{printTargetService.createdBy || 'سیستم'}</span>
+                </div>
+              </div>
+
+              {printTargetService.items && printTargetService.items.length > 0 ? (
+                <div className="space-y-2 pt-2">
+                  <h4 className="font-bold text-slate-800 text-xs">لیست موارد خدمات فنی و اقدامات صورت گرفته:</h4>
+                  <table className="w-full border-collapse border border-slate-200 text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700">
+                        <th className="border border-slate-200 p-2 w-10 text-center">ردیف</th>
+                        <th className="border border-slate-200 p-2 text-right">عنوان قطعه / بخش</th>
+                        <th className="border border-slate-200 p-2 text-right">شرح ایراد گزارش شده</th>
+                        <th className="border border-slate-200 p-2 text-right">اقدام فنی انجام شده</th>
+                        <th className="border border-slate-200 p-2 text-center w-20">وضعیت گارانتی</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {printTargetService.items.map((it, idx) => (
+                        <tr key={it.id || idx} className="hover:bg-slate-50">
+                          <td className="border border-slate-200 p-2 text-center font-mono">{idx + 1}</td>
+                          <td className="border border-slate-200 p-2">{it.productName || 'عمومی / کل تجهیز'}</td>
+                          <td className="border border-slate-200 p-2 text-slate-600">{it.issueDescription}</td>
+                          <td className="border border-slate-200 p-2 text-slate-800">{it.actionTaken || 'در حال بررسی فنی'}</td>
+                          <td className="border border-slate-200 p-2 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                              it.status === 'انجام شده' ? 'bg-emerald-50 text-emerald-700' :
+                              it.status === 'کنسل شده' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
+                            }`}>
+                              {it.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-slate-400 text-center py-4 border border-dashed border-slate-200 rounded-xl">اقدام جزئی مجزایی ثبت نشده است.</p>
+              )}
+
+              {printTargetService.notes && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 mt-3">
+                  <span className="text-slate-400 font-bold block mb-1">توضیحات و ملاحظات فنی:</span>
+                  <p className="text-slate-800 leading-relaxed">{printTargetService.notes}</p>
+                </div>
+              )}
+
+              <div className="pt-16 text-center text-[10px] text-slate-400 flex justify-between">
+                <div>
+                  <p className="font-bold text-slate-700">مسئول فنی و مهندس ناظر</p>
+                  <div className="h-16"></div>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-700">مهر و امضای دپارتمان پشتیبانی</p>
+                  <div className="h-16"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
