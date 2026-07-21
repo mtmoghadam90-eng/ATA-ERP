@@ -731,7 +731,8 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     poPrefix: 'PO-',
     poFormat: 'PO-{PROJECT}-{SEQ:3}',
     transactionFormat: 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}',
-    productFormat: 'EQ-{RAND:5}'
+    productFormat: 'EQ-{RAND:5}',
+    packingListFormat: 'PL-{PROJECT}-{SEQ:3}'
   },
   dropdownItems: {
     industries: ['نفت و گاز', 'پتروشیمی', 'نیروگاه و انرژی', 'فولاد و معادن', 'آب و فاضلاب', 'غذایی و دارویی', 'سیمان', 'EPC پیمانکاری'],

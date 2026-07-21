@@ -437,6 +437,8 @@ export interface DocumentFormat {
   transactionStartSeq?: number; // e.g. 1000
   productFormat?: string; // EQ-{RAND:5}
   productStartSeq?: number; // e.g. 1000
+  packingListFormat?: string; // PL-{PROJECT}-{SEQ:3}
+  packingListStartSeq?: number; // e.g. 1000
 }
 
 export interface ProformaTemplate {

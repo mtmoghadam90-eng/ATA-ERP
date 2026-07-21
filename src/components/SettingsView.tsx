@@ -156,7 +156,6 @@ export default function SettingsView({
     'categories',
     'units',
     'paymentTerms',
-    'salesExperts',
     'marketingChannels',
     'leadQualities',
     'communicationMethods',
@@ -485,6 +484,8 @@ export default function SettingsView({
   const [transactionStartSeq, setTransactionStartSeq] = useState(settings.documentFormats.transactionStartSeq || 1);
   const [productFormat, setProductFormat] = useState(settings.documentFormats.productFormat || 'EQ-{RAND:5}');
   const [productStartSeq, setProductStartSeq] = useState(settings.documentFormats.productStartSeq || 1);
+  const [packingListFormat, setPackingListFormat] = useState(settings.documentFormats.packingListFormat || 'PL-{PROJECT}-{SEQ:3}');
+  const [packingListStartSeq, setPackingListStartSeq] = useState(settings.documentFormats.packingListStartSeq || 1);
   const [vatPercent, setVatPercent] = useState(10);
   const [showProductBrandInDocuments, setShowProductBrandInDocuments] = useState(!!settings.showProductBrandInDocuments);
 
@@ -553,7 +554,9 @@ export default function SettingsView({
         transactionFormat,
         transactionStartSeq,
         productFormat,
-        productStartSeq
+        productStartSeq,
+        packingListFormat,
+        packingListStartSeq
       }
     });
 
@@ -1253,6 +1256,7 @@ export default function SettingsView({
                 {renderFormatField('ساختار کدگذاری سفارشات خرید ارزی', poFormat, setPoFormat, poStartSeq, setPoStartSeq, 'PO-{PROJECT}-{SEQ:3}', { projectCode: dummyProjectCode })}
                 {renderFormatField('ساختار شماره اسناد دریافت/پرداخت صندوق', transactionFormat, setTransactionFormat, transactionStartSeq, setTransactionStartSeq, 'TR-{TYPE}-{YYYY}{MM}-{SEQ:3}', { transactionType: 'دریافت' })}
                 {renderFormatField('ساختار پیش‌فرض کدهای کالا و تجهیزات', productFormat, setProductFormat, productStartSeq, setProductStartSeq, 'EQ-{RAND:5}', { category: 'CAT' })}
+                {renderFormatField('ساختار شماره‌گذاری پکینگ لیست‌ها', packingListFormat, setPackingListFormat, packingListStartSeq, setPackingListStartSeq, 'PL-{PROJECT}-{SEQ:3}', { projectCode: dummyProjectCode })}
 
 
               </div>

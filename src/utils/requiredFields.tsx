@@ -126,7 +126,6 @@ export const REQUIRED_FIELDS_METADATA: ModuleConfig[] = [
     name: 'بسته‌بندی و تحویل کالا',
     fields: [
       { key: 'projectId', label: 'پروژه مرتبط' },
-      { key: 'packingListNumber', label: 'شماره پکینگ لیست' },
       { key: 'deliveryDate', label: 'تاریخ پکینگ لیست' },
       { key: 'shippingMethod', label: 'نحوه ارسال کالا' },
     ]
@@ -236,7 +235,6 @@ export const DEFAULT_REQUIRED_FIELDS: Record<string, Record<string, boolean>> = 
   },
   packagingDelivery: {
     projectId: true,
-    packingListNumber: false,
     deliveryDate: false,
     shippingMethod: false,
   },

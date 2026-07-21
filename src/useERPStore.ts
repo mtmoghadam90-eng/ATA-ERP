@@ -690,7 +690,7 @@ export function useERPStore() {
     }
   };
 
-  const autoLogFactActivity = (projectId: string | undefined, categoryName: string, text: string) => {
+  const autoLogFactActivity = (projectId: string | undefined, categoryName: string, text: string, sourceId?: string) => {
     if (!projectId) return;
 
     // A helper to normalize and map different variations of categories to formal standard ones
@@ -725,6 +725,7 @@ export function useERPStore() {
       const newActivity = {
         id: 'act-' + Date.now() + Math.random().toString(36).substr(2, 5),
         text,
+        sourceId: sourceId || null,
         createdAt: new Date().toISOString(),
         attachment: null,
         referral: null,
@@ -757,6 +758,33 @@ export function useERPStore() {
       
       return updatedGroups;
     });
+  };
+
+  // Removes auto-logged fact activities belonging to a deleted source record and prunes the
+  // category group if it becomes empty. New activities are matched exactly by their stored
+  // `sourceId`; activities logged before source linking existed fall back to legacy text matching.
+  const removeFactActivitiesForRecord = (
+    projectId: string | undefined,
+    categoryName: string,
+    sourceId: string | undefined,
+    matchesLegacyText: (text: string) => boolean
+  ) => {
+    if (!projectId) return;
+    const normalizeCategory = (str: string) => str ? str.replace(/[\s‌]/g, "").trim().toLowerCase() : "";
+    const isTargetGroup = (g: any) =>
+      g.projectId === projectId && normalizeCategory(g.categoryName) === normalizeCategory(categoryName);
+    const shouldRemove = (act: any) => {
+      // Activity carries an explicit source link → trust it exactly (never over-delete siblings).
+      if (act.sourceId) return act.sourceId === sourceId;
+      // Legacy activity without a source link → best-effort text match.
+      return matchesLegacyText(act.text || '');
+    };
+    const updatedGroups = projectCategoryGroups
+      .map(g => isTargetGroup(g)
+        ? { ...g, activities: (g.activities || []).filter((act: any) => !shouldRemove(act)) }
+        : g)
+      .filter(g => !isTargetGroup(g) || (g.activities || []).length > 0);
+    saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
   };
 
   // --- Customers CRUD ---
@@ -2404,11 +2432,19 @@ export function useERPStore() {
   };
 
   const addPackagingDelivery = (pd: any) => {
-    const newPd = { ...pd, id: `pd-${Date.now()}`, createdAt: new Date().toISOString() };
+    const seqNum = (settings.documentFormats.packingListStartSeq || 1) + packagingDeliveries.length;
+    const projectCode = pd.projectId
+      ? (projects.find(p => p.id === pd.projectId)?.code || 'GEN')
+      : 'GEN';
+    const packingListNumber = formatERPNumber(
+      settings.documentFormats.packingListFormat || 'PL-{PROJECT}-{SEQ:3}',
+      { seq: seqNum, projectCode }
+    );
+    const newPd = { ...pd, id: `pd-${Date.now()}`, packingListNumber, createdAt: new Date().toISOString() };
     const updated = [...packagingDeliveries, newPd];
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
     processWorkflowRules('packaging_delivery_created', newPd);
-    autoLogFactActivity(newPd.projectId, 'بسته‌بندی و تحویل کالا', `شروع عملیات «${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال و تحویل'}» کالا برای خروج از انبار (شماره پکینگ‌لیست: ${newPd.packingListNumber}، وضعیت فعلی: ${newPd.status}).`);
+    autoLogFactActivity(newPd.projectId, 'بسته‌بندی و تحویل کالا', `شروع عملیات «${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال و تحویل'}» کالا برای خروج از انبار (شماره پکینگ‌لیست: ${newPd.packingListNumber}، وضعیت فعلی: ${newPd.status}).`, newPd.id);
     notifyModuleResponsible('packagingDelivery', 'ثبت مرحله بسته‌بندی/تحویل جدید', `مرحله جدید ${newPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} با وضعیت ${newPd.status} ثبت شد.`, newPd.projectId);
 
     if (newPd.actualDeliveryDate) {
@@ -2423,7 +2459,7 @@ export function useERPStore() {
     const before = packagingDeliveries.find(p => p.id === updatedPd.id);
     const updated = packagingDeliveries.map(p => p.id === updatedPd.id ? updatedPd : p);
     saveToStorage("erp_packaging_deliveries", updated, setPackagingDeliveries);
-    autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `تغییر وضعیت عملیات «${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال و تحویل'}» کالا (شماره پکینگ‌لیست: ${updatedPd.packingListNumber}) به «${updatedPd.status}».`);
+    autoLogFactActivity(updatedPd.projectId, 'بسته‌بندی و تحویل کالا', `تغییر وضعیت عملیات «${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال و تحویل'}» کالا (شماره پکینگ‌لیست: ${updatedPd.packingListNumber}) به «${updatedPd.status}».`, updatedPd.id);
     notifyModuleResponsible('packagingDelivery', 'بروزرسانی مرحله بسته‌بندی/تحویل', `مرحله ${updatedPd.type === 'PACKAGING' ? 'بسته‌بندی' : 'ارسال/تحویل'} به وضعیت ${updatedPd.status} تغییر یافت.`, updatedPd.projectId);
 
     processWorkflowRules('packaging_delivery_status_change', { newStatus: updatedPd.status, oldStatus: before?.status, ...updatedPd });
@@ -2453,33 +2489,13 @@ export function useERPStore() {
     );
 
     if (deleteLogs) {
-      const normalizeCategory = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
       const packingListNum = record.packingListNumber;
       const itemNames = record.items?.map((it: any) => it.itemOrDocName).filter(Boolean) || [];
-
-      const shouldRemoveActivity = (text: string) => {
-        if (!text) return false;
+      removeFactActivitiesForRecord(record.projectId, 'بسته‌بندی و تحویل کالا', record.id, (text) => {
         if (packingListNum && text.includes(packingListNum)) return true;
         if (itemNames.some((name: string) => text.includes(name))) return true;
         return false;
-      };
-
-      const updatedGroups = projectCategoryGroups.map(g => {
-        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('بسته‌بندی و تحویل کالا')) {
-          const remainingActivities = (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text));
-          return {
-            ...g,
-            activities: remainingActivities
-          };
-        }
-        return g;
-      }).filter(g => {
-        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('بسته‌بندی و تحویل کالا')) {
-          return (g.activities || []).length > 0;
-        }
-        return true;
       });
-      saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
     } else {
       autoLogFactActivity(
         record.projectId,
@@ -2493,7 +2509,7 @@ export function useERPStore() {
     const newAss = { ...ass, id: `ass-${Date.now()}`, createdAt: new Date().toISOString() };
     const updated = [...afterSalesServices, newAss];
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
-    autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات پس از فروش برای کالای «${newAss.itemName || 'نامشخص'}» (شرح خرابی: ${newAss.issueDescription || '-'}، وضعیت: ${newAss.status}).`);
+    autoLogFactActivity(newAss.projectId, 'خدمات پس از فروش', `ثبت درخواست خدمات پس از فروش برای کالای «${newAss.itemName || 'نامشخص'}» (شرح خرابی: ${newAss.issueDescription || '-'}، وضعیت: ${newAss.status}).`, newAss.id);
     notifyModuleResponsible('afterSalesServices', 'ثبت درخواست خدمات پس از فروش جدید', `درخواست خدمات جدید برای کالا ${newAss.itemName || ''} با وضعیت ${newAss.status} ثبت شد.`, newAss.projectId);
     processWorkflowRules('after_sales_service_created', newAss);
   };
@@ -2501,7 +2517,7 @@ export function useERPStore() {
     const before = afterSalesServices.find(a => a.id === updatedAss.id);
     const updated = afterSalesServices.map(a => a.id === updatedAss.id ? updatedAss : a);
     saveToStorage("erp_after_sales_services", updated, setAfterSalesServices);
-    autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `تغییر وضعیت درخواست خدمات پس از فروش کالای «${updatedAss.itemName || 'نامشخص'}» به «${updatedAss.status}» (اقدامات انجام‌شده: ${updatedAss.actionsTaken || '-'}).`);
+    autoLogFactActivity(updatedAss.projectId, 'خدمات پس از فروش', `تغییر وضعیت درخواست خدمات پس از فروش کالای «${updatedAss.itemName || 'نامشخص'}» به «${updatedAss.status}» (اقدامات انجام‌شده: ${updatedAss.actionsTaken || '-'}).`, updatedAss.id);
     notifyModuleResponsible('afterSalesServices', 'بروزرسانی درخواست خدمات پس از فروش', `درخواست خدمات برای کالا ${updatedAss.itemName || ''} به وضعیت ${updatedAss.status} تغییر یافت.`, updatedAss.projectId);
 
     processWorkflowRules('after_sales_service_status_change', { newStatus: updatedAss.status, oldStatus: before?.status, ...updatedAss });
@@ -2531,33 +2547,12 @@ export function useERPStore() {
     );
 
     if (deleteLogs) {
-      const normalizeCategory = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
       const itemName = record.itemName;
       const subItemNames = record.items?.map((it: any) => it.productName).filter(Boolean) || [];
       const allItemNames = [itemName, ...subItemNames].filter(Boolean);
-
-      const shouldRemoveActivity = (text: string) => {
-        if (!text) return false;
-        if (allItemNames.some((name: string) => text.includes(name))) return true;
-        return false;
-      };
-
-      const updatedGroups = projectCategoryGroups.map(g => {
-        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('خدمات پس از فروش')) {
-          const remainingActivities = (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text));
-          return {
-            ...g,
-            activities: remainingActivities
-          };
-        }
-        return g;
-      }).filter(g => {
-        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('خدمات پس از فروش')) {
-          return (g.activities || []).length > 0;
-        }
-        return true;
-      });
-      saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
+      removeFactActivitiesForRecord(record.projectId, 'خدمات پس از فروش', record.id, (text) =>
+        allItemNames.some((name: string) => text.includes(name))
+      );
     } else {
       autoLogFactActivity(
         record.projectId,
@@ -2574,7 +2569,7 @@ export function useERPStore() {
     
     const supplierObj = suppliers.find(s => s.id === newSi.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (newSi.supplierName || newSi.supplierId || '');
-    autoLogFactActivity(newSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `ثبت درخواست استعلام قیمت از تأمین‌کننده «${suppName}» (مبلغ اعلامی: ${newSi.price?.toLocaleString('fa-IR') || 0} ${newSi.currency || 'ریال'}، وضعیت: ${newSi.status}).`);
+    autoLogFactActivity(newSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `ثبت درخواست استعلام قیمت از تأمین‌کننده «${suppName}» (مبلغ اعلامی: ${newSi.price?.toLocaleString('fa-IR') || 0} ${newSi.currency || 'ریال'}، وضعیت: ${newSi.status}).`, newSi.id);
     notifyModuleResponsible('supplierInquiries', 'ثبت استعلام قیمت جدید', `استعلام قیمت جدید برای تأمین‌کننده «${suppName}» ثبت شد.`, newSi.projectId);
     processWorkflowRules('supplier_inquiry_created', newSi);
     return newSi;
@@ -2586,7 +2581,7 @@ export function useERPStore() {
     
     const supplierObj = suppliers.find(s => s.id === updatedSi.supplierId);
     const suppName = supplierObj ? (supplierObj.companyName || supplierObj.name) : (updatedSi.supplierName || updatedSi.supplierId || '');
-    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `بروزرسانی وضعیت استعلام قیمت از تأمین‌کننده «${suppName}» به «${updatedSi.status}» (مبلغ اعلامی: ${updatedSi.price?.toLocaleString('fa-IR') || 0} ${updatedSi.currency || 'ریال'}).`);
+    autoLogFactActivity(updatedSi.projectId, 'استعلام قیمت تأمین‌کنندگان', `بروزرسانی وضعیت استعلام قیمت از تأمین‌کننده «${suppName}» به «${updatedSi.status}» (مبلغ اعلامی: ${updatedSi.price?.toLocaleString('fa-IR') || 0} ${updatedSi.currency || 'ریال'}).`, updatedSi.id);
     processWorkflowRules('supplier_inquiry_status_change', { newStatus: updatedSi.status, oldStatus: oldSi?.status, ...updatedSi });
   };
   const deleteSupplierInquiry = (id: string, deleteLogs: boolean = false) => {
@@ -2606,33 +2601,12 @@ export function useERPStore() {
     );
 
     if (deleteLogs) {
-      const normalizeCategory = (str: string) => str ? str.replace(/[\s\u200c]/g, "").trim().toLowerCase() : "";
       const supplierName = record.supplierName;
       const itemNames = record.items?.map((it: any) => it.name).filter(Boolean) || [];
       const keywords = [supplierName, ...itemNames].filter(Boolean);
-
-      const shouldRemoveActivity = (text: string) => {
-        if (!text) return false;
-        if (keywords.some((name: string) => text.includes(name))) return true;
-        return false;
-      };
-
-      const updatedGroups = projectCategoryGroups.map(g => {
-        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('استعلام قیمت تأمین‌کنندگان')) {
-          const remainingActivities = (g.activities || []).filter((act: any) => !shouldRemoveActivity(act.text));
-          return {
-            ...g,
-            activities: remainingActivities
-          };
-        }
-        return g;
-      }).filter(g => {
-        if (g.projectId === record.projectId && normalizeCategory(g.categoryName) === normalizeCategory('استعلام قیمت تأمین‌کنندگان')) {
-          return (g.activities || []).length > 0;
-        }
-        return true;
-      });
-      saveToStorage("erp_project_category_groups", updatedGroups, setProjectCategoryGroups);
+      removeFactActivitiesForRecord(record.projectId, 'استعلام قیمت تأمین‌کنندگان', record.id, (text) =>
+        keywords.some((name: string) => text.includes(name))
+      );
     } else {
       autoLogFactActivity(
         record.projectId,
