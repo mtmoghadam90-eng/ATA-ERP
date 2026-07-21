@@ -35,6 +35,7 @@ import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
 import ModuleNotesSection from './ModuleNotesSection';
 import CustomerAgreementAlert from './CustomerAgreementAlert';
+import { isFieldRequired, renderFieldLabelWithAsterisk } from '../utils/requiredFields';
 
 interface PurchaseOrdersViewProps {
   initialPrintDocId?: string;
@@ -1030,7 +1031,7 @@ export default function PurchaseOrdersView({
                 
                 {/* Project Linked */}
                 <div className="space-y-1.5 w-full min-w-0">
-                  <label className="text-xs font-semibold text-slate-500">کد پروژه *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'purchaseOrders', 'projectId', 'کد پروژه')}</label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
                     <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={projectId}
@@ -1090,6 +1091,7 @@ export default function PurchaseOrdersView({
                           }
                         }
                       }}
+                      required={isFieldRequired(settings, 'purchaseOrders', 'projectId')}
                       options={[
                         { value: '', label: 'خرید عمومی (بدون پروژه)' },
                         ...projects.map(p => ({ value: p.id, label: `${p.name} (${p.code})` }))
@@ -1161,12 +1163,12 @@ export default function PurchaseOrdersView({
 
                 {/* Supplier select */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">انتخاب تأمین‌کننده خارجی *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'purchaseOrders', 'supplierId', 'انتخاب تأمین‌کننده خارجی')}</label>
                   <div className="flex gap-1.5 items-center">
                     <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={supplierId}
                       onChange={(val) => setSupplierId(val)}
-                      required
+                      required={isFieldRequired(settings, 'purchaseOrders', 'supplierId')}
                       options={[
                         { value: '', label: '-- انتخاب سازنده --' },
                         ...suppliers.map(s => ({ value: s.id, label: `${s.name} (${s.country})` }))
@@ -1188,7 +1190,7 @@ export default function PurchaseOrdersView({
 
                 {/* Proforma Linked */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">مرتبط با پیش‌فاکتور مشتری (پروفرما)</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'purchaseOrders', 'proformaId', 'مرتبط با پیش‌فاکتور مشتری (پروفرما)')}</label>
                   <SearchableSelect wrapperClassName="flex-1 min-w-0"
                     value={proformaId}
                     onChange={(val) => {
@@ -1221,6 +1223,7 @@ export default function PurchaseOrdersView({
                         }
                       }
                     }}
+                    required={isFieldRequired(settings, 'purchaseOrders', 'proformaId')}
                     options={[
                       { value: '', label: 'خرید متفرقه (بدون ارتباط با پیش‌فاکتور)' },
                       ...proformas.map(pf => ({ value: pf.id, label: `${pf.proformaNumber} - ${pf.customerName}` }))
@@ -1231,9 +1234,10 @@ export default function PurchaseOrdersView({
 
                 {/* Currency select */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">واحد پول سفارش ارزی</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'purchaseOrders', 'currency', 'واحد پول سفارش ارزی')}</label>
                   <select
                     value={currency}
+                    required={isFieldRequired(settings, 'purchaseOrders', 'currency')}
                     onChange={(e) => handleCurrencyChange(e.target.value as PurchaseOrder['currency'])}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                   >
@@ -1245,10 +1249,10 @@ export default function PurchaseOrdersView({
 
                 {/* Exchange rate lock */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">نرخ حواله صرافی (ریال به ارز)</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'purchaseOrders', 'exchangeRateInput', 'نرخ حواله صرافی (ریال به ارز)')}</label>
                   <input
                     type="number"
-                    required
+                    required={isFieldRequired(settings, 'purchaseOrders', 'exchangeRateInput')}
                     value={exchangeRateInput}
                     onChange={(e) => setExchangeRateInput(Number(e.target.value))}
                     disabled={currency === 'ریال'}
@@ -1746,9 +1750,7 @@ export default function PurchaseOrdersView({
 
             <div className="p-5 space-y-4 text-right">
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500">
-                  نام شرکت / برند تامین‌کننده {settings?.fieldRequirements?.suppliers?.name !== false && <span className="text-rose-500 font-bold">*</span>}
-                </label>
+                <label className="text-[11px] font-bold text-slate-500">نام شرکت / برند تامین‌کننده *</label>
                 <input
                   type="text"
                   value={quickSupName}
@@ -1760,9 +1762,7 @@ export default function PurchaseOrdersView({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500">
-                    کشور مبدا {settings?.fieldRequirements?.suppliers?.country !== false && <span className="text-rose-500 font-bold">*</span>}
-                  </label>
+                  <label className="text-[11px] font-bold text-slate-500">کشور مبدا *</label>
                   <input
                     type="text"
                     value={quickSupCountry}
@@ -1820,13 +1820,11 @@ export default function PurchaseOrdersView({
               <button
                 type="button"
                 onClick={() => {
-                  const reqName = settings?.fieldRequirements?.suppliers?.name !== false;
-                  if (reqName && !quickSupName.trim()) {
+                  if (!quickSupName.trim()) {
                     alert('لطفاً نام تامین‌کننده را وارد کنید.');
                     return;
                   }
-                  const reqCountry = settings?.fieldRequirements?.suppliers?.country !== false;
-                  if (reqCountry && !quickSupCountry.trim()) {
+                  if (!quickSupCountry.trim()) {
                     alert('لطفاً کشور را وارد کنید.');
                     return;
                   }

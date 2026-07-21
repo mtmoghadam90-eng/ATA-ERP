@@ -25,6 +25,7 @@ import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import ConfirmModal from './ConfirmModal';
 import { uploadFile, downloadFileFromServer } from '../imageUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk } from '../utils/requiredFields';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -915,9 +916,10 @@ export default function ProductsView({
                 
                 {/* Category */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">دسته‌بندی تخصصی ابزاردقیق *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'category', 'دسته‌بندی تخصصی ابزاردقیق')}</label>
                   <select
                     value={category}
+                    required={isFieldRequired(settings, 'products', 'category')}
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                   >
@@ -929,10 +931,10 @@ export default function ProductsView({
 
                 {/* Product Code */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">کد کالا *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'productCode', 'کد کالا')}</label>
                   <input
                     type="text"
-                    required
+                    required={isFieldRequired(settings, 'products', 'productCode')}
                     value={productCode}
                     onChange={(e) => setProductCode(e.target.value)}
                     placeholder="مثال: PRD-001"
@@ -943,10 +945,10 @@ export default function ProductsView({
 
                 {/* Equipment Type / Display Name */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">نوع تجهیز و نام کالا *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'displayName', 'نوع تجهیز و نام کالا')}</label>
                   <input
                     type="text"
-                    required
+                    required={isFieldRequired(settings, 'products', 'displayName')}
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="مثال: ترانسمیتر اختلاف فشار (DP Transmitter)"
@@ -956,9 +958,10 @@ export default function ProductsView({
 
                 {/* Brand */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">برند (اختیاری)</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'brand', 'برند (سازنده)')}</label>
                   <input
                     type="text"
+                    required={isFieldRequired(settings, 'products', 'brand')}
                     value={brand}
                     onChange={(e) => setBrand(e.target.value)}
                     placeholder="مثال: WIKA, Rosemount, Siemens"
@@ -969,9 +972,10 @@ export default function ProductsView({
                 <div className="grid grid-cols-2 gap-4">
                   {/* Supply Type */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">نوع تامین</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'supplyType', 'نوع تامین')}</label>
                     <select
                       value={supplyType}
+                      required={isFieldRequired(settings, 'products', 'supplyType')}
                       onChange={(e) => setSupplyType(e.target.value as any)}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                     >
@@ -982,9 +986,10 @@ export default function ProductsView({
 
                   {/* Currency Selection */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">ارز مرجع کالا</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'currencyForeign', 'ارز مرجع کالا')}</label>
                     <select
                       value={simpleCurrencyForeign}
+                      required={isFieldRequired(settings, 'products', 'currencyForeign')}
                       onChange={(e) => {
                         const curr = e.target.value;
                         setSimpleCurrencyForeign(curr);
@@ -1014,10 +1019,11 @@ export default function ProductsView({
                   {/* Initial Stock (Only for New Products & Inventory) */}
                   {!editingProduct && supplyType === 'INVENTORY' && !hasVariants && (
                     <div className="space-y-1.5 border-t border-slate-100 pt-3 mt-3 col-span-2">
-                      <label className="text-xs font-semibold text-emerald-600">موجودی اولیه در انبار</label>
+                      <label className="text-xs font-semibold text-emerald-600">{renderFieldLabelWithAsterisk(settings, 'products', 'initialStock', 'موجودی اولیه در انبار')}</label>
                       <input
                         type="number"
                         min="0"
+                        required={isFieldRequired(settings, 'products', 'initialStock')}
                         value={initialStock}
                         onChange={(e) => setInitialStock(e.target.value)}
                         placeholder="0"
@@ -1171,9 +1177,10 @@ export default function ProductsView({
 
                 {/* Description / Technical Specifications */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">مشخصات فنی و توضیحات</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'description', 'مشخصات فنی و توضیحات')}</label>
                   <textarea
                     rows={4}
+                    required={isFieldRequired(settings, 'products', 'description')}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="جزئیات متریال بدنه، اتصالات، کلاس کاری، رنج فشار یا دما، سیگنال خروجی و گواهینامه‌ها..."

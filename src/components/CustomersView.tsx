@@ -1073,10 +1073,10 @@ export default function CustomersView({
                   <>
                     {/* نام شرکت */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">نام شرکت *</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'companyName', 'نام شرکت')}</label>
                       <input
                         type="text"
-                        required
+                        required={isFieldRequired(settings, 'customers', 'companyName')}
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
                         placeholder="مثال: شرکت نفت و گاز کارون"
@@ -1086,9 +1086,10 @@ export default function CustomersView({
 
                     {/* کد اقتصادی */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">کد اقتصادی</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'economicCode', 'کد اقتصادی')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'economicCode')}
                         value={economicCode}
                         onChange={(e) => setEconomicCode(e.target.value)}
                         placeholder="مثال: ۴۱۱۳۴۵۶۷۸۹۱۲"
@@ -1098,9 +1099,10 @@ export default function CustomersView({
 
                     {/* تلفن */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'phone', 'تلفن ثابت')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'phone')}
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="مثال: 02188884422"
@@ -1110,9 +1112,10 @@ export default function CustomersView({
 
                     {/* تلفن همراه */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن همراه</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'mobile', 'تلفن همراه')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'mobile')}
                         value={mobile}
                         onChange={(e) => setMobile(e.target.value)}
                         placeholder="مثال: 09121112233"
@@ -1122,9 +1125,10 @@ export default function CustomersView({
 
                     {/* ایمیل */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">ایمیل</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'email', 'ایمیل')}</label>
                       <input
                         type="email"
+                        required={isFieldRequired(settings, 'customers', 'email')}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="مثال: info@company.com"
@@ -1134,9 +1138,10 @@ export default function CustomersView({
 
                     {/* صنعت / حوزه فعالیت */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">صنعت / حوزه فعالیت</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'industry', 'صنعت / حوزه فعالیت')}</label>
                       <select
                         value={industry}
+                        required={isFieldRequired(settings, 'customers', 'industry')}
                         onChange={(e) => setIndustry(e.target.value)}
                         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                       >
@@ -1148,9 +1153,10 @@ export default function CustomersView({
 
                     {/* استان */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">استان</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'province', 'استان')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'province')}
                         value={province}
                         onChange={(e) => setProvince(e.target.value)}
                         placeholder="مثال: تهران"
@@ -1163,10 +1169,10 @@ export default function CustomersView({
                   <>
                     {/* نام */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">نام *</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'firstName', 'نام')}</label>
                       <input
                         type="text"
-                        required
+                        required={isFieldRequired(settings, 'customers', 'firstName')}
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder="مثال: مهرداد"
@@ -1176,10 +1182,10 @@ export default function CustomersView({
 
                     {/* نام خانوادگی */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">نام خانوادگی *</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'lastName', 'نام خانوادگی')}</label>
                       <input
                         type="text"
-                        required
+                        required={isFieldRequired(settings, 'customers', 'lastName')}
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder="مثال: رضوی"
@@ -1189,9 +1195,10 @@ export default function CustomersView({
 
                     {/* جنسیت */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">جنسیت</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'gender', 'جنسیت')}</label>
                       <select
                         value={gender}
+                        required={isFieldRequired(settings, 'customers', 'gender')}
                         onChange={(e) => setGender(e.target.value as any)}
                         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                       >
@@ -1203,9 +1210,10 @@ export default function CustomersView({
 
                     {/* سمت */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">سمت</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'position', 'سمت')}</label>
                       <select
                         value={position}
+                        required={isFieldRequired(settings, 'customers', 'position')}
                         onChange={(e) => setPosition(e.target.value)}
                         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                       >
@@ -1225,9 +1233,10 @@ export default function CustomersView({
 
                     {/* تلفن */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'phone', 'تلفن ثابت')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'phone')}
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="مثال: 02122334455"
@@ -1237,9 +1246,10 @@ export default function CustomersView({
 
                     {/* تلفن همراه */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن همراه</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'mobile', 'تلفن همراه')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'mobile')}
                         value={mobile}
                         onChange={(e) => setMobile(e.target.value)}
                         placeholder="مثال: 09121112233"
@@ -1249,9 +1259,10 @@ export default function CustomersView({
 
                     {/* ایمیل */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">ایمیل</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'email', 'ایمیل')}</label>
                       <input
                         type="email"
+                        required={isFieldRequired(settings, 'customers', 'email')}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="مثال: m.razavi@example.com"
@@ -1261,9 +1272,10 @@ export default function CustomersView({
 
                     {/* استان */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">استان</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'province', 'استان')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'province')}
                         value={province}
                         onChange={(e) => setProvince(e.target.value)}
                         placeholder="مثال: اصفهان"
@@ -1276,9 +1288,10 @@ export default function CustomersView({
                 {/* Common fields (address, notes, tags) */}
                 {/* آدرس */}
                 <div className="space-y-1.5 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-600">آدرس</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'address', 'آدرس دقیق')}</label>
                   <textarea
                     rows={2}
+                    required={isFieldRequired(settings, 'customers', 'address')}
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="نشانی پستی دقیق..."

@@ -470,6 +470,7 @@ export interface ERPSettings {
   proformaTemplates: ProformaTemplate[];
   activeTemplateId: string;
   documentFormats: DocumentFormat;
+  requiredFields?: Record<string, Record<string, boolean>>;
   dropdownItems: {
     industries: string[];
     customerTypes: string[];
@@ -507,7 +508,6 @@ export interface ERPSettings {
   }>;
   deliveryChecklistTemplate?: string[];
   workflows?: WorkflowRule[];
-  fieldRequirements?: Record<string, Record<string, boolean>>;
 }
 
 export interface ProjectReferralResponse {

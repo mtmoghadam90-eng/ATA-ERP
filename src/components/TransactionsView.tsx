@@ -34,6 +34,7 @@ import CustomFieldsDetailView from './CustomFieldsDetailView';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
+import { isFieldRequired, renderFieldLabelWithAsterisk } from '../utils/requiredFields';
 
 interface TransactionsViewProps {
   initialPrintDocId?: string;
@@ -365,8 +366,8 @@ export default function TransactionsView({
     }
 
     // 4 & 5. شماره پیگیری برای حواله و چک
-    if ((paymentType === 'حواله بانکی' || paymentType === 'چک') && (!referenceNumber || referenceNumber.trim() === '')) {
-      alert('برای حواله بانکی یا چک، شماره پیگیری/شماره چک الزامی است.');
+    if (isFieldRequired(settings, 'transactions', 'referenceNumber') && (!referenceNumber || referenceNumber.trim() === '')) {
+      alert('شماره پیگیری مرجع / فیش بانکی الزامی است.');
       return;
     }
 
@@ -1690,9 +1691,10 @@ export default function TransactionsView({
 
                 {/* Reference Number */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">کد پیگیری مرجع / فیش بانکی</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'transactions', 'referenceNumber', 'کد پیگیری مرجع / فیش بانکی')}</label>
                   <input
                     type="text"
+                    required={isFieldRequired(settings, 'transactions', 'referenceNumber')}
                     value={referenceNumber}
                     onChange={(e) => setReferenceNumber(e.target.value)}
                     placeholder="مثال: 876125419"
@@ -1992,9 +1994,7 @@ export default function TransactionsView({
 
             <div className="p-5 space-y-4 text-right">
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500">
-                  نام شرکت / برند تامین‌کننده {settings?.fieldRequirements?.suppliers?.name !== false && <span className="text-rose-500 font-bold">*</span>}
-                </label>
+                <label className="text-[11px] font-bold text-slate-500">نام شرکت / برند تامین‌کننده *</label>
                 <input
                   type="text"
                   value={quickSupName}
@@ -2006,9 +2006,7 @@ export default function TransactionsView({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500">
-                    کشور مبدا {settings?.fieldRequirements?.suppliers?.country !== false && <span className="text-rose-500 font-bold">*</span>}
-                  </label>
+                  <label className="text-[11px] font-bold text-slate-500">کشور مبدا *</label>
                   <input
                     type="text"
                     value={quickSupCountry}
@@ -2066,13 +2064,11 @@ export default function TransactionsView({
               <button
                 type="button"
                 onClick={() => {
-                  const reqName = settings?.fieldRequirements?.suppliers?.name !== false;
-                  if (reqName && !quickSupName.trim()) {
+                  if (!quickSupName.trim()) {
                     alert('لطفاً نام تامین‌کننده را وارد کنید.');
                     return;
                   }
-                  const reqCountry = settings?.fieldRequirements?.suppliers?.country !== false;
-                  if (reqCountry && !quickSupCountry.trim()) {
+                  if (!quickSupCountry.trim()) {
                     alert('لطفاً کشور را وارد کنید.');
                     return;
                   }

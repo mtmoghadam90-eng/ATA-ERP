@@ -19,6 +19,7 @@ import { Supplier, ERPSettings } from '../types';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import { exportToCSV } from '../excelUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk } from '../utils/requiredFields';
 import ConfirmModal from './ConfirmModal';
 
 interface SuppliersViewProps {
@@ -98,18 +99,6 @@ export default function SuppliersView({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const reqName = settings?.fieldRequirements?.suppliers?.name !== false;
-    if (reqName && !name.trim()) {
-      alert("وارد کردن نام تامین‌کننده اجباری است.");
-      return;
-    }
-
-    const reqCountry = settings?.fieldRequirements?.suppliers?.country !== false;
-    if (reqCountry && !country.trim()) {
-      alert("وارد کردن کشور تامین‌کننده اجباری است.");
-      return;
-    }
 
     // Custom Fields Validation
     const moduleFields = (settings?.customFields || []).filter(f => f.module === 'suppliers');
@@ -501,12 +490,10 @@ export default function SuppliersView({
                 
                 {/* Company Name */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">
-                    نام کمپانی تأمین‌کننده (انگلیسی/فارسی) {settings?.fieldRequirements?.suppliers?.name !== false && <span className="text-rose-500 font-bold">*</span>}
-                  </label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'name', 'نام کمپانی تأمین‌کننده (انگلیسی/فارسی)')}</label>
                   <input
                     type="text"
-                    required={settings?.fieldRequirements?.suppliers?.name !== false}
+                    required={isFieldRequired(settings, 'suppliers', 'name')}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="مثال: WIKA Instruments"
@@ -516,12 +503,10 @@ export default function SuppliersView({
 
                 {/* Country */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">
-                    کشور مبدا تولید / دفتر توزیع {settings?.fieldRequirements?.suppliers?.country !== false && <span className="text-rose-500 font-bold">*</span>}
-                  </label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'country', 'کشور مبدا تولید / دفتر توزیع')}</label>
                   <input
                     type="text"
-                    required={settings?.fieldRequirements?.suppliers?.country !== false}
+                    required={isFieldRequired(settings, 'suppliers', 'country')}
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
                     placeholder="مثال: آلمان، امارات، ژاپن"
@@ -531,10 +516,10 @@ export default function SuppliersView({
 
                 {/* Contact Name */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">کارشناس فروش یا نماینده کمپانی *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'contactName', 'کارشناس فروش یا نماینده کمپانی')}</label>
                   <input
                     type="text"
-                    required
+                    required={isFieldRequired(settings, 'suppliers', 'contactName')}
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
                     placeholder="مثال: Mr. David Miller"
@@ -544,9 +529,10 @@ export default function SuppliersView({
 
                 {/* Status */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">وضعیت همکاری</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'status', 'وضعیت همکاری')}</label>
                   <select
                     value={status}
+                    required={isFieldRequired(settings, 'suppliers', 'status')}
                     onChange={(e) => setStatus(e.target.value as Supplier['status'])}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                   >
@@ -558,9 +544,10 @@ export default function SuppliersView({
 
                 {/* Phone */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">شماره تلفن بین‌المللی</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'phone', 'شماره تلفن بین‌المللی')}</label>
                   <input
                     type="text"
+                    required={isFieldRequired(settings, 'suppliers', 'phone')}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="مثال: 00499372132"
@@ -570,9 +557,10 @@ export default function SuppliersView({
 
                 {/* Email */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">پست الکترونیکی رسمی (ایمیل)</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'email', 'پست الکترونیکی رسمی (ایمیل)')}</label>
                   <input
                     type="email"
+                    required={isFieldRequired(settings, 'suppliers', 'email')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="مثال: export@wika.de"
@@ -582,7 +570,7 @@ export default function SuppliersView({
 
                 {/* Provided Product Categories */}
                 <div className="col-span-1 md:col-span-2 space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">دسته محصولات قابل ارائه</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'providedCategories', 'دسته محصولات قابل ارائه')}</label>
                   <div className="flex flex-wrap gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                     {(settings.dropdownItems?.categories || ['کنترلر و PLC', 'سنسور و ترانسمیتر', 'فلومتر و ابزار جریان', 'شیرآلات صنعتی', 'اتصالات و متریال نصب', 'تجهیزات هیدرولیک', 'سایر']).map((cat, i) => {
                       const isSelected = providedCategories.includes(cat);
@@ -613,9 +601,10 @@ export default function SuppliersView({
 
                 {/* Description */}
                 <div className="col-span-1 md:col-span-2 space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">توضیحات</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'description', 'توضیحات')}</label>
                   <textarea
                     value={description}
+                    required={isFieldRequired(settings, 'suppliers', 'description')}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="توضیحات تکمیلی، نمایندگی‌ها و نکات مربوط به تامین‌کننده..."
                     rows={3}

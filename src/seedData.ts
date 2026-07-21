@@ -596,6 +596,106 @@ export const DEFAULT_SETTINGS: ERPSettings = {
     { id: 'cf-1', module: 'customers', name: 'رتبه پیمانکاری', type: 'text' },
     { id: 'cf-2', module: 'products', name: 'دمای کاری حداکثر (C)', type: 'number' }
   ],
+  requiredFields: {
+    customers: {
+      companyName: true,
+      firstName: true,
+      lastName: true,
+      phone: false,
+      mobile: false,
+      email: false,
+      province: false,
+      city: false,
+      address: false,
+      industry: false,
+      keyPerson: false,
+      position: false,
+    },
+    projects: {
+      name: true,
+      customerId: true,
+      salesExpert: false,
+      marketingChannel: false,
+      leadQuality: false,
+      referrerName: false,
+      financialContact: false,
+      technicalContact: false,
+      customerInquiryNumber: false,
+      expectedCloseDate: false,
+      endUser: false,
+      description: false,
+    },
+    products: {
+      displayName: true,
+      category: false,
+      brand: false,
+      modelNumber: false,
+      unit: false,
+      basePriceRIYAL: false,
+      supplyType: false,
+      description: false,
+    },
+    suppliers: {
+      name: true,
+      country: true,
+      contactName: true,
+      phone: false,
+      email: false,
+      website: false,
+      paymentTerms: false,
+      description: false,
+    },
+    proformas: {
+      customerId: true,
+      projectId: false,
+      issueDate: true,
+      expiryDate: false,
+      currency: false,
+      notes: false,
+    },
+    tasks: {
+      title: true,
+      description: false,
+      assignedTo: false,
+      dueDate: true,
+      priority: false,
+    },
+    supplierInquiries: {
+      projectId: true,
+      supplierId: true,
+      creationDate: false,
+    },
+    purchaseOrders: {
+      supplierId: true,
+      projectId: false,
+      proformaId: false,
+      orderDate: false,
+      expectedDeliveryDate: false,
+      currency: false,
+    },
+    packagingDelivery: {
+      projectId: true,
+      packingListNumber: false,
+      deliveryDate: false,
+      shippingMethod: false,
+    },
+    afterSalesServices: {
+      projectId: true,
+      itemName: false,
+      issueDescription: false,
+      actionsTaken: false,
+      startDate: false,
+    },
+    transactions: {
+      type: false,
+      receiptType: false,
+      documentNumber: false,
+      amountRIYAL: true,
+      date: false,
+      paymentType: false,
+      referenceNumber: false,
+    }
+  },
   proformaTemplates: [
     {
       name: 'قالب پیش‌فرض رسمی',
@@ -740,11 +840,5 @@ export const DEFAULT_SETTINGS: ERPSettings = {
         }
       ]
     }
-  ],
-  fieldRequirements: {
-    suppliers: {
-      name: true,
-      country: true
-    }
-  }
+  ]
 };

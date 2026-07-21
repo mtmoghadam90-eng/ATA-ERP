@@ -51,6 +51,7 @@ import RatesView from './RatesView';
 import { decompressLZW } from '../utils/compress';
 import ConfirmModal from './ConfirmModal';
 import { compressAndResizeImage, uploadFile } from '../imageUtils';
+import { REQUIRED_FIELDS_METADATA, DEFAULT_REQUIRED_FIELDS } from '../utils/requiredFields';
 
 interface SettingsViewProps {
   settings: ERPSettings;
@@ -105,7 +106,18 @@ export default function SettingsView({
   };
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows' | 'rates' | 'fieldRequirements'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'customFields' | 'activityCategories' | 'dropdowns' | 'sidebarOrder' | 'adminNotifications' | 'deliveryChecklist' | 'auditLog' | 'workflows' | 'rates' | 'requiredFields'>('general');
+
+  // Mandatory / optional fields state
+  const [localRequiredFields, setLocalRequiredFields] = useState<Record<string, Record<string, boolean>>>(() => {
+    return settings.requiredFields || DEFAULT_REQUIRED_FIELDS;
+  });
+
+  React.useEffect(() => {
+    if (settings.requiredFields) {
+      setLocalRequiredFields(settings.requiredFields);
+    }
+  }, [settings.requiredFields]);
 
   // Workflow builder states
   const [editingRule, setEditingRule] = useState<WorkflowRule | null>(null);
@@ -477,6 +489,7 @@ export default function SettingsView({
   const [showProductBrandInDocuments, setShowProductBrandInDocuments] = useState(!!settings.showProductBrandInDocuments);
 
   const [isSaved, setIsSaved] = useState(false);
+  const [isRequiredFieldsSaved, setIsRequiredFieldsSaved] = useState(false);
 
   // Custom Fields manager states
   const [selectedModule, setSelectedModule] = useState<'customers' | 'projects' | 'products' | 'proformas' | 'suppliers' | 'purchaseOrders' | 'transactions' | 'tasks'>('customers');
@@ -767,6 +780,17 @@ export default function SettingsView({
           <span className="bg-sky-100 text-sky-700 text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-bold">مدیر</span>
         </button>
         <button
+          onClick={() => setActiveTab('requiredFields')}
+          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
+            activeTab === 'requiredFields'
+              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
+              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <CheckSquare size={16} className="text-red-500" />
+          تعیین فیلدهای اجباری
+        </button>
+        <button
           onClick={() => setActiveTab('activityCategories')}
           className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
             activeTab === 'activityCategories'
@@ -858,20 +882,107 @@ export default function SettingsView({
           <TrendingUp size={16} className="text-emerald-500" />
           نرخ ارز روزانه
         </button>
-        <button
-          onClick={() => setActiveTab('fieldRequirements')}
-          className={`py-2 px-4 md:py-2.5 md:px-5 text-xs md:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-xl border flex-shrink-0 ${
-            activeTab === 'fieldRequirements'
-              ? 'bg-sky-50 text-sky-600 border-sky-300 shadow-sm shadow-sky-100'
-              : 'bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
-          }`}
-        >
-          <CheckSquare size={16} className="text-indigo-500" />
-          فیلدهای اجباری
-        </button>
       </div>
 
-      {activeTab === 'rates' ? (
+      {activeTab === 'requiredFields' ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-6">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">تنظیمات اجباری/اختیاری بودن فیلدهای اصلی</h3>
+            <p className="text-slate-500 text-xs mt-1">
+              در این بخش می‌توانید مشخص کنید کدام‌یک از فیلدهای اصلی هر ماژول در زمان ثبت یا ویرایش الزامی (اجباری) باشند. فیلدهایی که اجباری می‌شوند با علامت ستاره قرمز <span className="text-red-500 font-bold">*</span> در فرم‌ها نمایش داده خواهند شد و سیستم اجازه ثبت بدون آن‌ها را نخواهد داد.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {REQUIRED_FIELDS_METADATA.map((mod) => {
+              const modFields = localRequiredFields[mod.key] || {};
+              return (
+                <div key={mod.key} className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3 mb-4">
+                      <div className="w-2 h-5 bg-sky-500 rounded-full"></div>
+                      <h4 className="font-bold text-slate-800 text-sm">{mod.name}</h4>
+                    </div>
+
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                      {mod.fields.map((field) => {
+                        const isRequired = !!modFields[field.key];
+                        return (
+                          <div key={field.key} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm">
+                            <span className="text-xs font-semibold text-slate-600">{field.label}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLocalRequiredFields((prev) => {
+                                  const updatedModule = {
+                                    ...(prev[mod.key] || {}),
+                                    [field.key]: !isRequired,
+                                  };
+                                  return {
+                                    ...prev,
+                                    [mod.key]: updatedModule,
+                                  };
+                                });
+                              }}
+                              className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all duration-300 outline-none ${
+                                isRequired ? 'bg-red-500 justify-end' : 'bg-slate-200 justify-start'
+                              }`}
+                            >
+                              <span className="bg-white w-4 h-4 rounded-full shadow-md transition-all duration-300"></span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-400 text-left">
+                    تعداد کل: {mod.fields.length} فیلد اصلی
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-between items-center border-t border-slate-100 pt-6">
+            <div>
+              {isRequiredFieldsSaved && (
+                <span className="text-emerald-600 text-xs font-bold flex items-center gap-1.5 animate-bounce-short">
+                  <CheckCircle2 size={16} />
+                  تنظیمات فیلدهای اجباری با موفقیت ذخیره شد.
+                </span>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setLocalRequiredFields(settings.requiredFields || DEFAULT_REQUIRED_FIELDS);
+                  setIsRequiredFieldsSaved(false);
+                }}
+                className="px-5 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-slate-200 rounded-xl transition"
+              >
+                لغو تغییرات
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  updateSettings({
+                    ...settings,
+                    requiredFields: localRequiredFields,
+                  });
+                  setIsRequiredFieldsSaved(true);
+                  setTimeout(() => setIsRequiredFieldsSaved(false), 4000);
+                }}
+                className="px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-2"
+              >
+                <Save size={14} />
+                ذخیره تنظیمات فیلدها
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'rates' ? (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="mb-6">
             <h3 className="text-lg font-bold text-slate-800">نرخ ارز روزانه</h3>
@@ -3426,93 +3537,6 @@ export default function SettingsView({
                 )}
               </div>
             )}
-          </div>
-        ) : activeTab === 'fieldRequirements' ? (
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
-            <div>
-              <h3 className="font-bold text-lg text-slate-800">تعیین فیلدهای اجباری/اختیاری فرم‌ها</h3>
-              <p className="text-slate-500 text-xs mt-1">
-                در این بخش می‌توانید مشخص کنید که کدام‌یک از فیلدهای اصلی هر فرم اجباری یا اختیاری باشند. در صورت اختیاری بودن، امکان ثبت بدون پر کردن آن‌ها وجود دارد.
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              {/* ماژول تامین‌کنندگان */}
-              <div className="border border-slate-150 rounded-xl p-5 space-y-4">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
-                  <h4 className="font-bold text-sm text-slate-700">ماژول تامین‌کنندگان (Suppliers)</h4>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* نام تامین‌کننده */}
-                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-100">
-                    <div>
-                      <p className="text-xs font-bold text-slate-700">نام تامین‌کننده</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 font-medium">نام کامل شرکت یا شخص تامین‌کننده کالا و خدمات</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.fieldRequirements?.suppliers?.name !== false}
-                        onChange={(e) => {
-                          const currentReqs = settings.fieldRequirements || {};
-                          const suppliersReqs = currentReqs.suppliers || { name: true, country: true };
-                          updateSettings({
-                            ...settings,
-                            fieldRequirements: {
-                              ...currentReqs,
-                              suppliers: {
-                                ...suppliersReqs,
-                                name: e.target.checked
-                              }
-                            }
-                          });
-                        }}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                      <span className="ms-2 text-xs font-semibold text-slate-600">
-                        {settings.fieldRequirements?.suppliers?.name !== false ? 'اجباری' : 'اختیاری'}
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* کشور */}
-                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-100">
-                    <div>
-                      <p className="text-xs font-bold text-slate-700">کشور تامین‌کننده</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 font-medium">کشور محل استقرار یا ثبت تامین‌کننده (داخلی/خارجی)</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.fieldRequirements?.suppliers?.country !== false}
-                        onChange={(e) => {
-                          const currentReqs = settings.fieldRequirements || {};
-                          const suppliersReqs = currentReqs.suppliers || { name: true, country: true };
-                          updateSettings({
-                            ...settings,
-                            fieldRequirements: {
-                              ...currentReqs,
-                              suppliers: {
-                                ...suppliersReqs,
-                                country: e.target.checked
-                              }
-                            }
-                          });
-                        }}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                      <span className="ms-2 text-xs font-semibold text-slate-600">
-                        {settings.fieldRequirements?.suppliers?.country !== false ? 'اجباری' : 'اختیاری'}
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         ) : null)}
 

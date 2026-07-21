@@ -47,6 +47,7 @@ import QuickAddModal from "./QuickAddModal";
 import { toPersianDigits } from "../numUtils";
 import ModuleNotesSection from "./ModuleNotesSection";
 import CustomerAgreementAlert from "./CustomerAgreementAlert";
+import { isFieldRequired, renderFieldLabelWithAsterisk } from "../utils/requiredFields";
 
 // Helper functions for dynamic delivery time notes generation
 const generateDeliveryNotes = (
@@ -3283,7 +3284,7 @@ export default function ProformasView({
                 {/* Customer Select */}
                 <div className="space-y-1.5 w-full min-w-0">
                   <label className="text-xs font-semibold text-slate-500">
-                    انتخاب خریدار / کارفرما *
+                    {renderFieldLabelWithAsterisk(settings, 'proformas', 'customerId', 'انتخاب خریدار / کارفرما')}
                   </label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
                     <SearchableSelect
@@ -3313,7 +3314,7 @@ export default function ProformasView({
                           setContactPrefix("");
                         }
                       }}
-                      required
+                      required={isFieldRequired(settings, 'proformas', 'customerId')}
                       options={[
                         { value: "", label: "-- انتخاب مشتری --" },
                         ...customers.map((c) => ({
@@ -3369,10 +3370,11 @@ export default function ProformasView({
                   return (
                     <div className="space-y-1.5 animate-fade-in">
                       <label className="text-xs font-semibold text-slate-500">
-                        پیشوند نام مشتری *
+                        {renderFieldLabelWithAsterisk(settings, 'proformas', 'contactPrefix', 'پیشوند نام مشتری')}
                       </label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'proformas', 'contactPrefix')}
                         value={contactPrefix}
                         onChange={(e) => setContactPrefix(e.target.value)}
                         placeholder="مانند: جناب آقای مهندس"
@@ -3401,7 +3403,7 @@ export default function ProformasView({
                     <>
                       <div className="space-y-1.5 animate-fade-in w-full min-w-0">
                         <label className="text-xs font-semibold text-slate-500">
-                          مخاطب *
+                          {renderFieldLabelWithAsterisk(settings, 'proformas', 'contactCustomerId', 'مخاطب')}
                         </label>
                         <div className="flex gap-1.5 items-center w-full min-w-0">
                           <SearchableSelect
@@ -3426,7 +3428,7 @@ export default function ProformasView({
                                 setContactPrefix("");
                               }
                             }}
-                            required
+                            required={isFieldRequired(settings, 'proformas', 'contactCustomerId')}
                             options={[
                               { value: "", label: "-- انتخاب مخاطب --" },
                               ...filteredContacts.map((c) => ({

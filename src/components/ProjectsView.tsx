@@ -15,6 +15,7 @@ import CustomFieldsForm from './CustomFieldsForm';
 import { uploadFile, compressImage, downloadFileFromServer } from '../imageUtils';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import { exportToCSV } from '../excelUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk } from '../utils/requiredFields';
 import ConfirmModal from './ConfirmModal';
 import QuickAddModal from './QuickAddModal';
 import { SearchableSelect } from './SearchableSelect';
@@ -3229,10 +3230,10 @@ export default function ProjectsView({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Project Name */}
                   <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-xs font-semibold text-slate-500">عنوان کامل پروژه / نام پروژه *</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'name', 'عنوان کامل پروژه / نام پروژه')}</label>
                     <input
                       type="text"
-                      required
+                      required={isFieldRequired(settings, 'projects', 'name')}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="مثال: نوسازی تجهیزات کنترل نیروگاه ری"
@@ -3242,12 +3243,12 @@ export default function ProjectsView({
 
                   {/* Customer select */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">نام مشتری / کارفرما *</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'customerId', 'نام مشتری / کارفرما')}</label>
                     <div className="flex gap-1.5 items-center">
                     <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={customerId}
                       onChange={(val) => setCustomerId(val)}
-                      required
+                      required={isFieldRequired(settings, 'projects', 'customerId')}
                       options={[
                         { value: '', label: '-- انتخاب مشتری --' },
                         ...customers.map(c => ({ value: c.id, label: c.companyName }))
@@ -3278,11 +3279,12 @@ export default function ProjectsView({
 
                   {/* End User */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">مصرف‌کننده نهایی</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'endUser', 'مصرف‌کننده نهایی')}</label>
                     <div className="flex gap-1.5 items-center">
                     <SearchableSelect wrapperClassName="flex-1 min-w-0"
                       value={endUser}
                       onChange={(val) => setEndUser(val)}
+                      required={isFieldRequired(settings, 'projects', 'endUser')}
                       options={[
                         { value: '', label: '-- انتخاب مصرف‌کننده (مشتری) --' },
                         ...customers.map(c => ({ value: c.id, label: c.companyName }))
@@ -3307,9 +3309,10 @@ export default function ProjectsView({
 
                   {/* Sales Expert */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">کارشناس فروش</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'salesExpert', 'کارشناس فروش')}</label>
                     <select
                       value={salesExpert}
+                      required={isFieldRequired(settings, 'projects', 'salesExpert')}
                       onChange={(e) => setSalesExpert(e.target.value)}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                     >
@@ -3322,9 +3325,10 @@ export default function ProjectsView({
 
                   {/* Customer Inquiry Number */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">شماره استعلام مشتری</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'customerInquiryNumber', 'شماره استعلام مشتری')}</label>
                     <input
                       type="text"
+                      required={isFieldRequired(settings, 'projects', 'customerInquiryNumber')}
                       value={customerInquiryNumber}
                       onChange={(e) => setCustomerInquiryNumber(e.target.value)}
                       placeholder="مثال: ۱۲۴-۹۹-الف"
@@ -3340,9 +3344,10 @@ export default function ProjectsView({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Marketing Channel */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">کانال بازاریابی</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'marketingChannel', 'کانال بازاریابی')}</label>
                     <select
                       value={marketingChannel}
+                      required={isFieldRequired(settings, 'projects', 'marketingChannel')}
                       onChange={(e) => setMarketingChannel(e.target.value)}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                     >
@@ -3354,9 +3359,10 @@ export default function ProjectsView({
 
                   {/* Lead Quality */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">کیفیت لید</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'leadQuality', 'کیفیت لید')}</label>
                     <select
                       value={leadQuality}
+                      required={isFieldRequired(settings, 'projects', 'leadQuality')}
                       onChange={(e) => setLeadQuality(e.target.value)}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                     >
@@ -3368,9 +3374,10 @@ export default function ProjectsView({
 
                   {/* Referrer Name */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">نام معرف (در صورت وجود)</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'referrerName', 'نام معرف (در صورت وجود)')}</label>
                     <input
                       type="text"
+                      required={isFieldRequired(settings, 'projects', 'referrerName')}
                       value={referrerName}
                       onChange={(e) => setReferrerName(e.target.value)}
                       placeholder="نام شخص یا سازمان معرفی‌کننده"
@@ -3380,9 +3387,10 @@ export default function ProjectsView({
 
                   {/* Communication Method */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">روش ارتباط اصلی</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'communicationMethod', 'روش ارتباط اصلی')}</label>
                     <select
                       value={communicationMethod}
+                      required={isFieldRequired(settings, 'projects', 'communicationMethod')}
                       onChange={(e) => setCommunicationMethod(e.target.value)}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                     >
@@ -3495,8 +3503,8 @@ export default function ProjectsView({
                   {/* Opportunity Creation Date */}
                   <div className="space-y-1.5">
                     <ShamsiDatePicker
-                      label="تاریخ ایجاد فرصت (ثبت در CRM) *"
-                      required
+                      label={renderFieldLabelWithAsterisk(settings, 'projects', 'opportunityDate', 'تاریخ ایجاد فرصت (ثبت در CRM)') as string}
+                      required={isFieldRequired(settings, 'projects', 'opportunityDate')}
                       value={opportunityDate}
                       onChange={(val) => setOpportunityDate(val)}
                     />
@@ -3513,9 +3521,10 @@ export default function ProjectsView({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Status / Outcome */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">نتیجه پروژه (مرحله پیشرفت فرصت)</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'status', 'نتیجه پروژه (مرحله پیشرفت فرصت)')}</label>
                     <select
                       value={status}
+                      required={isFieldRequired(settings, 'projects', 'status')}
                       onChange={(e) => handleStatusChange(e.target.value as Project['status'])}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                     >
@@ -3547,8 +3556,8 @@ export default function ProjectsView({
                   {(status === 'برنده (موفق)' || status === 'نیمه برنده') && (
                     <div className="space-y-1.5">
                       <ShamsiDatePicker
-                        label="تاریخ تایید (ابلاغ قرارداد) *"
-                        required
+                        label={renderFieldLabelWithAsterisk(settings, 'projects', 'winningDate', 'تاریخ تایید (ابلاغ قرارداد)') as string}
+                        required={isFieldRequired(settings, 'projects', 'winningDate')}
                         value={winningDate}
                         onChange={(val) => setWinningDate(val)}
                       />
@@ -3559,15 +3568,13 @@ export default function ProjectsView({
                   {(status === 'برنده (موفق)' || status === 'نیمه برنده') && (
                     <div className="space-y-1.5">
                       <ShamsiDatePicker
-                        label="تاریخ توافق‌شده تحویل نهایی *"
-                        required
+                        label={renderFieldLabelWithAsterisk(settings, 'projects', 'agreedDeliveryDate', 'تاریخ توافق‌شده تحویل نهایی') as string}
+                        required={isFieldRequired(settings, 'projects', 'agreedDeliveryDate')}
                         value={agreedDeliveryDate}
                         onChange={(val) => setAgreedDeliveryDate(val)}
                       />
                     </div>
                   )}
-
-
                 </div>
               </div>
 

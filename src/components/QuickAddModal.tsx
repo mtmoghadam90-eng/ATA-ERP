@@ -4,6 +4,7 @@ import { Customer, Project, Supplier, Product, ERPSettings, User as ERPUser } fr
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
 import { uploadFile } from '../imageUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk, getFieldAsterisk } from '../utils/requiredFields';
 
 interface QuickAddModalProps {
   isOpen: boolean;
@@ -212,12 +213,56 @@ export default function QuickAddModal({
 
     if (type === 'customer') {
       if (!addCustomer) return;
-      if (custType === 'حقوقی' && !companyName.trim()) {
-        alert('لطفاً نام شرکت را وارد کنید.');
+      if (custType === 'حقوقی') {
+        if (isFieldRequired(settings, 'customers', 'companyName') && !companyName.trim()) {
+          alert('لطفاً نام شرکت را وارد کنید.');
+          return;
+        }
+        if (isFieldRequired(settings, 'customers', 'economicCode') && !economicCode.trim()) {
+          alert('لطفاً کد اقتصادی را وارد کنید.');
+          return;
+        }
+        if (isFieldRequired(settings, 'customers', 'industry') && !industry) {
+          alert('لطفاً صنعت فعالیت را انتخاب کنید.');
+          return;
+        }
+        if (isFieldRequired(settings, 'customers', 'keyPerson') && !keyPerson.trim()) {
+          alert('لطفاً شخص کلیدی را وارد کنید.');
+          return;
+        }
+      } else {
+        if (isFieldRequired(settings, 'customers', 'firstName') && !firstName.trim()) {
+          alert('لطفاً نام را وارد کنید.');
+          return;
+        }
+        if (isFieldRequired(settings, 'customers', 'lastName') && !lastName.trim()) {
+          alert('لطفاً نام خانوادگی را وارد کنید.');
+          return;
+        }
+        if (isFieldRequired(settings, 'customers', 'position') && !position.trim()) {
+          alert('لطفاً سمت را وارد کنید.');
+          return;
+        }
+      }
+
+      if (isFieldRequired(settings, 'customers', 'phone') && !custPhone.trim()) {
+        alert('لطفاً تلفن ثابت را وارد کنید.');
         return;
       }
-      if (custType === 'حقیقی' && (!firstName.trim() || !lastName.trim())) {
-        alert('لطفاً نام و نام خانوادگی را وارد کنید.');
+      if (isFieldRequired(settings, 'customers', 'mobile') && !custMobile.trim()) {
+        alert('لطفاً تلفن همراه را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'customers', 'email') && !custEmail.trim()) {
+        alert('لطفاً ایمیل را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'customers', 'province') && !custProvince.trim()) {
+        alert('لطفاً استان را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'customers', 'address') && !custAddress.trim()) {
+        alert('لطفاً آدرس دقیق را وارد کنید.');
         return;
       }
 
@@ -245,12 +290,48 @@ export default function QuickAddModal({
       onClose();
     } else if (type === 'project') {
       if (!addProject) return;
-      if (!projName.trim()) {
+      if (isFieldRequired(settings, 'projects', 'name') && !projName.trim()) {
         alert('لطفاً عنوان پروژه را وارد کنید.');
         return;
       }
-      if (!projCustomerId) {
+      if (isFieldRequired(settings, 'projects', 'customerId') && !projCustomerId) {
         alert('لطفاً مشتری پروژه را انتخاب کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'salesExpert') && !projSalesExpert) {
+        alert('لطفاً کارشناس فروش را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'marketingChannel') && !projMarketingChannel) {
+        alert('لطفاً کانال بازاریابی را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'leadQuality') && !projLeadQuality) {
+        alert('لطفاً کیفیت لید را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'referrerName') && !projReferrerName.trim()) {
+        alert('لطفاً نام معرف را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'financialContact') && !projFinancialContact.trim()) {
+        alert('لطفاً فرد کلیدی مالی را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'technicalContact') && !projTechnicalContact.trim()) {
+        alert('لطفاً فرد کلیدی فنی را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'customerInquiryNumber') && !projCustomerInquiryNumber.trim()) {
+        alert('لطفاً شماره استعلام مشتری را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'expectedCloseDate') && !projExpectedCloseDate) {
+        alert('لطفاً تاریخ پیش‌بینی بسته شدن را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'projects', 'endUser') && !projEndUser.trim()) {
+        alert('لطفاً مصرف‌کننده نهایی را وارد کنید.');
         return;
       }
 
@@ -283,16 +364,28 @@ export default function QuickAddModal({
       onClose();
     } else if (type === 'supplier') {
       if (!addSupplier) return;
-      if (!suppName.trim()) {
+      if (isFieldRequired(settings, 'suppliers', 'name') && !suppName.trim()) {
         alert('لطفاً نام تأمین‌کننده را وارد کنید.');
         return;
       }
-      if (!suppCountry.trim()) {
+      if (isFieldRequired(settings, 'suppliers', 'country') && !suppCountry.trim()) {
         alert('لطفاً کشور مبدا را وارد کنید.');
         return;
       }
-      if (!suppContact.trim()) {
+      if (isFieldRequired(settings, 'suppliers', 'contactName') && !suppContact.trim()) {
         alert('لطفاً کارشناس فروش را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'suppliers', 'phone') && !suppPhone.trim()) {
+        alert('لطفاً تلفن تماس را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'suppliers', 'email') && !suppEmail.trim()) {
+        alert('لطفاً ایمیل مکاتبه را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'suppliers', 'description') && !suppDescription.trim()) {
+        alert('لطفاً توضیحات را وارد کنید.');
         return;
       }
 
@@ -311,8 +404,20 @@ export default function QuickAddModal({
       onClose();
     } else if (type === 'product') {
       if (!addProduct) return;
-      if (!prodDisplayName.trim()) {
+      if (isFieldRequired(settings, 'products', 'displayName') && !prodDisplayName.trim()) {
         alert('لطفاً نام کالا را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'products', 'category') && !prodCategory) {
+        alert('لطفاً دسته‌بندی کالا را انتخاب کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'products', 'brand') && !prodBrand.trim()) {
+        alert('لطفاً برند کالا را وارد کنید.');
+        return;
+      }
+      if (isFieldRequired(settings, 'products', 'description') && !prodDescription.trim()) {
+        alert('لطفاً توضیحات کالا را وارد کنید.');
         return;
       }
 
@@ -395,10 +500,10 @@ export default function QuickAddModal({
                 {custType === 'حقوقی' ? (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">نام شرکت *</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'companyName', 'نام شرکت')}</label>
                       <input
                         type="text"
-                        required
+                        required={isFieldRequired(settings, 'customers', 'companyName')}
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
                         placeholder="مثال: شرکت نفت و گاز کارون"
@@ -406,9 +511,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">کد اقتصادی</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'economicCode', 'کد اقتصادی')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'economicCode')}
                         value={economicCode}
                         onChange={(e) => setEconomicCode(e.target.value)}
                         placeholder="مثال: ۴۱۱۳۴۵۶۷۸۹۱۲"
@@ -416,9 +522,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'phone', 'تلفن ثابت')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'phone')}
                         value={custPhone}
                         onChange={(e) => setCustPhone(e.target.value)}
                         placeholder="مثال: 02188884422"
@@ -426,9 +533,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن همراه</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'mobile', 'تلفن همراه')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'mobile')}
                         value={custMobile}
                         onChange={(e) => setCustMobile(e.target.value)}
                         placeholder="مثال: 09121112233"
@@ -436,9 +544,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">ایمیل</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'email', 'ایمیل')}</label>
                       <input
                         type="email"
+                        required={isFieldRequired(settings, 'customers', 'email')}
                         value={custEmail}
                         onChange={(e) => setCustEmail(e.target.value)}
                         placeholder="مثال: info@company.com"
@@ -446,7 +555,7 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">صنعت / حوزه فعالیت</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'industry', 'صنعت / حوزه فعالیت')}</label>
                       <select
                         value={industry}
                         onChange={(e) => setIndustry(e.target.value)}
@@ -458,9 +567,10 @@ export default function QuickAddModal({
                       </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">استان</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'province', 'استان')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'province')}
                         value={custProvince}
                         onChange={(e) => setCustProvince(e.target.value)}
                         placeholder="مثال: تهران"
@@ -471,10 +581,10 @@ export default function QuickAddModal({
                 ) : (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">نام *</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'firstName', 'نام')}</label>
                       <input
                         type="text"
-                        required
+                        required={isFieldRequired(settings, 'customers', 'firstName')}
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder="مثال: مهرداد"
@@ -482,10 +592,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">نام خانوادگی *</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'lastName', 'نام خانوادگی')}</label>
                       <input
                         type="text"
-                        required
+                        required={isFieldRequired(settings, 'customers', 'lastName')}
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder="مثال: رضوی"
@@ -505,7 +615,7 @@ export default function QuickAddModal({
                       </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">سمت</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'position', 'سمت')}</label>
                       <select
                         value={position}
                         onChange={(e) => setPosition(e.target.value)}
@@ -518,9 +628,10 @@ export default function QuickAddModal({
                       </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'phone', 'تلفن ثابت')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'phone')}
                         value={custPhone}
                         onChange={(e) => setCustPhone(e.target.value)}
                         placeholder="مثال: 02122334455"
@@ -528,9 +639,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">تلفن همراه</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'mobile', 'تلفن همراه')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'mobile')}
                         value={custMobile}
                         onChange={(e) => setCustMobile(e.target.value)}
                         placeholder="مثال: 09121112233"
@@ -538,9 +650,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">ایمیل</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'email', 'ایمیل')}</label>
                       <input
                         type="email"
+                        required={isFieldRequired(settings, 'customers', 'email')}
                         value={custEmail}
                         onChange={(e) => setCustEmail(e.target.value)}
                         placeholder="مثال: m.razavi@example.com"
@@ -548,9 +661,10 @@ export default function QuickAddModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600">استان</label>
+                      <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'province', 'استان')}</label>
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'customers', 'province')}
                         value={custProvince}
                         onChange={(e) => setCustProvince(e.target.value)}
                         placeholder="مثال: اصفهان"
@@ -561,7 +675,7 @@ export default function QuickAddModal({
                 )}
 
                 <div className="space-y-1.5 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-600">آدرس</label>
+                  <label className="text-xs font-bold text-slate-600">{renderFieldLabelWithAsterisk(settings, 'customers', 'address', 'آدرس دقیق')}</label>
                   <textarea
                     rows={2}
                     value={custAddress}
@@ -664,10 +778,10 @@ export default function QuickAddModal({
                 <h4 className="text-xs font-extrabold text-slate-700 mb-3 border-r-4 border-sky-500 pr-2">اطلاعات عمومی پروژه</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-xs font-semibold text-slate-500">عنوان کامل پروژه / نام پروژه *</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'name', 'عنوان کامل پروژه / نام پروژه')}</label>
                     <input
                       type="text"
-                      required
+                      required={isFieldRequired(settings, 'projects', 'name')}
                       value={projName}
                       onChange={(e) => setProjName(e.target.value)}
                       placeholder="مثال: نوسازی تجهیزات کنترل نیروگاه ری"
@@ -676,12 +790,12 @@ export default function QuickAddModal({
                   </div>
 
                    <div className="space-y-1.5">
-                     <label className="text-xs font-semibold text-slate-500">نام مشتری / کارفرما *</label>
+                     <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'customerId', 'نام مشتری / کارفرما')}</label>
                      <div className="flex gap-1.5 items-center">
                        <select
                          value={projCustomerId}
                          onChange={(e) => setProjCustomerId(e.target.value)}
-                         required
+                         required={isFieldRequired(settings, 'projects', 'customerId')}
                          className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                        >
                          <option value="">-- انتخاب مشتری --</option>
@@ -706,7 +820,7 @@ export default function QuickAddModal({
                    </div>
 
                    <div className="space-y-1.5">
-                     <label className="text-xs font-semibold text-slate-500">مصرف‌کننده نهایی</label>
+                     <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'endUser', 'مصرف‌کننده نهایی')}</label>
                      <div className="flex gap-1.5 items-center">
                        <select
                          value={projEndUser}
@@ -735,7 +849,7 @@ export default function QuickAddModal({
                    </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">کارشناس فروش</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'salesExpert', 'کارشناس فروش')}</label>
                     <select
                       value={projSalesExpert}
                       onChange={(e) => setProjSalesExpert(e.target.value)}
@@ -755,7 +869,7 @@ export default function QuickAddModal({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">شماره استعلام مشتری</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'customerInquiryNumber', 'شماره استعلام مشتری')}</label>
                     <input
                       type="text"
                       value={projCustomerInquiryNumber}
@@ -772,7 +886,7 @@ export default function QuickAddModal({
                 <h4 className="text-xs font-extrabold text-slate-700 mb-3 border-r-4 border-indigo-500 pr-2">کانال بازاریابی و کیفیت سرنخ (لید)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">کانال بازاریابی</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'marketingChannel', 'کانال بازاریابی')}</label>
                     <select
                       value={projMarketingChannel}
                       onChange={(e) => setProjMarketingChannel(e.target.value)}
@@ -785,7 +899,7 @@ export default function QuickAddModal({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">کیفیت لید</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'leadQuality', 'کیفیت لید')}</label>
                     <select
                       value={projLeadQuality}
                       onChange={(e) => setProjLeadQuality(e.target.value)}
@@ -798,7 +912,7 @@ export default function QuickAddModal({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">نام معرف (در صورت وجود)</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'referrerName', 'نام معرف (در صورت وجود)')}</label>
                     <input
                       type="text"
                       value={projReferrerName}
@@ -828,11 +942,12 @@ export default function QuickAddModal({
                 <h4 className="text-xs font-extrabold text-slate-700 mb-3 border-r-4 border-amber-500 pr-2">افراد کلیدی مشتری</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">فرد کلیدی مالی</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'financialContact', 'فرد کلیدی مالی')}</label>
                     <div className="flex gap-1.5 items-center">
                       <select
                         value={projFinancialContact}
                         onChange={(e) => setProjFinancialContact(e.target.value)}
+                        required={isFieldRequired(settings, 'projects', 'financialContact')}
                         className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                       >
                         <option value="">-- انتخاب فرد مالی (مشتری) --</option>
@@ -871,11 +986,12 @@ export default function QuickAddModal({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">فرد کلیدی فنی</label>
+                    <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'projects', 'technicalContact', 'فرد کلیدی فنی')}</label>
                     <div className="flex gap-1.5 items-center">
                       <select
                         value={projTechnicalContact}
                         onChange={(e) => setProjTechnicalContact(e.target.value)}
+                        required={isFieldRequired(settings, 'projects', 'technicalContact')}
                         className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                       >
                         <option value="">-- انتخاب فرد فنی (مشتری) --</option>
@@ -930,7 +1046,8 @@ export default function QuickAddModal({
 
                   <div className="space-y-1.5">
                     <ShamsiDatePicker
-                      label="موعد مقرر تحویل عمومی (تعهد تحویل کالا)"
+                      label={`موعد مقرر تحویل عمومی (تعهد تحویل کالا)${getFieldAsterisk(settings, 'projects', 'expectedCloseDate')}`}
+                      required={isFieldRequired(settings, 'projects', 'expectedCloseDate')}
                       value={projExpectedCloseDate}
                       onChange={(val) => setProjExpectedCloseDate(val)}
                     />
@@ -1098,10 +1215,10 @@ export default function QuickAddModal({
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">نام کمپانی تأمین‌کننده (انگلیسی/فارسی) *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'name', 'نام کمپانی تأمین‌کننده (انگلیسی/فارسی)')}</label>
                   <input
                     type="text"
-                    required
+                    required={isFieldRequired(settings, 'suppliers', 'name')}
                     value={suppName}
                     onChange={(e) => setSuppName(e.target.value)}
                     placeholder="مثال: WIKA Instruments"
@@ -1110,10 +1227,10 @@ export default function QuickAddModal({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">کشور مبدا تولید / دفتر توزیع *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'country', 'کشور مبدا تولید / دفتر توزیع')}</label>
                   <input
                     type="text"
-                    required
+                    required={isFieldRequired(settings, 'suppliers', 'country')}
                     value={suppCountry}
                     onChange={(e) => setSuppCountry(e.target.value)}
                     placeholder="مثال: آلمان، امارات، ژاپن"
@@ -1122,10 +1239,10 @@ export default function QuickAddModal({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">کارشناس فروش یا نماینده کمپانی *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'contactName', 'کارشناس فروش یا نماینده کمپانی')}</label>
                   <input
                     type="text"
-                    required
+                    required={isFieldRequired(settings, 'suppliers', 'contactName')}
                     value={suppContact}
                     onChange={(e) => setSuppContact(e.target.value)}
                     placeholder="مثال: Mr. David Miller"
@@ -1147,9 +1264,10 @@ export default function QuickAddModal({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">شماره تلفن بین‌المللی</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'phone', 'شماره تلفن بین‌المللی')}</label>
                   <input
                     type="text"
+                    required={isFieldRequired(settings, 'suppliers', 'phone')}
                     value={suppPhone}
                     onChange={(e) => setSuppPhone(e.target.value)}
                     placeholder="مثال: 00499372132"
@@ -1158,9 +1276,10 @@ export default function QuickAddModal({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">پست الکترونیکی رسمی (ایمیل)</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'suppliers', 'email', 'پست الکترونیکی رسمی (ایمیل)')}</label>
                   <input
                     type="email"
+                    required={isFieldRequired(settings, 'suppliers', 'email')}
                     value={suppEmail}
                     onChange={(e) => setSuppEmail(e.target.value)}
                     placeholder="مثال: export@wika.de"
@@ -1228,7 +1347,7 @@ export default function QuickAddModal({
           {type === 'product' && (
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500">دسته‌بندی تخصصی ابزاردقیق *</label>
+                <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'category', 'دسته‌بندی تخصصی ابزاردقیق')}</label>
                 <select
                   value={prodCategory}
                   onChange={(e) => setProdCategory(e.target.value)}
@@ -1241,10 +1360,10 @@ export default function QuickAddModal({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500">نوع تجهیز و نام کالا *</label>
+                <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'displayName', 'نوع تجهیز و نام کالا')}</label>
                 <input
                   type="text"
-                  required
+                  required={isFieldRequired(settings, 'products', 'displayName')}
                   value={prodDisplayName}
                   onChange={(e) => setProdDisplayName(e.target.value)}
                   placeholder="مثال: ترانسمیتر اختلاف فشار (DP Transmitter)"
@@ -1253,9 +1372,10 @@ export default function QuickAddModal({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500">برند (اختیاری)</label>
+                <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'brand', 'برند (سازنده)')}</label>
                 <input
                   type="text"
+                  required={isFieldRequired(settings, 'products', 'brand')}
                   value={prodBrand}
                   onChange={(e) => setProdBrand(e.target.value)}
                   placeholder="مثال: WIKA, Rosemount"
@@ -1285,7 +1405,7 @@ export default function QuickAddModal({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">نوع تامین</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'supplyType', 'نوع تامین')}</label>
                   <select
                     value={prodSupplyType}
                     onChange={(e) => setProdSupplyType(e.target.value as 'INVENTORY' | 'ORDER')}
@@ -1313,9 +1433,10 @@ export default function QuickAddModal({
 
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500">مشخصات فنی و توضیحات</label>
+                <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'products', 'description', 'مشخصات فنی و توضیحات')}</label>
                 <textarea
                   rows={4}
+                  required={isFieldRequired(settings, 'products', 'description')}
                   value={prodDescription}
                   onChange={(e) => setProdDescription(e.target.value)}
                   placeholder="جزئیات متریال بدنه، اتصالات، کلاس کاری، رنج فشار یا دما، سیگنال خروجی و گواهینامه‌ها..."
