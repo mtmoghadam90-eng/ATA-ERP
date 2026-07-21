@@ -1843,19 +1843,23 @@ export default function ProductsView({
                               
                               // Filter combinations based on configRules
                               const validCombinations = combinations.filter(combo => {
+                                if (!configRules || !Array.isArray(configRules)) return true;
                                 return !configRules.some(rule => {
-                                  if (!rule.active) return false;
+                                  if (!rule || !rule.active || !rule.conditions || !rule.actions) return false;
                                   
                                   // Check if all conditions match this combination
                                   const conditionsMatch = rule.conditions.every(cond => {
-                                    if (!cond.values || cond.values.length === 0) return false;
+                                    if (!cond || !cond.values || cond.values.length === 0) return false;
                                     return cond.values.includes(combo[cond.featureName]);
                                   });
                                   
                                   if (!conditionsMatch) return false;
                                   
                                   // If conditions match, check if this combination uses a forbidden action value
-                                  return rule.actions.values.includes(combo[rule.actions.featureName]);
+                                  return rule.actions.some(action => {
+                                    if (!action || !action.values || !Array.isArray(action.values)) return false;
+                                    return action.values.includes(combo[action.featureName]);
+                                  });
                                 });
                               });
 
