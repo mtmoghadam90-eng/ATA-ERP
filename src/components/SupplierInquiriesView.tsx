@@ -41,6 +41,7 @@ import {
 import ConfirmModal from './ConfirmModal';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import { getTodayShamsi } from '../dateUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk, getFieldAsterisk } from '../utils/requiredFields';
 import { downloadFileFromServer } from '../imageUtils';
 
 interface SupplierInquiriesViewProps {
@@ -974,6 +975,15 @@ function InquiryFormInner({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isFieldRequired(settings, 'supplierInquiries', 'projectId') && !projectId) {
+      alert('فیلد "پروژه" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'supplierInquiries', 'supplierId') && !supplierId) {
+      alert('فیلد "تأمین‌کننده" الزامی است.');
+      return;
+    }
     if (!projectId) {
       alert("لطفاً یک پروژه را انتخاب نمایید.");
       return;
@@ -1023,7 +1033,7 @@ function InquiryFormInner({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Project Selector */}
         <div className="space-y-1">
-          <label className="text-xs font-bold text-slate-500">انتخاب پروژه <span className="text-rose-500">*</span></label>
+          <label className="text-xs font-bold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'supplierInquiries', 'projectId', 'انتخاب پروژه')}</label>
           <select
             value={projectId}
             onChange={(e) => {
@@ -1060,11 +1070,11 @@ function InquiryFormInner({
 
         {/* Supplier Selector */}
         <div className="space-y-1">
-          <label className="text-xs font-bold text-slate-500">انتخاب تأمین‌کننده <span className="text-rose-500">*</span></label>
+          <label className="text-xs font-bold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'supplierInquiries', 'supplierId', 'انتخاب تأمین‌کننده')}</label>
           <select
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
-            required
+            required={isFieldRequired(settings, 'supplierInquiries', 'supplierId')}
             disabled={editingInquiry !== null} // Lock supplier on edit
             className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
           >

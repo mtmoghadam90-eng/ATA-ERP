@@ -23,6 +23,7 @@ import {
 import ConfirmModal from './ConfirmModal';
 import { SearchableSelect } from './SearchableSelect';
 import { getTodayShamsi } from '../dateUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk, getFieldAsterisk } from '../utils/requiredFields';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
 import ModuleNotesSection from './ModuleNotesSection';
@@ -198,6 +199,23 @@ export default function AfterSalesServicesView({
       finalProductName = itemCustomName.trim();
     }
 
+
+    if (isFieldRequired(settings, 'afterSalesServices', 'itemName') && !finalProductName) {
+      alert('فیلد "نام کالا" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'afterSalesServices', 'issueDescription') && !itemIssue) {
+      alert('فیلد "علت برگشت / نوع مشکل" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'afterSalesServices', 'actionsTaken') && !itemAction) {
+      alert('فیلد "اقدامات انجام شده" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'afterSalesServices', 'startDate') && !itemStartDate) {
+      alert('فیلد "تاریخ دریافت کالا" الزامی است.');
+      return;
+    }
     if (!itemIssue) {
       alert('لطفاً مشکل / دلیل برگشت را انتخاب یا مشخص کنید.');
       return;
@@ -257,6 +275,12 @@ export default function AfterSalesServicesView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isFieldRequired(settings, 'afterSalesServices', 'projectId') && !selectedProjectId) {
+      alert('فیلد "پروژه (مشتری)" الزامی است.');
+      return;
+    }
+
     
     if (!selectedProjectId) {
       alert('لطفاً پروژه را مشخص کنید.');
@@ -572,7 +596,7 @@ export default function AfterSalesServicesView({
               {/* بخش ۱: اطلاعات پروژه و پیش‌فاکتور */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">پروژه (مشتری) <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-bold text-slate-700">{renderFieldLabelWithAsterisk(settings, 'afterSalesServices', 'projectId', 'پروژه (مشتری)')}</label>
                   <SearchableSelect wrapperClassName="flex-1 min-w-0"
                     value={selectedProjectId}
                     onChange={(val) => {
@@ -581,6 +605,7 @@ export default function AfterSalesServicesView({
                       resetItemForm();
                       setServiceItems([]);
                     }}
+                    required={isFieldRequired(settings, 'afterSalesServices', 'projectId')}
                     options={[
                       { value: '', label: 'انتخاب پروژه...' },
                       ...projects.map(p => ({
@@ -589,7 +614,6 @@ export default function AfterSalesServicesView({
                       }))
                     ]}
                     placeholder="انتخاب پروژه..."
-                    required
                   />
                   {selectedProjectId && (
                     <div className="mt-2">
@@ -629,11 +653,12 @@ export default function AfterSalesServicesView({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* نام کالا */}
                   <div className="space-y-1.5 md:col-span-2 lg:col-span-1">
-                    <label className="text-xs font-bold text-slate-700">نام کالا / تجهیز برگشتی <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-bold text-slate-700">{renderFieldLabelWithAsterisk(settings, 'afterSalesServices', 'itemName', 'نام کالا / تجهیز برگشتی')}</label>
                     {selectedProformaNumber && proformaItems.length > 0 ? (
                       <div className="space-y-2">
                         <SearchableSelect wrapperClassName="flex-1 min-w-0"
                           value={itemProductDropdownVal}
+                          required={isFieldRequired(settings, 'afterSalesServices', 'itemName')}
                           onChange={(val) => {
                             setItemProductDropdownVal(val);
                             if (val !== 'custom' && val !== '') {
@@ -659,6 +684,7 @@ export default function AfterSalesServicesView({
                         {(itemProductDropdownVal === 'custom' || !itemProductDropdownVal) && (
                           <input
                             type="text"
+                            required={isFieldRequired(settings, 'afterSalesServices', 'itemName')}
                             value={itemCustomName}
                             onChange={(e) => setItemCustomName(e.target.value)}
                             placeholder="نام کالا را دستی وارد کنید"
@@ -669,6 +695,7 @@ export default function AfterSalesServicesView({
                     ) : (
                       <input
                         type="text"
+                        required={isFieldRequired(settings, 'afterSalesServices', 'itemName')}
                         value={itemCustomName}
                         onChange={(e) => setItemCustomName(e.target.value)}
                         placeholder="نام کالا را وارد کنید"
@@ -680,11 +707,12 @@ export default function AfterSalesServicesView({
 
                   {/* علت برگشت */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">علت برگشت / نوع مشکل <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-bold text-slate-700">{renderFieldLabelWithAsterisk(settings, 'afterSalesServices', 'issueDescription', 'علت برگشت / نوع مشکل')}</label>
                     <select
                       value={itemIssue}
                       onChange={(e) => setItemIssue(e.target.value)}
                       className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-750"
+                      required={isFieldRequired(settings, 'afterSalesServices', 'issueDescription')}
                       disabled={!selectedProjectId}
                     >
                       <option value="">انتخاب کنید...</option>
@@ -712,9 +740,10 @@ export default function AfterSalesServicesView({
 
                   {/* اقدامات انجام شده */}
                   <div className="space-y-1.5 lg:col-span-3">
-                    <label className="text-xs font-bold text-slate-700">اقدامات انجام شده</label>
+                    <label className="text-xs font-bold text-slate-700">{renderFieldLabelWithAsterisk(settings, 'afterSalesServices', 'actionsTaken', 'اقدامات انجام شده')}</label>
                     <input
                       type="text"
+                      required={isFieldRequired(settings, 'afterSalesServices', 'actionsTaken')}
                       value={itemAction}
                       onChange={(e) => setItemAction(e.target.value)}
                       placeholder="شرح کارها و تعمیراتی که روی این کالا انجام شده است..."
@@ -726,7 +755,8 @@ export default function AfterSalesServicesView({
                   {/* تاریخ دریافت */}
                   <div className="space-y-1.5">
                     <ShamsiDatePicker
-                      label="تاریخ دریافت کالا"
+                      label={`تاریخ دریافت کالا${getFieldAsterisk(settings, 'afterSalesServices', 'startDate')}`}
+                      required={isFieldRequired(settings, 'afterSalesServices', 'startDate')}
                       value={itemStartDate}
                       onChange={(val) => setItemStartDate(val)}
                     />

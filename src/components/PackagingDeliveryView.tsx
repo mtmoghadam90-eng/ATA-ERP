@@ -33,6 +33,7 @@ import {
   Customer
 } from '../types';
 import { getTodayShamsi } from '../dateUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk, getFieldAsterisk } from '../utils/requiredFields';
 import { getProformaOutcomeStatus, getWonItemsOfProforma } from '../useERPStore';
 import ConfirmModal from './ConfirmModal';
 import ShamsiDatePicker from './ShamsiDatePicker';
@@ -300,6 +301,19 @@ export default function PackagingDeliveryView({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+
+    if (isFieldRequired(settings, 'packagingDelivery', 'projectId') && !selectedProjectId) {
+      alert('فیلد "پروژه" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'packagingDelivery', 'shippingMethod') && !shippingMethod) {
+      alert('فیلد "نحوه ارسال کالا" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'packagingDelivery', 'deliveryDate') && !deliveryDate) {
+      alert('فیلد "تاریخ صدور پکینگ لیست" الزامی است.');
+      return;
+    }
   };
 
   const handleDrop = async (e: React.DragEvent) => {
@@ -1161,11 +1175,11 @@ export default function PackagingDeliveryView({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Project dropdown */}
             <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">انتخاب پروژه <span className="text-rose-500">*</span></label>
+              <label className="block text-xs font-bold text-slate-700">{renderFieldLabelWithAsterisk(settings, 'packagingDelivery', 'projectId', 'انتخاب پروژه')}</label>
               <select
                 value={selectedProjectId}
                 onChange={e => handleProjectChange(e.target.value)}
-                required
+                required={isFieldRequired(settings, 'packagingDelivery', 'projectId')}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
               >
                 <option value="">-- انتخاب پروژه --</option>
@@ -1202,8 +1216,8 @@ export default function PackagingDeliveryView({
             {/* Delivery Date */}
             <div className="space-y-1">
               <ShamsiDatePicker
-                label="تاریخ صدور پکینگ لیست *"
-                required
+                label={`تاریخ صدور پکینگ لیست${getFieldAsterisk(settings, 'packagingDelivery', 'deliveryDate')}`}
+                required={isFieldRequired(settings, 'packagingDelivery', 'deliveryDate')}
                 value={deliveryDate}
                 onChange={setDeliveryDate}
               />
@@ -1251,10 +1265,11 @@ export default function PackagingDeliveryView({
 
             {/* Shipping Method */}
             <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">نحوه ارسال کالا</label>
+              <label className="block text-xs font-bold text-slate-700">{renderFieldLabelWithAsterisk(settings, 'packagingDelivery', 'shippingMethod', 'نحوه ارسال کالا')}</label>
               <select
                 value={shippingMethod}
                 onChange={e => setShippingMethod(e.target.value)}
+                required={isFieldRequired(settings, 'packagingDelivery', 'shippingMethod')}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
               >
                 {settings.dropdownItems.shippingMethods?.map((method, index) => (

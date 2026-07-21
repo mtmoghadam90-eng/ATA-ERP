@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Task, Customer, Project, ERPSettings, User as ERPUser } from '../types';
 import { getTodayShamsi } from '../dateUtils';
+import { isFieldRequired, renderFieldLabelWithAsterisk, getFieldAsterisk } from '../utils/requiredFields';
 import ShamsiDatePicker from './ShamsiDatePicker';
 import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
@@ -110,6 +111,27 @@ export default function TasksView({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isFieldRequired(settings, 'tasks', 'title') && !title) {
+      alert('فیلد "عنوان وظیفه" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'tasks', 'description') && !description) {
+      alert('فیلد "شرح جزئیات" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'tasks', 'priority') && !priority) {
+      alert('فیلد "درجه اولویت" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'tasks', 'dueDate') && !dueDate) {
+      alert('فیلد "مهلت انجام" الزامی است.');
+      return;
+    }
+    if (isFieldRequired(settings, 'tasks', 'assignedTo') && !assignedTo) {
+      alert('فیلد "ارجاع کار به همکار" الزامی است.');
+      return;
+    }
 
     // Custom Fields Validation
     const moduleFields = (settings?.customFields || []).filter(f => f.module === 'tasks');
@@ -376,10 +398,10 @@ export default function TasksView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Title */}
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-xs font-semibold text-slate-500">عنوان وظیفه / پیگیری بازرگانی *</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'tasks', 'title', 'عنوان وظیفه / پیگیری بازرگانی')}</label>
                   <input
                     type="text"
-                    required
+                    required={isFieldRequired(settings, 'tasks', 'title')}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="مثال: ارسال اصلاحیه پروفرما به مهندسی مپنا"
@@ -389,9 +411,10 @@ export default function TasksView({
 
                 {/* Description */}
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-xs font-semibold text-slate-500">شرح جزئیات اقدام درخواستی</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'tasks', 'description', 'شرح جزئیات اقدام درخواستی')}</label>
                   <textarea
                     rows={2}
+                    required={isFieldRequired(settings, 'tasks', 'description')}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="جزئیات استعلام قیمت ارزی، شرایط پرداخت توافق شده..."
@@ -476,9 +499,10 @@ export default function TasksView({
 
                 {/* Priority */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">درجه اولویت</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'tasks', 'priority', 'درجه اولویت')}</label>
                   <select
                     value={priority}
+                    required={isFieldRequired(settings, 'tasks', 'priority')}
                     onChange={(e) => setPriority(e.target.value as Task['priority'])}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white"
                   >
@@ -492,8 +516,8 @@ export default function TasksView({
                 {/* Due Date */}
                 <div className="space-y-1.5" id="task-due-date-picker-wrapper">
                   <ShamsiDatePicker
-                    label="مهلت انجام (سررسید)"
-                    required
+                    label={`مهلت انجام (سررسید)${getFieldAsterisk(settings, 'tasks', 'dueDate')}`}
+                    required={isFieldRequired(settings, 'tasks', 'dueDate')}
                     value={dueDate}
                     onChange={(val) => setDueDate(val)}
                   />
@@ -501,9 +525,10 @@ export default function TasksView({
 
                 {/* Assignee */}
                 <div className="space-y-1.5" id="task-assignee-select-wrapper">
-                  <label className="text-xs font-semibold text-slate-500">ارجاع کار به همکار (اختیاری)</label>
+                  <label className="text-xs font-semibold text-slate-500">{renderFieldLabelWithAsterisk(settings, 'tasks', 'assignedTo', 'ارجاع کار به همکار')}</label>
                   <select
                     value={assignedTo}
+                    required={isFieldRequired(settings, 'tasks', 'assignedTo')}
                     onChange={(e) => setAssignedTo(e.target.value)}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-right bg-white font-medium"
                   >
