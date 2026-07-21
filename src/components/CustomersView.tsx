@@ -29,6 +29,7 @@ import CustomFieldsForm from './CustomFieldsForm';
 import CustomFieldsDetailView from './CustomFieldsDetailView';
 import { exportToCSV } from '../excelUtils';
 import ConfirmModal from './ConfirmModal';
+import { isFieldRequired, renderFieldLabelWithAsterisk } from '../utils/requiredFields';
 
 interface CustomersViewProps {
   customers: Customer[];
