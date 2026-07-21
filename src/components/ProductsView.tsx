@@ -1840,8 +1840,27 @@ export default function ProductsView({
                               };
 
                               const combinations = getCombinations(features);
+                              
+                              // Filter combinations based on configRules
+                              const validCombinations = combinations.filter(combo => {
+                                return !configRules.some(rule => {
+                                  if (!rule.active) return false;
+                                  
+                                  // Check if all conditions match this combination
+                                  const conditionsMatch = rule.conditions.every(cond => {
+                                    if (!cond.values || cond.values.length === 0) return false;
+                                    return cond.values.includes(combo[cond.featureName]);
+                                  });
+                                  
+                                  if (!conditionsMatch) return false;
+                                  
+                                  // If conditions match, check if this combination uses a forbidden action value
+                                  return rule.actions.values.includes(combo[rule.actions.featureName]);
+                                });
+                              });
+
                               const pCode = productCode.trim() || 'SKU';
-                              const newVariants = combinations.map((combo, i) => {
+                              const newVariants = validCombinations.map((combo, i) => {
                                 // Generate SKU
                                 const skuParts = [pCode];
                                 features.forEach((feat) => {
